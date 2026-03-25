@@ -1,0 +1,95 @@
+services:
+  kong-dp:
+    image: kong/kong-gateway:3.13.0.1
+    container_name: kong-dp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      KONG_ROLE: data_plane
+      KONG_DATABASE: "off"
+      KONG_CLUSTER_MTLS: pki
+      KONG_CLUSTER_CONTROL_PLANE: ${KONG_CLUSTER_CONTROL_PLANE}
+      KONG_CLUSTER_SERVER_NAME: ${KONG_CLUSTER_SERVER_NAME}
+      KONG_CLUSTER_TELEMETRY_ENDPOINT: ${KONG_CLUSTER_TELEMETRY_ENDPOINT}
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: ${KONG_CLUSTER_TELEMETRY_SERVER_NAME}
+      KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
+      KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
+      KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
+      KONG_KONNECT_MODE: "on"
+      KONG_VITALS: "off"
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_LOG_LEVEL: notice
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "8100:8100"
+    volumes:
+      - ./kong/certs:/etc/kong/certs:ro
+    depends_on:
+      orchestrator:
+        condition: service_started
+      support-agent:
+        condition: service_started
+      success-agent:
+        condition: service_started
+      mock-api:
+        condition: service_started
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: orchestrator
+    command: ["uvicorn", "services.orchestrator.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PORT: "8000"
+      KONG_PROXY_URL: http://kong-dp:8000
+      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/orchestrator
+      AGENT_API_KEY: orchestrator-demo-key
+      TRACE_WS_PATH: /trace
+      OPENAI_MODEL: gpt-4o-mini
+
+  support-agent:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: support-agent
+    command: ["uvicorn", "services.support_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PORT: "8000"
+      KONG_MCP_URL: http://kong-dp:8000/mock-mcp
+      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/subagent
+      AGENT_API_KEY: support-demo-key
+      OPENAI_MODEL: gemini-2.5-flash
+
+  success-agent:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: success-agent
+    command: ["uvicorn", "services.success_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PORT: "8000"
+      KONG_MCP_URL: http://kong-dp:8000/mock-mcp
+      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/subagent
+      AGENT_API_KEY: success-demo-key
+      OPENAI_MODEL: gemini-2.5-flash
+
+  mock-api:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: mock-api
+    command: ["uvicorn", "services.mock_api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PORT: "8000"
+
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    container_name: ui
+    ports:
+      - "3000:80"

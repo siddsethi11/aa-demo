@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kong Agent + MCP Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Kong Konnect Hybrid Demo</p>
+          <h1>Kong Unified Governance</h1>
+          <p class="hero-copy">
+            One request enters Kong. The orchestrator, sub-agents, LLM routes, and MCP tools all
+            execute through the gateway while the trace updates live.
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <button id="play-button" class="primary">Play</button>
+          <button id="reset-button" class="secondary" type="button">Reset</button>
+          <button id="scene-button" class="secondary" type="button">View Scene</button>
+          <button id="output-button" class="secondary" type="button">View Run Output</button>
+        </div>
+      </header>
+
+      <main class="dashboard-layout">
+        <aside class="trace-sidebar panel-dark">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Execution Tree</p>
+              <h2>Run Trace</h2>
+            </div>
+            <span class="run-state" id="run-state">idle</span>
+          </div>
+          <div class="trace-summary">
+            <div>
+              <span class="label">Run ID</span>
+              <strong id="run-id-label">not started</strong>
+            </div>
+            <div>
+              <span class="label">Last Activity</span>
+              <strong id="last-run">not started</strong>
+            </div>
+          </div>
+          <div class="trace-tree" id="trace-tree">
+            <div class="trace-empty">
+              <h3>No run yet</h3>
+              <p>Press Play to stream the execution tree in real time.</p>
+            </div>
+          </div>
+          <div class="tree-actions">
+            <button id="clear-log" class="ghost" type="button">Clear Trace</button>
+          </div>
+        </aside>
+
+        <section class="main-workspace">
+          <section class="gateway-stage panel-dark">
+            <div class="panel-head">
+              <div>
+                <p class="panel-kicker">Live Topology</p>
+                <h2>Traffic Through Kong</h2>
+              </div>
+              <span class="status-dot" id="scene-status"></span>
+            </div>
+            <div class="stage-banner">
+              <span class="label">Current Stage</span>
+              <strong id="flow-stage-title">Waiting for a run</strong>
+              <p id="flow-stage-detail">Press Play to see Kong route the request across AI, sub-agent, and MCP paths.</p>
+            </div>
+
+            <div class="topology">
+              <div class="topology-activity" id="topology-activity" hidden>
+                <span class="topology-activity-label">Active MCP Tool</span>
+                <strong id="topology-activity-name">-</strong>
+              </div>
+              <svg class="topology-lines" viewBox="0 0 1400 860" preserveAspectRatio="none" aria-hidden="true">
+                <path id="line-user-ui" d="M278 110 L590 110" />
+                <path id="line-ui-kong" d="M700 182 L700 282" />
+                <path id="line-kong-orchestrator" d="M570 332 L380 332" />
+                <path id="line-kong-support" d="M620 456 L620 590 L380 590" />
+                <path id="line-kong-success" d="M660 456 L660 782 L404 782" />
+                <path id="line-kong-openai" d="M830 340 L1088 186" />
+                <path id="line-kong-gemini" d="M830 390 L1088 380" />
+                <path id="line-kong-mcp" d="M740 456 L740 720 L1002 720" />
+                <path id="line-mcp-backend" d="M990 590 L990 456 L740 456 L1186 456 L1186 700" />
+              </svg>
+
+              <article class="topology-node user-node" data-node="user">
+                <span class="node-label">Entry</span>
+                <h3>User Request</h3>
+                <p>Play starts one fixed escalation workflow.</p>
+              </article>
+
+              <article class="topology-node ui-node" data-node="ui">
+                <span class="node-label">Hosted UI</span>
+                <h3>Dashboard</h3>
+                <p>Served through Kong. Shows live path activation and trace state.</p>
+              </article>
+
+              <article class="topology-node kong-node gateway-core" data-node="kong">
+                <span class="node-label">Gateway Core</span>
+                <h3>Kong Gateway</h3>
+                <p>AI Proxy Advanced, Agent routing, auth, ACLs, and MCP tool exposure.</p>
+              </article>
+
+              <article class="topology-node orchestrator-node" data-node="orchestrator">
+                <span class="node-label">LangGraph</span>
+                <h3>Orchestrator</h3>
+                <p>Gets context, calls its LLM, invokes support then success, and assembles the final brief.</p>
+              </article>
+
+              <article class="topology-node support-node" data-node="support-agent">
+                <span class="node-label">Sub-agent</span>
+                <h3>Support Agent</h3>
+                <p>Uses incident and runbook tools, then summarizes the technical posture.</p>
+              </article>
+
+              <article class="topology-node success-node" data-node="success-agent">
+                <span class="node-label">Sub-agent</span>
+                <h3>Success Agent</h3>
+                <p>Uses reply and task tools, then produces the customer action plan.</p>
+              </article>
+
+              <article class="topology-node openai-node" data-node="openai">
+                <span class="node-label">Primary</span>
+                <h3>OpenAI 4o mini</h3>
+                <p>Primary orchestrator model via AI Proxy Advanced.</p>
+              </article>
+
+              <article class="topology-node gemini-node" data-node="gemini">
+                <span class="node-label">Failover / Shared</span>
+                <h3>Gemini 2.5 Flash</h3>
+                <p>Orchestrator failover and the sub-agent LLM route.</p>
+              </article>
+
+              <article class="topology-node mcp-node" data-node="mcp">
+                <span class="node-label">Tool Plane</span>
+                <h3>MCP Tools</h3>
+                <p>Kong exposes the backing REST API as tools and filters them per consumer group.</p>
+              </article>
+
+              <article class="topology-node backend-node" data-node="backend-api">
+                <span class="node-label">Upstream</span>
+                <h3>Backend APIs</h3>
+                <p>Mock account, incident, runbook, draft, and task endpoints reached through Kong.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="detail-panel panel-dark">
+            <div class="panel-head">
+              <div>
+                <p class="panel-kicker">Selected Step</p>
+                <h2 id="detail-title">No step selected</h2>
+              </div>
+            </div>
+            <div class="detail-meta" id="detail-meta">
+              <span class="meta-chip">Click a trace row</span>
+            </div>
+            <div class="detail-block">
+              <strong>Summary</strong>
+              <p id="detail-summary">The selected trace step will show timing, request input, and output payload here.</p>
+            </div>
+            <div class="detail-io">
+              <div class="detail-code">
+                <strong>Input</strong>
+                <pre id="detail-input">-</pre>
+              </div>
+              <div class="detail-code">
+                <strong>Output</strong>
+                <pre id="detail-output">-</pre>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <dialog id="scene-modal" class="modal">
+        <div class="modal-shell">
+          <div class="modal-head">
+            <div>
+              <p class="eyebrow">Scene</p>
+              <h2>Customer Escalation Triage</h2>
+            </div>
+            <button class="ghost modal-close" data-close-modal="scene-modal" type="button">Close</button>
+          </div>
+          <p class="modal-copy">
+            A renewal-risk account reports a billing issue and a workflow sync issue. The UI stays
+            focused on the topology and trace, while the form lives here in the scene popup.
+          </p>
+          <section class="scene-presets">
+            <span class="scene-presets-label">Choose a preset</span>
+            <div class="preset-options" id="preset-options">
+              <label class="preset-option">
+                <input type="radio" name="scene_preset" value="acme_default" checked />
+                <span>Acme Health</span>
+              </label>
+              <label class="preset-option">
+                <input type="radio" name="scene_preset" value="northwind_exports" />
+                <span>Northwind Logistics</span>
+              </label>
+              <label class="preset-option">
+                <input type="radio" name="scene_preset" value="contoso_peak" />
+                <span>Contoso Retail</span>
+              </label>
+            </div>
+          </section>
+          <form id="play-form" class="form-grid">
+            <label>
+              Customer ID
+              <input name="customer_id" value="cust_acme" />
+            </label>
+            <label>
+              Account Name
+              <input name="account_name" value="Acme Health" />
+            </label>
+            <label>
+              Product Issue
+              <input name="product_issue" value="workflow agent sync delays" />
+            </label>
+            <label>
+              Billing Issue
+              <input name="billing_issue" value="billing overcharge on enterprise add-ons" />
+            </label>
+            <label class="full">
+              Issue Summary
+              <textarea name="issue_summary">Customer reports a billing dispute and workflow-agent sync delays.</textarea>
+            </label>
+            <label>
+              Incident ID
+              <input name="incident_id" value="INC-1007" />
+            </label>
+          </form>
+        </div>
+      </dialog>
+
+      <dialog id="output-modal" class="modal">
+        <div class="modal-shell modal-wide">
+            <div class="modal-head">
+              <div>
+                <p class="eyebrow">Run Output</p>
+                <h2>Detailed Response</h2>
+            </div>
+            <button class="ghost modal-close" data-close-modal="output-modal" type="button">Close</button>
+          </div>
+          <div class="result-card" id="final-output">
+            <h3>Awaiting run</h3>
+            <p>Click Play to start the orchestrated demo flow.</p>
+          </div>
+        </div>
+      </dialog>
+    </div>
+
+    <script>
+      const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host || "localhost:8000";
+      window.APP_CONFIG = {
+        apiBaseUrl: `${protocol}//${host}/orchestrator`,
+        traceWsUrl: `${wsProtocol}//${host}/orchestrator/trace?apikey=ui-demo-key`,
+        apiKey: "ui-demo-key"
+      };
+    </script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

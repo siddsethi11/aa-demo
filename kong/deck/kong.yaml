@@ -1,0 +1,314 @@
+_format_version: "3.0"
+
+services:
+  - name: ui-service
+    url: http://ui:80
+    routes:
+      - name: ui-route
+        paths:
+          - /
+        strip_path: false
+
+  - name: ai-orchestrator-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-chat-route
+        paths:
+          - /ai/orchestrator/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          balancer:
+            algorithm: priority
+            retries: 1
+            failover_criteria:
+              - error
+              - timeout
+              - non_idempotent
+              - http_429
+              - http_502
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              model:
+                provider: openai
+                name: gpt-4o-mini
+              weight: 100
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              model:
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+              weight: 50
+
+  - name: ai-subagent-service
+    url: https://generativelanguage.googleapis.com
+    routes:
+      - name: ai-subagent-chat-route
+        paths:
+          - /ai/subagent/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              model:
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+
+  - name: orchestrator-service
+    url: http://orchestrator:8000
+    routes:
+      - name: orchestrator-route
+        paths:
+          - /orchestrator
+        strip_path: true
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+
+  - name: support-agent-service
+    url: http://support-agent:8000
+    routes:
+      - name: support-agent-route
+        paths:
+          - /support-agent
+        strip_path: true
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+
+  - name: success-agent-service
+    url: http://success-agent:8000
+    routes:
+      - name: success-agent-route
+        paths:
+          - /success-agent
+        strip_path: true
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+
+  - name: mock-api-service
+    url: http://mock-api:8000
+    routes:
+      - name: mock-api-route
+        paths:
+          - /api
+        strip_path: true
+      - name: mock-mcp-route
+        paths:
+          - /mock-mcp
+        strip_path: false
+        plugins:
+          - name: key-auth
+            config:
+              key_names:
+                - apikey
+          - name: ai-mcp-proxy
+            config:
+              mode: conversion-listener
+              include_consumer_groups: true
+              server:
+                timeout: 10000
+              max_request_body_size: 8192
+              tools:
+                - name: get_customer_account
+                  description: Get account metadata and current health signals
+                  method: GET
+                  path: /api/customers/{customer_id}
+                  annotations:
+                    title: Customer Account
+                  parameters:
+                    - name: customer_id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                      description: Customer ID
+                  acl:
+                    allow:
+                      - orchestrator-tools
+                - name: get_renewal_risk
+                  description: Get renewal risk and contributing factors
+                  method: GET
+                  path: /api/customers/{customer_id}/renewal-risk
+                  annotations:
+                    title: Renewal Risk
+                  parameters:
+                    - name: customer_id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                      description: Customer ID
+                  acl:
+                    allow:
+                      - orchestrator-tools
+                - name: get_open_tickets
+                  description: Get open support tickets for the customer
+                  method: GET
+                  path: /api/customers/{customer_id}/tickets
+                  annotations:
+                    title: Open Tickets
+                  parameters:
+                    - name: customer_id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                      description: Customer ID
+                  acl:
+                    allow:
+                      - orchestrator-tools
+                - name: get_incident_status
+                  description: Get current incident status and impact
+                  method: GET
+                  path: /api/incidents/{incident_id}
+                  annotations:
+                    title: Incident Status
+                  parameters:
+                    - name: incident_id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                      description: Incident ID
+                  acl:
+                    allow:
+                      - support-tools
+                - name: search_runbook
+                  description: Search operational runbooks
+                  method: GET
+                  path: /api/runbooks/search
+                  annotations:
+                    title: Runbook Search
+                  parameters:
+                    - name: q
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                      description: Search query
+                  acl:
+                    allow:
+                      - support-tools
+                - name: draft_customer_reply
+                  description: Draft a customer-facing reply
+                  method: GET
+                  path: /api/drafts/customer-reply/preview
+                  annotations:
+                    title: Draft Customer Reply
+                  parameters:
+                    - name: account_name
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: csm
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: issue_summary
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: renewal_risk
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: technical_summary
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                  acl:
+                    allow:
+                      - success-tools
+                - name: create_followup_task
+                  description: Create a success-team follow-up task
+                  method: GET
+                  path: /api/tasks/followup/preview
+                  annotations:
+                    title: Create Follow-up Task
+                  parameters:
+                    - name: account_name
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: owner
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: due_date
+                      in: query
+                      required: true
+                      schema:
+                        type: string
+                    - name: action_items
+                      in: query
+                      required: false
+                      schema:
+                        type: string
+                  acl:
+                    allow:
+                      - success-tools
+
+consumers:
+  - username: orchestrator-agent
+    groups:
+      - name: orchestrator-tools
+    keyauth_credentials:
+      - key: orchestrator-demo-key
+  - username: support-agent
+    groups:
+      - name: support-tools
+    keyauth_credentials:
+      - key: support-demo-key
+  - username: success-agent
+    groups:
+      - name: success-tools
+    keyauth_credentials:
+      - key: success-demo-key
+  - username: ui-client
+    keyauth_credentials:
+      - key: ui-demo-key
+
+consumer_groups:
+  - name: orchestrator-tools
+  - name: support-tools
+  - name: success-tools

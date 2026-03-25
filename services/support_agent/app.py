@@ -1,0 +1,305 @@
+from __future__ import annotations
+
+import os
+import time
+from typing import Any
+from typing import TypedDict
+
+import httpx
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from langgraph.graph import END, START, StateGraph
+
+from services.common.jsonrpc import error_response, success_response
+from services.common.llm import OrchestratorLLM
+from services.common.mcp_client import KongMCPClient
+
+
+app = FastAPI(title="Support Agent", version="1.0.0")
+
+MCP_URL = os.getenv("KONG_MCP_URL", "http://kong-dp:8000/mock-mcp")
+API_KEY = os.getenv("AGENT_API_KEY", "support-demo-key")
+TRACE_COLLECTOR_URL = os.getenv("TRACE_COLLECTOR_URL", "http://orchestrator:8000/trace/event")
+os.environ.setdefault("KONG_AI_PROXY_URL", "http://kong-dp:8000/ai/subagent")
+llm = OrchestratorLLM()
+
+
+class SupportRunParams(BaseModel):
+    run_id: str
+    customer_id: str
+    account_name: str
+    product_issue: str
+    incident_id: str
+    triage_brief: str
+
+
+class SupportState(TypedDict, total=False):
+    params: dict[str, Any]
+    available_tools: list[str]
+    called_mcp_tools: list[str]
+    tool_plan_steps: list[dict[str, Any]]
+    incident: Any
+    runbook: Any
+    llm_summary: dict[str, Any]
+    result: dict[str, Any]
+
+
+async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        await client.post(
+            TRACE_COLLECTOR_URL,
+            json={"run_id": run_id, "type": event_type, "payload": payload},
+        )
+
+
+async def fetch_tool_inventory(state: SupportState) -> SupportState:
+    params = state["params"]
+    client = KongMCPClient(MCP_URL, API_KEY, "support-agent")
+    started = time.perf_counter()
+    tools = await client.list_tools()
+    available_tools = [tool.get("name") for tool in tools]
+    await emit_trace(
+        params["run_id"],
+        "tool_list_received",
+        actor="support-agent",
+        tools=available_tools,
+        duration_ms=round((time.perf_counter() - started) * 1000),
+    )
+    return {"available_tools": available_tools}
+
+
+def unwrap_mcp_result(result: Any) -> Any:
+    if isinstance(result, dict):
+        return result.get("structuredContent") or result.get("content") or result
+    return result
+
+
+def build_support_tool_args(tool_name: str, llm_arguments: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    if tool_name == "get_incident_status":
+        incident_id = llm_arguments.get("incident_id") or llm_arguments.get("path_incident_id") or params["incident_id"]
+        return {"path_incident_id": incident_id}
+    if tool_name == "search_runbook":
+        query = llm_arguments.get("q") or llm_arguments.get("query_q") or params["product_issue"]
+        return {"query_q": query}
+    return llm_arguments
+
+
+async def investigate_issue(state: SupportState) -> SupportState:
+    params = state["params"]
+    client = KongMCPClient(MCP_URL, API_KEY, "support-agent")
+    available_tools = state.get("available_tools", [])
+    remaining_tools = [tool for tool in available_tools if tool in {"get_incident_status", "search_runbook"}]
+    called_mcp_tools: list[str] = []
+    tool_plan_steps: list[dict[str, Any]] = []
+    incident = None
+    runbook = None
+
+    for step_number in range(1, len(remaining_tools) + 2):
+        current_context = {
+            "incident": unwrap_mcp_result(incident) if incident else None,
+            "runbook": unwrap_mcp_result(runbook) if runbook else None,
+        }
+        prompts = llm.build_next_tool_prompts(
+            account_name=params["account_name"],
+            issue_summary=params["triage_brief"],
+            product_issue=params["product_issue"],
+            billing_issue="n/a",
+            available_tools=available_tools,
+            remaining_tools=remaining_tools,
+            current_context=current_context,
+        )
+        stage = f"tool_selection_{step_number}"
+        await emit_trace(params["run_id"], "llm_started", actor="support-agent", stage=stage, input=prompts)
+        started = time.perf_counter()
+        tool_decision = await llm.choose_next_tool(
+            account_name=params["account_name"],
+            issue_summary=params["triage_brief"],
+            product_issue=params["product_issue"],
+            billing_issue="n/a",
+            available_tools=available_tools,
+            remaining_tools=remaining_tools,
+            current_context=current_context,
+        )
+        await emit_trace(
+            params["run_id"],
+            "llm_completed",
+            actor="support-agent",
+            stage=stage,
+            llm_used=tool_decision["llm_used"],
+            model=tool_decision["model"],
+            output=tool_decision,
+            duration_ms=round((time.perf_counter() - started) * 1000),
+        )
+        tool_plan_steps.append(tool_decision)
+
+        next_tool = tool_decision.get("next_tool")
+        if tool_decision.get("done") or not next_tool or next_tool not in remaining_tools:
+            break
+
+        tool_args = build_support_tool_args(next_tool, tool_decision.get("arguments", {}), params)
+        await emit_trace(params["run_id"], "tool_call_started", actor="support-agent", tool=next_tool, input=tool_args)
+        tool_started = time.perf_counter()
+        tool_result = await client.call_tool(next_tool, tool_args)
+        await emit_trace(
+            params["run_id"],
+            "tool_call_completed",
+            actor="support-agent",
+            tool=next_tool,
+            input=tool_args,
+            output=tool_result,
+            duration_ms=round((time.perf_counter() - tool_started) * 1000),
+        )
+
+        if next_tool == "get_incident_status":
+            incident = tool_result
+        elif next_tool == "search_runbook":
+            runbook = tool_result
+        called_mcp_tools.append(next_tool)
+        remaining_tools.remove(next_tool)
+
+        if not remaining_tools:
+            break
+
+    return {
+        "called_mcp_tools": called_mcp_tools,
+        "tool_plan_steps": tool_plan_steps,
+        "incident": unwrap_mcp_result(incident) if incident else None,
+        "runbook": unwrap_mcp_result(runbook) if runbook else None,
+    }
+
+
+async def generate_technical_summary(state: SupportState) -> SupportState:
+    params = state["params"]
+    incident = state.get("incident")
+    runbook = state.get("runbook")
+    system_prompt = "You are a support engineering sub-agent. Produce a concise technical customer escalation summary."
+    user_prompt = (
+        f"Triage brief: {params['triage_brief']}\n"
+        f"Product issue: {params['product_issue']}\n"
+        f"Incident: {incident}\n"
+        f"Runbook: {runbook}\n"
+        "Write 2 short paragraphs: current technical posture and immediate remediation plan."
+    )
+    llm_input = {
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+    }
+    await emit_trace(params["run_id"], "llm_started", actor="support-agent", stage="technical_summary", input=llm_input)
+    started = time.perf_counter()
+    if not llm.enabled:
+        result = {
+            "llm_summary": {
+                "llm_used": False,
+                "model": None,
+                "summary": (
+                    f"Technical view for {params['account_name']}: align the customer update to the "
+                    f"incident status {incident} and the operational guidance {runbook}."
+                ),
+            }
+        }
+        await emit_trace(
+            params["run_id"],
+            "llm_completed",
+            actor="support-agent",
+            stage="technical_summary",
+            llm_used=False,
+            model=None,
+            output=result["llm_summary"],
+            duration_ms=round((time.perf_counter() - started) * 1000),
+        )
+        return result
+    llm_summary = await llm.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+    await emit_trace(
+        params["run_id"],
+        "llm_completed",
+        actor="support-agent",
+        stage="technical_summary",
+        llm_used=llm_summary["llm_used"],
+        model=llm_summary["model"],
+        output=llm_summary,
+        duration_ms=round((time.perf_counter() - started) * 1000),
+    )
+    return {"llm_summary": llm_summary}
+
+
+def build_response(state: SupportState) -> SupportState:
+    params = state["params"]
+    result = {
+        "agent": "support-agent",
+        "triage_brief": params["triage_brief"],
+        "available_tools": state.get("available_tools", []),
+        "called_mcp_tools": state.get("called_mcp_tools", []),
+        "tool_plan_steps": state.get("tool_plan_steps", []),
+        "incident": state.get("incident"),
+        "runbook": state.get("runbook"),
+        "llm_summary": state.get("llm_summary"),
+        "technical_response": state.get("llm_summary", {}).get(
+            "summary",
+            (
+                f"The current incident is being actively mitigated for {params['account_name']}. "
+                "Recommend acknowledging the impact, confirming engineering ownership, and sharing "
+                "the mitigation ETA plus the next status checkpoint."
+            ),
+        ),
+        "recommended_actions": [
+            "Share the current incident status and ETA",
+            "Reference the runbook-driven mitigation path",
+            "Keep the escalation open until sync latency returns to normal",
+        ],
+    }
+    return {"result": result}
+
+
+support_graph = (
+    StateGraph(SupportState)
+    .add_node("fetch_tool_inventory", fetch_tool_inventory)
+    .add_node("investigate_issue", investigate_issue)
+    .add_node("generate_technical_summary", generate_technical_summary)
+    .add_node("build_response", build_response)
+    .add_edge(START, "fetch_tool_inventory")
+    .add_edge("fetch_tool_inventory", "investigate_issue")
+    .add_edge("investigate_issue", "generate_technical_summary")
+    .add_edge("generate_technical_summary", "build_response")
+    .add_edge("build_response", END)
+    .compile()
+)
+
+
+@app.get("/health")
+@app.get("/support-agent/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/.well-known/agent.json")
+@app.get("/support-agent/.well-known/agent.json")
+async def agent_card() -> dict[str, Any]:
+    return {
+        "agent_id": "support-agent",
+        "name": "Support Agent",
+        "description": "Investigates technical issues and recommends remediation steps.",
+        "endpoints": {"jsonrpc": "/v1/jsonrpc"},
+    }
+
+
+@app.post("/v1/jsonrpc")
+@app.post("/support-agent/v1/jsonrpc")
+async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
+    body = await request.json()
+    request_id = body.get("id")
+    if body.get("method") != "agent.run":
+        return error_response(request_id, -32601, "Unsupported method")
+
+    try:
+        params = SupportRunParams.model_validate(body.get("params", {}))
+    except Exception as exc:
+        return error_response(request_id, -32602, "Invalid params", str(exc))
+
+    try:
+        graph_result = await support_graph.ainvoke({"params": params.model_dump()})
+    except Exception as exc:
+        return error_response(request_id, -32000, "Support agent failed", str(exc))
+    return success_response(request_id, graph_result["result"])
