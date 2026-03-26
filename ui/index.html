@@ -208,7 +208,7 @@
             </div>
           </section>
           <section class="scene-presets">
-            <span class="scene-presets-label">Choose a governance scenario</span>
+            <span class="scene-presets-label scene-presets-label-highlight">Choose a governance scenario</span>
             <div class="preset-options" id="scenario-options">
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="normal" checked />
@@ -229,6 +229,10 @@
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="semantic_guard" />
                 <span>Semantic Guard</span>
+              </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="semantic_cache" />
+                <span>Semantic Cache</span>
               </label>
             </div>
           </section>
@@ -258,7 +262,28 @@
               <input name="incident_id" value="INC-1007" />
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
+            <input type="hidden" name="semantic_cache_step" value="single" />
           </form>
+          <section id="semantic-cache-controls" class="semantic-cache-controls" hidden>
+            <div class="semantic-cache-grid">
+              <article class="semantic-cache-card">
+                <span class="semantic-cache-label">First Request</span>
+                <p class="semantic-cache-copy">Seeds Kong semantic cache for the orchestrator triage prompt.</p>
+                <pre id="semantic-cache-seed-payload" class="semantic-cache-payload"></pre>
+                <button id="semantic-cache-seed-button" class="primary" type="button">Send First Request</button>
+              </article>
+              <article class="semantic-cache-card">
+                <span class="semantic-cache-label">Second Request</span>
+                <p class="semantic-cache-copy">Replays the same triage payload so Kong can return a cache hit.</p>
+                <pre id="semantic-cache-hit-payload" class="semantic-cache-payload"></pre>
+                <button id="semantic-cache-hit-button" class="primary" type="button">Send Second Request</button>
+              </article>
+            </div>
+            <div class="semantic-cache-utility">
+              <button id="semantic-cache-clear-button" class="secondary semantic-cache-clear" type="button">Clear Semantic Cache</button>
+              <p class="semantic-cache-copy">Clears all semantic cache entries so the next first request starts from a clean cache.</p>
+            </div>
+          </section>
           <div class="modal-actions">
             <button id="scene-play-button" class="primary" type="button">Play</button>
           </div>
@@ -371,6 +396,19 @@
               </p>
             </article>
           </section>
+        </div>
+      </dialog>
+
+      <dialog id="notice-modal" class="modal">
+        <div class="modal-shell modal-notice">
+          <div class="modal-head">
+            <div>
+              <p class="eyebrow" id="notice-kicker">Status</p>
+              <h2 id="notice-title">Operation complete</h2>
+            </div>
+            <button class="ghost modal-close" data-close-modal="notice-modal" type="button">Close</button>
+          </div>
+          <p class="modal-copy" id="notice-message">The action completed successfully.</p>
         </div>
       </dialog>
     </div>

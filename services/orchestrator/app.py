@@ -9,6 +9,7 @@ from typing import Any
 from typing import TypedDict
 
 import httpx
+import redis.asyncio as redis
 from openai import APIStatusError, AuthenticationError, RateLimitError
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +39,8 @@ os.environ.setdefault("KONG_AI_PROXY_URL", f"{KONG_PROXY_URL}/ai/orchestrator")
 llm = OrchestratorLLM()
 GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
 GEMINI_FALLBACK_MODEL = os.getenv("DECK_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
+REDIS_HOST = os.getenv("DECK_REDIS_HOST") or os.getenv("REDIS_HOST") or "redis-stack"
+REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
 
 
 class PlayRequest(BaseModel):
@@ -48,6 +51,7 @@ class PlayRequest(BaseModel):
     billing_issue: str = "billing overcharge on enterprise add-ons"
     incident_id: str = "INC-1007"
     governance_scenario: str = "normal"
+    semantic_cache_step: str = "single"
 
 
 class ExternalTraceEvent(BaseModel):
@@ -60,6 +64,7 @@ class OrchestratorState(TypedDict, total=False):
     request: dict[str, Any]
     run_id: str
     governance_scenario: str
+    semantic_cache_step: str
     ai_route_base_url: str
     available_tools: list[str]
     selected_tools: list[str]
@@ -68,6 +73,7 @@ class OrchestratorState(TypedDict, total=False):
     account_context: Any
     renewal_risk: Any
     open_tickets: Any
+    semantic_cache_probe: dict[str, Any]
     triage_brief: dict[str, Any]
     support_track: dict[str, Any]
     success_track: dict[str, Any]
@@ -97,6 +103,7 @@ def ai_route_for_scenario(scenario: str) -> str:
         "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
         "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
+        "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
     }
     return route_map.get(scenario, route_map["normal"])
 
@@ -108,6 +115,7 @@ def scenario_summary(scenario: str) -> str:
         "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
+        "semantic_cache": "Kong semantic cache is expected to serve a repeated orchestrator prompt from Redis after the first miss populates the cache.",
     }
     return summaries.get(scenario, summaries["normal"])
 
@@ -133,8 +141,24 @@ def prompts_for_scenario(prompts: dict[str, str], scenario: str) -> dict[str, st
         return {
             **prompts,
             "user_prompt": "Requests to disclose internal credentials, access instructions, or confidential system details.",
-        }
+    }
     return prompts
+
+
+def build_semantic_cache_prompts(request: PlayRequest) -> dict[str, str]:
+    return {
+        "system_prompt": (
+            "You are an executive escalation triage assistant. "
+            "Return a concise response with two sections: Situation and Recommended action."
+        ),
+        "user_prompt": (
+            f"Account: {request.account_name}\n"
+            f"Issue summary: {request.issue_summary}\n"
+            f"Product issue: {request.product_issue}\n"
+            f"Billing issue: {request.billing_issue}\n"
+            "Summarize the current escalation and the next action."
+        ),
+    }
 
 
 async def choose_next_tool_for_route(
@@ -442,6 +466,7 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
     run_id = state["run_id"]
     request = state["request"]
     scenario = state.get("governance_scenario", "normal")
+    semantic_cache_step = state.get("semantic_cache_step", "single")
     ai_route_base_url = state.get("ai_route_base_url", ai_route_for_scenario(scenario))
     llm_input = prompts_for_scenario(
         {
@@ -466,27 +491,56 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
             input={"original_prompt": llm_input},
             output=decorated,
         )
-    await emit(run_id, "llm_started", actor="orchestrator", stage="triage_plan", input=llm_input)
-    started = time.perf_counter()
     triage_prompts = llm_input
-    triage_brief = await generate_for_scenario(
-        run_id=run_id,
-        stage="triage_plan",
-        scenario=scenario,
-        prompts=triage_prompts,
-        base_url=ai_route_base_url,
-    )
+    semantic_cache_probe: dict[str, Any] | None = None
+    if scenario == "semantic_cache":
+        stage_name = "triage_cache_seed" if semantic_cache_step == "seed" else "triage_plan"
+        expected_stage = "semantic_cache_miss" if semantic_cache_step == "seed" else "semantic_cache_hit"
+        stage_summary = (
+            "Kong semantic cache evaluated the first orchestrator prompt and stored the response in Redis."
+            if semantic_cache_step == "seed"
+            else "Kong semantic cache reused the orchestrator prompt from Redis."
+        )
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage_name, input=llm_input)
+        started = time.perf_counter()
+        triage_brief = await llm.generate_with_headers(base_url=ai_route_base_url, **triage_prompts)
+        semantic_cache_probe = {
+            "step": semantic_cache_step,
+            "headers": triage_brief["cache_headers"],
+        }
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage=expected_stage,
+            llm_stage=stage_name,
+            summary=stage_summary,
+            output=triage_brief["cache_headers"],
+        )
+    else:
+        await emit(run_id, "llm_started", actor="orchestrator", stage="triage_plan", input=llm_input)
+        started = time.perf_counter()
+        triage_brief = await generate_for_scenario(
+            run_id=run_id,
+            stage="triage_plan",
+            scenario=scenario,
+            prompts=triage_prompts,
+            base_url=ai_route_base_url,
+        )
     await emit(
         run_id,
         "llm_completed",
         actor="orchestrator",
-        stage="triage_plan",
+        stage="triage_cache_seed" if scenario == "semantic_cache" and semantic_cache_step == "seed" else "triage_plan",
         llm_used=triage_brief["llm_used"],
         model=triage_brief["model"],
         output=triage_brief,
         duration_ms=timed_ms(started),
     )
-    return {"triage_brief": triage_brief}
+    result = {"triage_brief": triage_brief}
+    if semantic_cache_probe:
+        result["semantic_cache_probe"] = semantic_cache_probe
+    return result
 
 
 async def run_support_agent(state: OrchestratorState) -> OrchestratorState:
@@ -615,6 +669,7 @@ async def finalize_response(state: OrchestratorState) -> OrchestratorState:
         "renewal_risk": state.get("renewal_risk"),
         "open_tickets": state.get("open_tickets"),
         "triage_brief": state.get("triage_brief"),
+        "semantic_cache_probe": state.get("semantic_cache_probe"),
         "support_track": state.get("support_track"),
         "success_track": state.get("success_track"),
         "executive_brief": executive_brief,
@@ -645,6 +700,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     run_id = str(uuid.uuid4())
     started = time.perf_counter()
     scenario = request.governance_scenario
+    semantic_cache_step = request.semantic_cache_step
     ai_route_base_url = ai_route_for_scenario(scenario)
     await emit(
         run_id,
@@ -661,12 +717,73 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         summary=scenario_summary(scenario),
         output={"ai_route_base_url": ai_route_base_url},
     )
+    if scenario == "semantic_cache":
+        prompts = build_semantic_cache_prompts(request)
+        stage = "semantic_cache_seed" if semantic_cache_step == "seed" else "semantic_cache_reuse"
+        stage_summary = (
+            "First semantic-cache request through Kong. This should populate Redis."
+            if semantic_cache_step == "seed"
+            else "Second semantic-cache request through Kong. This should reuse the cached response."
+        )
+        await emit(run_id, "planning", message=stage_summary)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
+        llm_started = time.perf_counter()
+        triage_result = await llm.generate_with_headers(base_url=ai_route_base_url, **prompts)
+        cache_status = (triage_result.get("cache_headers", {}).get("x-cache-status") or "").lower()
+        policy_stage = "semantic_cache_hit" if cache_status == "hit" else "semantic_cache_miss"
+        policy_summary = (
+            "Kong semantic cache returned a cached response for this semantically similar prompt."
+            if policy_stage == "semantic_cache_hit"
+            else "Kong semantic cache did not find a reusable entry and stored this response in Redis."
+        )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage=policy_stage,
+            llm_stage=stage,
+            summary=policy_summary,
+            output=triage_result.get("cache_headers"),
+        )
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            llm_used=triage_result["llm_used"],
+            model=triage_result["model"],
+            output=triage_result,
+            duration_ms=timed_ms(llm_started),
+        )
+        final_response = {
+            "headline": "Semantic cache probe completed",
+            "governance_scenario": scenario,
+            "semantic_cache_probe": {
+                "step": semantic_cache_step,
+                "headers": triage_result.get("cache_headers"),
+                "request_payload": request.model_dump(),
+            },
+            "executive_brief": triage_result,
+            "recommended_summary": triage_result["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "result": final_response}
     try:
         graph_result = await orchestrator_graph.ainvoke(
             {
                 "request": request.model_dump(),
                 "run_id": run_id,
                 "governance_scenario": scenario,
+                "semantic_cache_step": semantic_cache_step,
                 "ai_route_base_url": ai_route_base_url,
             }
         )
@@ -710,6 +827,22 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     return {"run_id": run_id, "result": graph_result["result"]}
 
 
+async def clear_semantic_cache_keys() -> dict[str, Any]:
+    client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    try:
+        deleted = 0
+        cursor = 0
+        while True:
+            cursor, keys = await client.scan(cursor=cursor, match="semantic_cache:*", count=200)
+            if keys:
+                deleted += await client.delete(*keys)
+            if cursor == 0:
+                break
+        return {"deleted_keys": deleted}
+    finally:
+        await client.aclose()
+
+
 @app.get("/health")
 @app.get("/orchestrator/health")
 async def health() -> dict[str, str]:
@@ -731,6 +864,16 @@ async def agent_card() -> dict[str, Any]:
 @app.post("/orchestrator/play")
 async def play(request: PlayRequest) -> dict[str, Any]:
     return await run_playbook(request)
+
+
+@app.post("/semantic-cache/clear")
+@app.post("/orchestrator/semantic-cache/clear")
+async def clear_semantic_cache() -> dict[str, Any]:
+    result = await clear_semantic_cache_keys()
+    return {
+        "status": "cleared",
+        **result,
+    }
 
 
 @app.post("/v1/jsonrpc")

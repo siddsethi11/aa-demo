@@ -4,6 +4,7 @@ import json
 import os
 from typing import Any
 
+import httpx
 from openai import AsyncOpenAI
 
 
@@ -52,6 +53,51 @@ class OrchestratorLLM:
             "llm_used": True,
             "model": resolved_model,
             "summary": text.strip(),
+        }
+
+    async def generate_with_headers(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        base_url: str | None = None,
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.enabled:
+            raise RuntimeError("Kong-routed LLM is not configured")
+
+        resolved_base_url = (base_url or self.base_url or "").rstrip("/")
+        resolved_model = model or self.model
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{resolved_base_url}/chat/completions",
+                headers={
+                    "apikey": self.kong_api_key or "",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": resolved_model,
+                    "temperature": 0.2,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+        text = payload.get("choices", [{}])[0].get("message", {}).get("content") or ""
+        cache_headers = {
+            "x-cache-status": response.headers.get("x-cache-status"),
+            "x-cache-key": response.headers.get("x-cache-key"),
+            "x-cache-ttl": response.headers.get("x-cache-ttl"),
+            "age": response.headers.get("age"),
+        }
+        return {
+            "llm_used": True,
+            "model": resolved_model,
+            "summary": text.strip(),
+            "cache_headers": cache_headers,
         }
 
     async def summarize_escalation(

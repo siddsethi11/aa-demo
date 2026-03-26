@@ -94,6 +94,9 @@ The AI routes are split by caller type:
 - `/ai/orchestrator-semantic-guard-demo/chat/completions`
   - used only for the semantic guard scenario
   - protected by Kong `ai-semantic-prompt-guard` with Redis as the vector database
+- `/ai/orchestrator-semantic-cache-demo/chat/completions`
+  - used only for the semantic cache scenario
+  - protected by Kong `ai-semantic-cache` with Redis as the vector database
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
@@ -113,6 +116,7 @@ The route path is selected by the `governance_scenario` field sent in the `Play`
 - `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
 - `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
+- `semantic_cache` -> `/ai/orchestrator-semantic-cache-demo/chat/completions`
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
 
@@ -242,6 +246,59 @@ Behind the scenes:
 - the trace shows a `Kong semantic guard blocked request` event under the affected orchestrator LLM step
 
 This mode is useful for showing semantic policy enforcement at the gateway layer instead of relying on exact keyword matches inside the application.
+
+### 6. Semantic Cache
+
+This scenario demonstrates Kong serving a repeated orchestrator prompt from semantic cache backed by Redis.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-semantic-cache-demo/chat/completions`
+- that route applies `ai-semantic-cache`
+- the plugin uses:
+  - OpenAI `text-embedding-3-small` for embeddings
+  - Redis as the vector database
+- the current config in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml) uses:
+  - `vectordb.strategy: redis`
+  - `vectordb.distance_metric: cosine`
+  - `vectordb.dimensions: 1024`
+  - `vectordb.threshold: 0.1`
+  - `vectordb.redis.host: ${{ env "DECK_REDIS_HOST" }}`
+- in this scenario, the orchestrator sends the same triage prompt twice through the semantic-cache route:
+  - first call seeds the cache
+  - second call reuses the cached answer
+- Kong returns cache headers such as:
+  - `X-Cache-Status`
+  - `X-Cache-Key`
+  - `X-Cache-Ttl`
+  - `Age`
+- the trace shows:
+  - `Semantic cache miss`
+  - `Semantic cache hit`
+- the final output also includes a `Semantic Cache Probe` section with the cache headers from both calls
+
+This mode is useful for showing that Kong can speed up repeated or semantically similar orchestrator prompts without changing application code.
+
+When `Semantic Cache` is selected in `View Scene`, the scene popup changes from a single `Play` action to three explicit semantic-cache controls:
+
+- `Send First Request`
+  - sends the semantic-cache seed request
+  - the payload includes `governance_scenario: "semantic_cache"` and `semantic_cache_step: "seed"`
+  - the orchestrator uses `/ai/orchestrator-semantic-cache-demo/chat/completions`
+  - Kong calls the model normally, returns `X-Cache-Status: Miss`, and writes the semantic result into Redis
+  - this run is a cache-probe flow only, so it does not invoke MCP tools or sub-agents
+
+- `Send Second Request`
+  - sends the semantic-cache reuse request
+  - the payload includes `governance_scenario: "semantic_cache"` and `semantic_cache_step: "reuse"`
+  - the payload is intentionally similar, not identical, to the first request so the cache behavior is semantic rather than exact-string matching
+  - the orchestrator again uses `/ai/orchestrator-semantic-cache-demo/chat/completions`
+  - Kong should return `X-Cache-Status: Hit` and serve the cached response from Redis instead of running the full downstream flow
+
+- `Clear Semantic Cache`
+  - calls the orchestrator cache-clear endpoint: `/orchestrator/semantic-cache/clear`
+  - the orchestrator deletes all Redis keys matching `semantic_cache:*`
+  - this button is independent of the send-request buttons and is intended to reset the semantic-cache demo back to a clean state before another first request
 
 ## What happens when Play is pressed
 

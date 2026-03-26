@@ -22,6 +22,16 @@ const scenarioOptions = document.getElementById("scenario-options");
 const sceneModal = document.getElementById("scene-modal");
 const outputModal = document.getElementById("output-modal");
 const graphModal = document.getElementById("graph-modal");
+const noticeModal = document.getElementById("notice-modal");
+const semanticCacheControls = document.getElementById("semantic-cache-controls");
+const semanticCacheSeedPayload = document.getElementById("semantic-cache-seed-payload");
+const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payload");
+const semanticCacheSeedButton = document.getElementById("semantic-cache-seed-button");
+const semanticCacheHitButton = document.getElementById("semantic-cache-hit-button");
+const semanticCacheClearButton = document.getElementById("semantic-cache-clear-button");
+const noticeKicker = document.getElementById("notice-kicker");
+const noticeTitle = document.getElementById("notice-title");
+const noticeMessage = document.getElementById("notice-message");
 const detailTitle = document.getElementById("detail-title");
 const detailMeta = document.getElementById("detail-meta");
 const detailSummary = document.getElementById("detail-summary");
@@ -118,6 +128,7 @@ function labelForScenario(scenario) {
     token_limit: "AI Token Limit",
     prompt_enhancement: "Prompt Decorator",
     semantic_guard: "Semantic Guard",
+    semantic_cache: "Semantic Cache",
   };
   return labels[scenario] || "Normal";
 }
@@ -212,6 +223,64 @@ function applyScenarioChoice(scenario) {
   if (hiddenField) {
     hiddenField.value = activeScenario;
   }
+  const cacheField = playForm.elements.namedItem("semantic_cache_step");
+  if (cacheField) {
+    cacheField.value = "single";
+  }
+  const isSemanticCache = activeScenario === "semantic_cache";
+  if (semanticCacheControls) {
+    semanticCacheControls.hidden = !isSemanticCache;
+  }
+  if (playButton) {
+    playButton.hidden = isSemanticCache;
+  }
+  if (isSemanticCache) {
+    renderSemanticCachePayloads();
+  }
+}
+
+function currentFormPayload() {
+  const formData = new FormData(playForm);
+  return Object.fromEntries(formData.entries());
+}
+
+function semanticCachePayload(step) {
+  const base = currentFormPayload();
+  const reuseVariant =
+    step === "reuse"
+      ? {
+          issue_summary: "Customer reports a pricing disagreement and workflow synchronization lag across agent jobs.",
+          product_issue: "workflow synchronization lag across agent jobs",
+          billing_issue: "pricing discrepancy on enterprise add-ons",
+        }
+      : {};
+  return {
+    ...base,
+    ...reuseVariant,
+    governance_scenario: "semantic_cache",
+    semantic_cache_step: step,
+  };
+}
+
+function renderSemanticCachePayloads() {
+  if (!semanticCacheSeedPayload || !semanticCacheHitPayload) {
+    return;
+  }
+  semanticCacheSeedPayload.textContent = pretty(semanticCachePayload("seed"));
+  semanticCacheHitPayload.textContent = pretty(semanticCachePayload("reuse"));
+}
+
+function showNotice({ kicker = "Status", title, message }) {
+  if (!noticeModal || !noticeTitle || !noticeMessage || !noticeKicker) {
+    return;
+  }
+  noticeKicker.textContent = kicker;
+  noticeTitle.textContent = title;
+  noticeMessage.textContent = message;
+  if (noticeModal.open) {
+    noticeModal.close();
+  }
+  noticeModal.showModal();
 }
 
 function unwrapStructuredValue(value) {
@@ -385,6 +454,19 @@ function ensureActorRoot(actor) {
   addTraceNode(node, "run");
   traceState.actorRoots[actor] = rootId;
   return rootId;
+}
+
+function completeActorRoot(actor, timestamp, durationMs) {
+  const actorId = traceState.actorRoots[actor];
+  if (!actorId || !traceState.nodes[actorId]) {
+    return;
+  }
+  const actorNode = traceState.nodes[actorId];
+  actorNode.timestamp = timestamp || actorNode.timestamp;
+  if (durationMs !== undefined) {
+    actorNode.durationMs = durationMs;
+  }
+  actorNode.status = "complete";
 }
 
 function upsertSystemNode(key, parentId, title, summary, payload) {
@@ -763,6 +845,27 @@ function renderFinalOutput(result) {
           </div>
         </div>
       </section>
+      ${
+        result.semantic_cache_probe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>Semantic Cache Probe</strong>
+        <p class="output-section-copy">Created by the orchestrator in the semantic-cache scenario. This run sends either the first cache-seed request or the second cache-reuse request through Kong.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>${result.semantic_cache_probe?.step === "seed" ? "First Request" : "Second Request"}</span>
+            ${renderDefinitionList([
+              ["Step", result.semantic_cache_probe?.step],
+              ["X-Cache-Status", result.semantic_cache_probe?.headers?.["x-cache-status"]],
+              ["X-Cache-Key", result.semantic_cache_probe?.headers?.["x-cache-key"]],
+              ["X-Cache-TTL", result.semantic_cache_probe?.headers?.["x-cache-ttl"]],
+              ["Age", result.semantic_cache_probe?.headers?.age],
+            ])}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
       <section class="output-section">
         <strong>Account Context</strong>
         <p class="output-section-copy">Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts.</p>
@@ -958,8 +1061,15 @@ function handleTraceEvent(payload) {
 
     case "planning":
       ensureActorRoot("orchestrator");
-      setFlowStage("Gathering account context", payload.message);
-      setMcpPathState("active");
+      if (traceState.scenario === "semantic_cache") {
+        setFlowStage("Semantic cache probe", payload.message);
+        hideTopologyActivity();
+        clearOrchestratorLlmPath();
+        activateToolPath("orchestrator", "complete");
+      } else {
+        setFlowStage("Gathering account context", payload.message);
+        setMcpPathState("active");
+      }
       break;
 
     case "tool_list_received": {
@@ -1038,6 +1148,8 @@ function handleTraceEvent(payload) {
         prompt_decoration: "Decorator policy applied",
         token_limit: "Kong token policy blocked request",
         semantic_guard: "Kong semantic guard blocked request",
+        semantic_cache_miss: "Semantic cache miss",
+        semantic_cache_hit: "Semantic cache hit",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
       };
@@ -1130,16 +1242,28 @@ function handleTraceEvent(payload) {
       );
       finalNode.output = payload.output;
       addTraceNode(finalNode, "run");
+      selectedTraceId = "final-response";
       setFlowStage("Run complete", "The orchestrator completed synthesis and the final output is ready.");
       activateActorPath("orchestrator", "complete");
+      completeActorRoot("orchestrator", payload.timestamp);
       markNode("kong", "complete");
       markLine("ui-kong", "complete");
+      if (traceState.scenario === "semantic_cache") {
+        hideTopologyActivity();
+        activateToolPath("orchestrator", "complete");
+      }
       break;
     }
 
     case "run_completed": {
       const runNode = traceState.nodes.run;
-      runNode.output = payload.output;
+      runNode.output =
+        payload.output?.headline || payload.output?.policy_outcome
+          ? {
+              headline: payload.output?.headline,
+              policy_outcome: payload.output?.policy_outcome || "completed",
+            }
+          : runNode.output;
       runNode.durationMs = payload.duration_ms;
       runNode.timestamp = payload.timestamp;
       if (payload.output?.policy_outcome === "blocked") {
@@ -1148,6 +1272,11 @@ function handleTraceEvent(payload) {
       } else {
         runNode.status = "complete";
         setRunState("complete");
+      }
+      completeActorRoot("orchestrator", payload.timestamp, payload.duration_ms);
+      if (traceState.scenario === "semantic_cache") {
+        hideTopologyActivity();
+        activateToolPath("orchestrator", "complete");
       }
       break;
     }
@@ -1160,9 +1289,9 @@ function handleTraceEvent(payload) {
   updateSelectedDetail();
 }
 
-async function play() {
+async function play(overrides = {}) {
   const formData = new FormData(playForm);
-  const payload = Object.fromEntries(formData.entries());
+  const payload = { ...Object.fromEntries(formData.entries()), ...overrides };
 
   resetTopology();
   resetTraceState();
@@ -1202,10 +1331,59 @@ async function play() {
   }
 }
 
+async function clearSemanticCache() {
+  try {
+    const response = await fetch(`${config.apiBaseUrl}/semantic-cache/clear`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.apiKey,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Cache clear failed (${response.status})`);
+    }
+    const result = await response.json();
+    setFlowStage("Semantic cache cleared", `Deleted ${result.deleted_keys ?? 0} cached semantic entries from Redis.`);
+    if (activeScenario === "semantic_cache") {
+      renderSemanticCachePayloads();
+    }
+    showNotice({
+      kicker: "Semantic Cache",
+      title: "Cache deleted successfully",
+      message: `Deleted ${result.deleted_keys ?? 0} semantic cache entr${result.deleted_keys === 1 ? "y" : "ies"} from Redis.`,
+    });
+  } catch (error) {
+    setFlowStage("Cache clear failed", error.message);
+    showNotice({
+      kicker: "Semantic Cache",
+      title: "Cache delete failed",
+      message: error.message,
+    });
+  }
+}
+
 playButton.addEventListener("click", (event) => {
   event.preventDefault();
   sceneModal.close();
   play();
+});
+
+semanticCacheSeedButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  sceneModal.close();
+  play({ governance_scenario: "semantic_cache", semantic_cache_step: "seed" });
+});
+
+semanticCacheHitButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  sceneModal.close();
+  play({ governance_scenario: "semantic_cache", semantic_cache_step: "reuse" });
+});
+
+semanticCacheClearButton?.addEventListener("click", async (event) => {
+  event.preventDefault();
+  await clearSemanticCache();
 });
 
 presetOptions?.addEventListener("change", (event) => {
@@ -1214,6 +1392,9 @@ presetOptions?.addEventListener("change", (event) => {
     return;
   }
   applyScenePreset(target.value);
+  if (activeScenario === "semantic_cache") {
+    renderSemanticCachePayloads();
+  }
 });
 
 scenarioOptions?.addEventListener("change", (event) => {
@@ -1233,6 +1414,12 @@ resetButton.addEventListener("click", () => {
   setRunState("idle");
   setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");
   finalOutput.innerHTML = "<h3>Awaiting run</h3><p>Open View Scene and start the orchestrated demo flow from the scene popup.</p>";
+});
+
+playForm.addEventListener("input", () => {
+  if (activeScenario === "semantic_cache") {
+    renderSemanticCachePayloads();
+  }
 });
 
 clearLogButton.addEventListener("click", () => {

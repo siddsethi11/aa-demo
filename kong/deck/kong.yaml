@@ -218,6 +218,50 @@ services:
                 provider: openai
                 name: gpt-4o-mini
 
+  - name: ai-orchestrator-semantic-cache-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-semantic-cache-demo-chat-route
+        paths:
+          - /ai/orchestrator-semantic-cache-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-semantic-cache
+        config:
+          embeddings:
+            auth:
+              header_name: Authorization
+              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+            model:
+              provider: openai
+              name: text-embedding-3-small
+              options:
+                upstream_url: https://api.openai.com/v1/embeddings
+          vectordb:
+            dimensions: 1024
+            distance_metric: cosine
+            strategy: redis
+            threshold: 0.1
+            redis:
+              host: ${{ env "DECK_REDIS_HOST" }}
+              port: 6379
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              model:
+                provider: openai
+                name: gpt-4o-mini
+
   - name: ai-subagent-service
     url: https://generativelanguage.googleapis.com
     routes:

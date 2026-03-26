@@ -654,6 +654,10 @@ button:hover {
   width: min(1180px, calc(100vw - 32px));
 }
 
+.modal-notice {
+  width: min(560px, calc(100vw - 32px));
+}
+
 #output-modal {
   width: min(1320px, calc(100vw - 32px));
 }
@@ -699,6 +703,18 @@ button:hover {
   font-size: 0.84rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.scene-presets-label-highlight {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(131, 255, 94, 0.26);
+  background: rgba(131, 255, 94, 0.1);
+  color: #d6ffbe;
+  box-shadow: 0 0 0 1px rgba(131, 255, 94, 0.05) inset;
 }
 
 .preset-options {
@@ -766,6 +782,78 @@ button:hover {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.semantic-cache-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.semantic-cache-controls[hidden] {
+  display: none;
+}
+
+.semantic-cache-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.semantic-cache-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.semantic-cache-label {
+  color: #d6ffbe;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.semantic-cache-copy {
+  margin: 0;
+  color: var(--muted);
+}
+
+.semantic-cache-payload {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.semantic-cache-utility {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.semantic-cache-clear {
+  justify-self: start;
+  border-color: rgba(243, 179, 84, 0.38);
+  background: linear-gradient(180deg, rgba(243, 179, 84, 0.22), rgba(243, 179, 84, 0.1));
+  color: #fff2db;
+}
+
+.semantic-cache-clear:hover {
+  border-color: rgba(243, 179, 84, 0.54);
+  filter: brightness(1.08);
 }
 
 .graph-diagrams {
