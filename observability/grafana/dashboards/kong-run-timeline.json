@@ -691,6 +691,43 @@
         "x": 0,
         "y": 60
       },
+      "id": 13,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=~\"agent|llm|mcp\",run_id=\"$run_id\"} | json | line_format \"{{.component}} | svc={{.service}} | route={{.route}} | {{.method}} {{.request_uri}} | status={{.status}} | tool={{.mcp_tool_name}} | mcp={{.mcp_method}} | model={{.llm_usage_model}} | tokens={{.llm_usage_total_tokens}} | latency={{.latencies_request}}ms\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Run Trace (Selected Run)",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      },
       "id": 5,
       "options": {
         "dedupStrategy": "none",
