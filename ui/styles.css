@@ -551,6 +551,29 @@ button:hover {
   left: calc(50% - 130px);
 }
 
+.kong-policy-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border-color: rgba(131, 255, 94, 0.34);
+  background:
+    linear-gradient(180deg, rgba(131, 255, 94, 0.2), rgba(131, 255, 94, 0.08)),
+    rgba(255, 255, 255, 0.04);
+  color: #f6ffeb;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(131, 255, 94, 0.08);
+}
+
+.kong-policy-button:hover {
+  border-color: rgba(131, 255, 94, 0.5);
+}
+
 .orchestrator-node {
   top: 248px;
   left: 150px;
@@ -727,6 +750,85 @@ button:hover {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.policy-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.policy-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.policy-card-label {
+  color: #d6ffbe;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.policy-copy {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.policy-list {
+  display: grid;
+  gap: 10px;
+}
+
+.policy-point {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  line-height: 1.7;
+  position: relative;
+}
+
+.policy-point::before {
+  content: "";
+  position: absolute;
+  top: 0.72em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(131, 255, 94, 0.28);
+}
+
+.policy-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.policy-kv-item {
+  padding: 14px 15px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.policy-kv-item strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.policy-kv-item span {
+  color: var(--text);
+  line-height: 1.5;
 }
 
 .scene-presets {
@@ -1419,6 +1521,10 @@ button:hover {
 
   .output-subsection-wide {
     grid-column: auto;
+  }
+
+  .policy-kv {
+    grid-template-columns: 1fr;
   }
 }
 

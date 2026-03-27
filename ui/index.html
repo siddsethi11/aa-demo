@@ -102,6 +102,7 @@
               </article>
 
               <article class="topology-node kong-node gateway-core" data-node="kong">
+                <button id="kong-policy-button" class="kong-policy-button" type="button" aria-label="View Kong policy details">+</button>
                 <span class="node-label">Gateway Core</span>
                 <h3>Kong Gateway</h3>
                 <p>AI Proxy Advanced, Agent routing, auth, ACLs, and MCP tool exposure.</p>
@@ -463,6 +464,35 @@
             <button class="ghost modal-close" data-close-modal="notice-modal" type="button">Close</button>
           </div>
           <p class="modal-copy" id="notice-message">The action completed successfully.</p>
+        </div>
+      </dialog>
+
+      <dialog id="policy-modal" class="modal">
+        <div class="modal-shell modal-wide">
+          <div class="modal-head">
+            <div>
+              <p class="eyebrow">Kong Policy</p>
+              <h2 id="policy-title">Scene Policy Details</h2>
+            </div>
+            <button class="ghost modal-close" data-close-modal="policy-modal" type="button">Close</button>
+          </div>
+          <p class="modal-copy" id="policy-intro">
+            This explains what Kong is doing for the current scene in plain English.
+          </p>
+          <div class="policy-sections">
+            <section class="policy-card">
+              <span class="policy-card-label">What Kong Is Doing</span>
+              <div id="policy-plain-english" class="policy-list"></div>
+            </section>
+            <section class="policy-card">
+              <span class="policy-card-label">Why It Matters</span>
+              <p id="policy-why" class="policy-copy"></p>
+            </section>
+            <section class="policy-card">
+              <span class="policy-card-label">Config Applied</span>
+              <div id="policy-config" class="policy-kv"></div>
+            </section>
+          </div>
         </div>
       </dialog>
     </div>

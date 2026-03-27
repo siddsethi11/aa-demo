@@ -23,6 +23,8 @@ const sceneModal = document.getElementById("scene-modal");
 const outputModal = document.getElementById("output-modal");
 const graphModal = document.getElementById("graph-modal");
 const noticeModal = document.getElementById("notice-modal");
+const policyModal = document.getElementById("policy-modal");
+const kongPolicyButton = document.getElementById("kong-policy-button");
 const semanticCacheControls = document.getElementById("semantic-cache-controls");
 const semanticCacheSeedPayload = document.getElementById("semantic-cache-seed-payload");
 const semanticCacheHitPayload = document.getElementById("semantic-cache-hit-payload");
@@ -38,6 +40,11 @@ const piiSendButton = document.getElementById("pii-send-button");
 const noticeKicker = document.getElementById("notice-kicker");
 const noticeTitle = document.getElementById("notice-title");
 const noticeMessage = document.getElementById("notice-message");
+const policyTitle = document.getElementById("policy-title");
+const policyIntro = document.getElementById("policy-intro");
+const policyPlainEnglish = document.getElementById("policy-plain-english");
+const policyWhy = document.getElementById("policy-why");
+const policyConfig = document.getElementById("policy-config");
 const detailTitle = document.getElementById("detail-title");
 const detailMeta = document.getElementById("detail-meta");
 const detailSummary = document.getElementById("detail-summary");
@@ -147,6 +154,154 @@ function labelForScenario(scenario) {
     pii_sanitizer: "PII Sanitization",
   };
   return labels[scenario] || "Normal";
+}
+
+function currentPiiMode() {
+  return document.querySelector('input[name="pii_mode_choice"]:checked')?.value ||
+    playForm.elements.namedItem("pii_sanitizer_mode")?.value ||
+    "placeholder";
+}
+
+function policyDetailsForScenario(scenario) {
+  const common = {
+    normal: {
+      title: "Normal",
+      intro: "Kong fronts the full happy-path orchestration and applies the standard routing, auth, and tool exposure needed for the demo.",
+      plainEnglish: [
+        "Kong authenticates the request from the hosted UI before anything else runs.",
+        "Kong exposes the mock REST API as MCP tools, so the orchestrator and sub-agents can call tools instead of raw endpoints.",
+        "Kong routes the orchestrator’s LLM traffic to the primary OpenAI model and routes the sub-agent LLM traffic to Gemini.",
+      ],
+      why: "This is the baseline governed flow: one gateway handles auth, tool exposure, LLM routing, and service-to-service policy in one place.",
+      config: [
+        ["UI access", "Key-auth using the UI consumer key"],
+        ["Tool exposure", "AI MCP Proxy exposes only the allowed tools per consumer group"],
+        ["Orchestrator LLM route", "AI Proxy Advanced to OpenAI 4o mini"],
+        ["Sub-agent LLM route", "AI Proxy Advanced to Gemini 2.5 Flash"],
+      ],
+    },
+    llm_failover: {
+      title: "LLM Failover",
+      intro: "Kong tries the primary OpenAI route first and then moves the orchestrator to Gemini when the primary path fails.",
+      plainEnglish: [
+        "Kong sends the orchestrator request to the primary model first.",
+        "If the primary model path fails, Kong switches the request to the fallback model.",
+        "The orchestration continues without the app needing a separate fallback implementation for the user-facing flow.",
+      ],
+      why: "This shows resilience at the gateway layer. The app still asks for one LLM call, while Kong handles which model actually fulfills it.",
+      config: [
+        ["Primary model", "OpenAI 4o mini"],
+        ["Fallback model", "Gemini 2.5 Flash"],
+        ["Routing behavior", "AI Proxy Advanced with failover behavior"],
+        ["Expected outcome", "Primary fails, fallback succeeds, workflow continues"],
+      ],
+    },
+    token_limit: {
+      title: "AI Token Limit",
+      intro: "Kong applies a token governance policy and blocks the later orchestrator LLM call once the demo threshold is exceeded.",
+      plainEnglish: [
+        "Kong counts usage for the orchestrator’s AI route.",
+        "When the configured demo budget is exceeded, Kong blocks the request instead of forwarding it upstream.",
+        "The app receives a governed blocked result rather than continuing as if the policy did not exist.",
+      ],
+      why: "This demonstrates that Kong can enforce cost and usage guardrails without changing the application logic.",
+      config: [
+        ["Protected route", "Orchestrator AI route"],
+        ["Policy", "AI Rate Limiting Advanced"],
+        ["Decision", "Block once the configured demo budget is exceeded"],
+        ["Expected outcome", "Request is rejected before the model call completes"],
+      ],
+    },
+    prompt_enhancement: {
+      title: "Prompt Decorator",
+      intro: "Kong adds extra governance instructions to the orchestrator prompt before it reaches the model.",
+      plainEnglish: [
+        "The application sends its normal prompt to Kong.",
+        "Kong injects extra instructions that shape the response into an executive-ready escalation format.",
+        "The model output becomes more structured even though the application itself did not change its prompt template.",
+      ],
+      why: "This is useful when teams want one centrally enforced response style instead of re-implementing prompt standards in every service.",
+      config: [
+        ["Policy", "AI Prompt Decorator"],
+        ["Injected behavior", "Executive sections, customer posture, next checkpoint, confidence score"],
+        ["Where applied", "Orchestrator AI route only for this scene"],
+        ["Expected outcome", "More structured and policy-shaped output"],
+      ],
+    },
+    semantic_guard: {
+      title: "Semantic Guard",
+      intro: "Kong compares the prompt embedding against denied topics in Redis before deciding whether the request is allowed to reach the model.",
+      plainEnglish: [
+        "Kong converts the incoming prompt into an embedding and compares it against stored denied-topic embeddings.",
+        "Redis is used as the vector store for that similarity check.",
+        "If the prompt is close to a denied topic, Kong blocks it before any model call is made.",
+      ],
+      why: "This is stronger than simple keyword matching because Kong is checking for meaning, not just exact text.",
+      config: [
+        ["Policy", "AI Semantic Prompt Guard"],
+        ["Vector store", "Redis vector DB"],
+        ["Decision style", "Allow or block based on embedding similarity"],
+        ["Expected outcome", "Blocked prompts never reach the model"],
+      ],
+    },
+    semantic_cache: {
+      title: "Semantic Cache",
+      intro: "Kong checks Redis for a semantically similar prior prompt before deciding whether it needs to call the model again.",
+      plainEnglish: [
+        "Kong computes an embedding for the prompt and compares it against cached prompt embeddings in Redis.",
+        "If the prompt is close enough to a prior one, Kong returns the cached answer instead of calling the model.",
+        "If it is not, Kong calls the model and stores the new result for later reuse.",
+      ],
+      why: "This reduces repeat model work for similar prompts and makes repeated calls cheaper and faster.",
+      config: [
+        ["Policy", "AI Semantic Cache"],
+        ["Vector store", "Redis vector DB"],
+        ["Decision style", "Cache hit returns stored answer; cache miss calls the model"],
+        ["Expected outcome", "First request misses, second similar request hits"],
+      ],
+    },
+    pii_sanitizer: {
+      title: "PII Sanitization",
+      intro: "Kong sanitizes sensitive data before it leaves the gateway and sanitizes the model response before it returns to the UI.",
+      plainEnglish: [
+        "Kong first sends the request through the AI PII Service to detect and transform sensitive data.",
+        "Only after that sanitized request comes back does Kong forward it to the model.",
+        "When the model responds, Kong can sanitize the response as well before it goes back to the UI.",
+      ],
+      why: "This lets teams protect sensitive information at the gateway layer, instead of depending on every application and model call to do it correctly.",
+      config: [
+        ["Policy", "AI Sanitizer"],
+        ["Protected directions", "Request and response"],
+        ["Protected categories", "All supported PII fields plus credentials"],
+        ["Mode", currentPiiMode()],
+      ],
+    },
+  };
+
+  return common[scenario] || common.normal;
+}
+
+function renderPolicyModal() {
+  const scenario = activeScenario || "normal";
+  const details = policyDetailsForScenario(scenario);
+  if (!policyTitle || !policyIntro || !policyPlainEnglish || !policyWhy || !policyConfig) {
+    return;
+  }
+  policyTitle.textContent = `${details.title} Policy Details`;
+  policyIntro.textContent = details.intro;
+  policyPlainEnglish.innerHTML = details.plainEnglish
+    .map((point) => `<p class="policy-point">${escapeHtml(point)}</p>`)
+    .join("");
+  policyWhy.textContent = details.why;
+  policyConfig.innerHTML = details.config
+    .map(
+      ([label, value]) => `
+        <div class="policy-kv-item">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(value)}</span>
+        </div>`,
+    )
+    .join("");
 }
 
 function createTraceNode(id, level, title, summary, meta = {}) {
@@ -1908,6 +2063,9 @@ scenarioOptions?.addEventListener("change", (event) => {
     return;
   }
   applyScenarioChoice(target.value);
+  if (policyModal?.open) {
+    renderPolicyModal();
+  }
 });
 
 piiModeOptions?.addEventListener("change", (event) => {
@@ -1916,6 +2074,9 @@ piiModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderPiiSanitizerPayloads();
+  if (policyModal?.open && activeScenario === "pii_sanitizer") {
+    renderPolicyModal();
+  }
 });
 
 resetButton.addEventListener("click", () => {
@@ -1948,6 +2109,10 @@ clearLogButton.addEventListener("click", () => {
 sceneButton.addEventListener("click", () => sceneModal.showModal());
 graphButton.addEventListener("click", () => graphModal.showModal());
 outputButton.addEventListener("click", () => outputModal.showModal());
+kongPolicyButton?.addEventListener("click", () => {
+  renderPolicyModal();
+  policyModal?.showModal();
+});
 
 connectTraceSocket();
 applyScenePreset("acme_default");
