@@ -1,5 +1,90 @@
 _format_version: "3.0"
 
+plugins:
+  - name: http-log
+    config:
+      http_endpoint: http://loki:3100/loki/api/v1/push
+      method: POST
+      content_type: application/json
+      timeout: 10000
+      keepalive: 60000
+      flush_timeout: 2
+      queue:
+        concurrency_limit: 1
+        initial_retry_delay: 0.01
+        max_coalescing_delay: 1
+        max_entries: 10000
+        max_batch_size: 1
+        max_retry_delay: 60
+        max_retry_time: 60
+      headers: {}
+      custom_fields_by_lua:
+        streams: >-
+          local ts = string.format('%18.0f', os.time() * 1000000000)
+          local log_payload = kong.log.serialize()
+          local service = log_payload['service'] or { name = 'noService' }
+          local route = log_payload['route'] or { name = 'noRoute' }
+          local consumer = log_payload['consumer'] or {}
+          local request = log_payload['request'] or {}
+          local response = log_payload['response'] or {}
+          local status_code = tonumber(response['status'] or 0) or 0
+          local status = tostring(status_code)
+          local status_class = tostring(math.floor(status_code / 100)) .. 'xx'
+          local component = 'gateway'
+          if route['name'] == 'mock-mcp-route' then
+            component = 'mcp'
+          elseif string.sub(service['name'] or '', 1, 3) == 'ai-' then
+            component = 'llm'
+          elseif service['name'] == 'orchestrator-service' or service['name'] == 'support-agent-service' or service['name'] == 'success-agent-service' then
+            component = 'agent'
+          elseif service['name'] == 'mock-api-service' then
+            component = 'backend'
+          elseif service['name'] == 'ui-service' then
+            component = 'ui'
+          end
+          local ai = log_payload['ai'] or {}
+          local proxy = ai['proxy'] or {}
+          local meta = proxy['meta'] or {}
+          local usage = proxy['usage'] or {}
+          local prompt_tokens = tonumber(usage['prompt_tokens'] or usage['input_tokens'] or 0) or 0
+          local completion_tokens = tonumber(usage['completion_tokens'] or usage['output_tokens'] or 0) or 0
+          local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
+          log_payload['llm_usage'] = {
+            provider_name = tostring(meta['provider_name'] or ''),
+            request_model = tostring(meta['request_model'] or ''),
+            response_model = tostring(meta['response_model'] or ''),
+            prompt_tokens = prompt_tokens,
+            completion_tokens = completion_tokens,
+            total_tokens = total_tokens,
+            cost = usage['cost'],
+            time_per_token = usage['time_per_token'],
+            time_to_first_token = usage['time_to_first_token'],
+          }
+          log_payload['llm_usage_prompt_tokens'] = prompt_tokens
+          log_payload['llm_usage_completion_tokens'] = completion_tokens
+          log_payload['llm_usage_total_tokens'] = total_tokens
+          log_payload['llm_usage_model'] = tostring(meta['response_model'] or meta['request_model'] or '')
+          log_payload['llm_usage_provider'] = tostring(meta['provider_name'] or '')
+          local cjson = require 'cjson'
+          local payload_string = cjson.encode(log_payload)
+          return {
+            {
+              stream = {
+                gateway = 'kong-unified-governance',
+                component = component,
+                service = tostring(service['name'] or 'noService'),
+                route = tostring(route['name'] or 'noRoute'),
+                consumer = tostring(consumer['username'] or consumer['custom_id'] or consumer['id'] or 'anonymous'),
+                method = tostring(request['method'] or 'UNKNOWN'),
+                status = status,
+                status_class = status_class,
+              },
+              values = {
+                { ts, payload_string }
+              }
+            }
+          }
+
 services:
   - name: ui-service
     url: http://ui:80
@@ -39,6 +124,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -48,6 +136,9 @@ services:
                 param_name: key
                 param_value: ${{ env "DECK_GEMINI_API_KEY" }}
                 param_location: query
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: gemini
                 name: ${{ env "DECK_GEMINI_MODEL" }}
@@ -83,6 +174,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer invalid-failover-demo-key
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -92,6 +186,9 @@ services:
                 param_name: key
                 param_value: ${{ env "DECK_GEMINI_API_KEY" }}
                 param_location: query
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: gemini
                 name: ${{ env "DECK_GEMINI_MODEL" }}
@@ -118,6 +215,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -164,6 +264,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -214,6 +317,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -258,6 +364,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -292,6 +401,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -326,6 +438,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -361,6 +476,9 @@ services:
               auth:
                 header_name: Authorization
                 header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: openai
                 name: gpt-4o-mini
@@ -387,6 +505,9 @@ services:
                 param_name: key
                 param_value: ${{ env "DECK_GEMINI_API_KEY" }}
                 param_location: query
+              logging:
+                log_payloads: false
+                log_statistics: true
               model:
                 provider: gemini
                 name: ${{ env "DECK_GEMINI_MODEL" }}

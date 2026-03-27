@@ -75,7 +75,7 @@
                 <span class="topology-activity-label">Active MCP Tool</span>
                 <strong id="topology-activity-name">-</strong>
               </div>
-              <svg class="topology-lines" viewBox="0 0 1400 860" preserveAspectRatio="none" aria-hidden="true">
+              <svg class="topology-lines" viewBox="0 0 1400 1120" preserveAspectRatio="none" aria-hidden="true">
                 <path id="line-user-ui" d="M278 110 L590 110" />
                 <path id="line-ui-kong" d="M700 182 L700 282" />
                 <path id="line-kong-orchestrator" d="M570 332 L380 332" />
@@ -83,10 +83,11 @@
                 <path id="line-kong-success" d="M660 456 L660 782 L404 782" />
                 <path id="line-kong-openai" d="M830 340 L1088 186" />
                 <path id="line-kong-gemini" d="M830 390 L1088 380" />
-                <path id="line-kong-mcp" d="M740 456 L740 720 L1002 720" />
-                <path id="line-mcp-backend" d="M990 590 L990 456 L740 456 L1186 456 L1186 700" />
+                <path id="line-kong-mcp" d="M740 456 L990 456 L990 700" />
+                <path id="line-mcp-backend" d="M1064 810 L1190 810" />
                 <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
                 <path id="line-kong-pii" d="M830 420 L942 420 L942 560 L1090 560" />
+                <path id="line-kong-observability" class="telemetry-line" d="M700 456 L700 860" />
               </svg>
 
               <article class="topology-node user-node" data-node="user">
@@ -148,6 +149,12 @@
                 <span class="node-label">Sanitization</span>
                 <h3>AI PII Service</h3>
                 <p>Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.</p>
+              </article>
+
+              <article class="topology-node observability-node telemetry-node" data-node="observability">
+                <span class="node-label">Observability</span>
+                <h3>Grafana / Loki</h3>
+                <p>Receives Kong gateway logs for live metrics, queries, and dashboard panels.</p>
               </article>
 
               <article class="topology-node mcp-node" data-node="mcp">

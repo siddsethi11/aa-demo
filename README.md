@@ -767,6 +767,27 @@ http://localhost:8000/
 
 This is the intended demo entrypoint.
 
+### 10. Open Grafana
+
+The stack now includes Loki and Grafana for gateway log exploration:
+
+```text
+Grafana: http://localhost:3001/
+Loki:    http://localhost:3100/
+```
+
+Grafana is pre-provisioned with:
+
+- a Loki datasource
+- a starter dashboard called `Kong Governance Overview`
+
+The default Grafana credentials are:
+
+```text
+username: admin
+password: admin
+```
+
 The UI is hosted through Kong and uses the same gateway for:
 
 - `/orchestrator`
@@ -825,6 +846,60 @@ Stop the stack:
 ```bash
 docker compose down
 ```
+
+## Observability
+
+Kong now sends gateway logs to Loki through a global `http-log` plugin. The plugin reformats each gateway log line into Loki's `streams` payload and adds a small set of low-cardinality labels so Grafana queries stay useful.
+
+### Loki labels
+
+Each log line is labeled with:
+
+- `gateway`
+  - fixed as `kong-unified-governance`
+- `component`
+  - one of `llm`, `mcp`, `agent`, `backend`, `ui`, or `gateway`
+- `service`
+  - the Kong service name
+- `route`
+  - the Kong route name
+- `consumer`
+  - the consumer username, custom id, id, or `anonymous`
+- `method`
+  - the HTTP method
+- `status`
+  - the response status code
+- `status_class`
+  - the HTTP class such as `2xx`, `4xx`, or `5xx`
+
+### How component classification works
+
+The global log plugin classifies traffic like this:
+
+- `mock-mcp-route` => `mcp`
+- services beginning with `ai-` => `llm`
+- `orchestrator-service`, `support-agent-service`, `success-agent-service` => `agent`
+- `mock-api-service` => `backend`
+- `ui-service` => `ui`
+- everything else => `gateway`
+
+This makes it straightforward to build Grafana panels for:
+
+- LLM request volume and failures
+- MCP request volume and failures
+- agent request volume and failures
+- backend and UI traffic split by status
+
+### Grafana dashboard
+
+The starter dashboard `Kong Governance Overview` includes:
+
+- requests by component
+- errors by component
+- LLM requests
+- MCP requests
+- agent requests
+- a raw log stream panel for inspection
 
 ## Notes
 

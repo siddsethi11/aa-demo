@@ -62,6 +62,7 @@ const nodes = {
   gemini: document.querySelector('[data-node="gemini"]'),
   redis: document.querySelector('[data-node="redis"]'),
   "pii-service": document.querySelector('[data-node="pii-service"]'),
+  observability: document.querySelector('[data-node="observability"]'),
   mcp: document.querySelector('[data-node="mcp"]'),
   "backend-api": document.querySelector('[data-node="backend-api"]'),
 };
@@ -76,6 +77,7 @@ const lineMap = {
   "kong-gemini": document.getElementById("line-kong-gemini"),
   "kong-redis": document.getElementById("line-kong-redis"),
   "kong-pii": document.getElementById("line-kong-pii"),
+  "kong-observability": document.getElementById("line-kong-observability"),
   "kong-mcp": document.getElementById("line-kong-mcp"),
   "mcp-backend": document.getElementById("line-mcp-backend"),
 };
@@ -983,6 +985,11 @@ function activateRedisPath(state = "active") {
   markLine("kong-redis", state);
 }
 
+function setObservabilityPath(state = "active") {
+  markNode("observability", state);
+  markLine("kong-observability", state);
+}
+
 function completeRedisPath() {
   activateRedisPath("complete");
 }
@@ -1471,6 +1478,7 @@ function handleTraceEvent(payload) {
       markNode("ui", "complete");
       markLine("user-ui", "complete");
       markLine("ui-kong", "active");
+      setObservabilityPath("active");
       if (traceState.scenario === "semantic_guard") {
         markNode("kong", "active");
         markNode("orchestrator", "complete");
@@ -1839,6 +1847,7 @@ function handleTraceEvent(payload) {
         markNode("kong", "complete");
         markLine("ui-kong", "complete");
       }
+      setObservabilityPath("complete");
       if (
         traceState.scenario === "semantic_cache" ||
         traceState.scenario === "pii_sanitizer" ||
@@ -1900,6 +1909,7 @@ function handleTraceEvent(payload) {
         traceState.scenario === "semantic_guard"
       ) {
         hideTopologyActivity();
+        setObservabilityPath("complete");
         if (traceState.scenario === "semantic_cache") {
           activateRedisPath("complete");
           setOpenAiNodeState("complete");

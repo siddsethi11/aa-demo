@@ -14,6 +14,35 @@ services:
     expose:
       - "8080"
 
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      loki:
+        condition: service_started
+
   kong-dp:
     image: kong/kong-gateway:3.13.0.1
     container_name: kong-dp
@@ -36,6 +65,8 @@ services:
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_LOG_LEVEL: notice
+      KONG_UNTRUSTED_LUA: "on"
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: resty.http,cjson
     ports:
       - "8000:8000"
       - "8443:8443"
@@ -43,6 +74,8 @@ services:
     volumes:
       - ./kong/certs:/etc/kong/certs:ro
     depends_on:
+      loki:
+        condition: service_started
       redis-stack:
         condition: service_started
       ai-pii-service:

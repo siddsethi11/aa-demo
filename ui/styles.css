@@ -12,6 +12,7 @@
   --green-soft: rgba(131, 255, 94, 0.18);
   --white-soft: rgba(255, 255, 255, 0.88);
   --blue: #7cc0ff;
+  --blue-soft: rgba(124, 192, 255, 0.18);
   --amber: #f3b354;
   --red: #ff6b6b;
   --red-soft: rgba(255, 107, 107, 0.18);
@@ -100,7 +101,7 @@ button:hover {
 
 .topbar h1 {
   margin: 8px 0 10px;
-  font-size: clamp(2.3rem, 4vw, 4rem);
+  font-size: clamp(2rem, 3.3vw, 3.35rem);
   line-height: 0.96;
 }
 
@@ -369,7 +370,7 @@ button:hover {
 
 .topology {
   position: relative;
-  min-height: 860px;
+  min-height: 1120px;
   border-radius: 24px;
   border: 1px solid var(--border);
   background:
@@ -459,6 +460,14 @@ button:hover {
   animation: dash-flow 1s linear infinite;
 }
 
+.topology-lines path.telemetry-line.active {
+  stroke: var(--blue);
+  opacity: 1;
+  filter: drop-shadow(0 0 10px rgba(124, 192, 255, 0.62));
+  stroke-dasharray: 12 10;
+  animation: dash-flow 1.2s linear infinite;
+}
+
 .topology-lines path.error {
   stroke: var(--red);
   opacity: 1;
@@ -536,6 +545,21 @@ button:hover {
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32);
 }
 
+.telemetry-node {
+  border-color: rgba(124, 192, 255, 0.54);
+  background:
+    linear-gradient(180deg, rgba(124, 192, 255, 0.14), rgba(124, 192, 255, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.telemetry-node.active {
+  border-color: rgba(124, 192, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(124, 192, 255, 0.34),
+    0 0 32px rgba(124, 192, 255, 0.22),
+    0 18px 40px rgba(0, 0, 0, 0.34);
+}
+
 .user-node {
   top: 56px;
   left: 56px;
@@ -600,7 +624,8 @@ button:hover {
 }
 
 .redis-node,
-.pii-node {
+.pii-node,
+.observability-node {
   top: 468px;
   right: 88px;
   width: 220px;
@@ -620,13 +645,18 @@ button:hover {
     rgba(11, 13, 18, 0.94);
 }
 
+.observability-node {
+  top: 860px;
+  left: calc(50% - 110px);
+}
+
 .mcp-node {
-  top: 590px;
+  top: 700px;
   right: 300px;
 }
 
 .backend-node {
-  top: 590px;
+  top: 700px;
   right: 14px;
   width: 200px;
 }
@@ -1435,7 +1465,7 @@ button:hover {
   }
 
   .topology {
-    min-height: 1040px;
+    min-height: 1180px;
   }
 
   .user-node {
@@ -1487,6 +1517,11 @@ button:hover {
     top: 700px;
     right: 18px;
     width: 190px;
+  }
+
+  .observability-node {
+    top: 900px;
+    left: calc(50% - 110px);
   }
 
   .topology-activity {
