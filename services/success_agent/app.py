@@ -139,6 +139,7 @@ async def prepare_customer_actions(state: SuccessState) -> SuccessState:
             available_tools=available_tools,
             remaining_tools=remaining_tools,
             current_context=current_context,
+            run_id=params["run_id"],
         )
         await emit_trace(
             params["run_id"],

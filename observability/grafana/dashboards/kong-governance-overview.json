@@ -50,7 +50,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\"} |~ \"/(support-agent|success-agent)/v1/jsonrpc\"",
+          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/v1/jsonrpc\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -87,7 +87,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"mcp\",route=\"mock-mcp-route\"} | json | mcp_method =~ \"tools/(list|call)\"",
+          "expr": "{component=\"mcp\",route=\"mock-mcp-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | mcp_method =~ \"tools/(list|call)\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -124,7 +124,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"llm\"}",
+          "expr": "{component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"}",
           "queryType": "range",
           "refId": "A"
         }
@@ -176,7 +176,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "targets": [
@@ -186,7 +186,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_cost [$__range]))",
           "legendFormat": "{{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
@@ -249,7 +249,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum(sum_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_cost [$__range]))",
           "legendFormat": "Total Cost",
           "queryType": "range",
           "refId": "A"
@@ -302,7 +302,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "targets": [
@@ -312,7 +312,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_cost [$__range]))",
           "legendFormat": "{{consumer}}",
           "queryType": "range",
           "refId": "A"
@@ -365,7 +365,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "targets": [
@@ -375,13 +375,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (consumer) (avg_over_time({component=\"llm\"} | json | unwrap llm_usage_cost [1h]))",
+          "expr": "avg by (consumer) (sum by (consumer, run_id) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_cost [$__range])))",
           "legendFormat": "{{consumer}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Average Cost By Agent",
+      "title": "Average Cost Per Run By Agent",
       "type": "stat"
     },
     {
@@ -418,6 +418,7 @@
       "id": 224,
       "options": {
         "displayLabels": [
+          "name",
           "value"
         ],
         "legend": {
@@ -443,13 +444,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (count_over_time({component=\"llm\"} | json | llm_usage_model != \"\" [1h]))",
+          "expr": "sum by (llm_usage_model) (count_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" [$__range]))",
           "legendFormat": "{{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "LLM Calls By Model",
+      "title": "LLM Calls By Model Name",
       "type": "piechart"
     },
     {
@@ -486,6 +487,7 @@
       "id": 236,
       "options": {
         "displayMode": "gradient",
+        "namePlacement": "left",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -505,13 +507,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (count_over_time({component=\"llm\"} | json | llm_usage_model != \"\" [1h]))",
+          "expr": "sum by (consumer,llm_usage_model) (count_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" [$__range]))",
           "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "LLM Calls By Agent And Model",
+      "title": "LLM Calls By Agent And Model Name",
       "type": "bargauge"
     },
     {
@@ -548,6 +550,7 @@
       "id": 232,
       "options": {
         "displayMode": "gradient",
+        "namePlacement": "left",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -567,13 +570,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_total_tokens [1h]))",
+          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [1h]))",
           "legendFormat": "{{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Tokens Consumed By LLM Model",
+      "title": "Tokens Consumed By Model Name",
       "type": "bargauge"
     },
     {
@@ -609,14 +612,9 @@
       },
       "id": 244,
       "options": {
-        "displayLabels": [
-          "value"
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right"
-        },
-        "pieType": "donut",
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -624,9 +622,9 @@
           "fields": "",
           "values": false
         },
-        "tooltip": {
-          "mode": "single"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
       },
       "targets": [
         {
@@ -635,14 +633,14 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_total_tokens [1h]))",
+          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [1h]))",
           "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Tokens Consumed By Agent And Model",
-      "type": "piechart"
+      "title": "Tokens Consumed By Agent And Model Name",
+      "type": "bargauge"
     },
     {
       "datasource": {
@@ -678,6 +676,7 @@
       "id": 240,
       "options": {
         "displayMode": "gradient",
+        "namePlacement": "left",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -697,13 +696,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (mcp_tool_name) (avg_over_time({component=\"mcp\",route=\"mock-mcp-route\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" | unwrap mcp_tool_latency [1h]))",
+          "expr": "avg by (mcp_tool_name) (avg_over_time({component=\"mcp\",route=\"mock-mcp-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" | unwrap mcp_tool_latency [1h]))",
           "legendFormat": "{{mcp_tool_name}}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "MCP Tool Execution Latency",
+      "title": "MCP Tool Execution Latency By Tool",
       "type": "bargauge"
     },
     {
@@ -740,6 +739,7 @@
       "id": 252,
       "options": {
         "displayMode": "gradient",
+        "namePlacement": "left",
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -759,7 +759,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"orchestrator-service\",method=\"POST\",status=\"200\"} | json | request_uri = \"/orchestrator/play\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"orchestrator-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri = \"/orchestrator/play\" | unwrap latencies_request [1h]))",
           "legendFormat": "Orchestrator",
           "queryType": "range",
           "refId": "A"
@@ -770,7 +770,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\"} | json | request_uri =~ \".*/support-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
           "legendFormat": "Support Agent",
           "queryType": "range",
           "refId": "B"
@@ -781,13 +781,13 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\"} | json | request_uri =~ \".*/success-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
           "legendFormat": "Success Agent",
           "queryType": "range",
           "refId": "C"
         }
       ],
-      "title": "Agent Execution Latency",
+      "title": "Agent Execution Latency By Agent",
       "type": "bargauge",
       "description": "Derived from Kong request latency logs over the recent lookback. This averages only the real agent execution requests, excluding long-lived trace websocket traffic."
     },
@@ -839,7 +839,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\"} | json | unwrap llm_usage_total_tokens [5m]))",
+          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [5m]))",
           "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
@@ -896,7 +896,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (mcp_tool_name) (count_over_time({component=\"mcp\",route=\"mock-mcp-route\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" [5m]))",
+          "expr": "sum by (mcp_tool_name) (count_over_time({component=\"mcp\",route=\"mock-mcp-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | mcp_method = \"tools/call\" | mcp_tool_name != \"\" [5m]))",
           "legendFormat": "{{mcp_tool_name}}",
           "queryType": "range",
           "refId": "A"
@@ -917,7 +917,37 @@
     "mcp"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "grafana-loki"
+        },
+        "definition": "label_values({run_id!=\"\"}, run_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Run ID",
+        "multi": false,
+        "name": "run_id",
+        "options": [],
+        "query": {
+          "label": "run_id",
+          "stream": "{run_id!=\"\"}",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 3,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",

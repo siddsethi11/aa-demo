@@ -631,6 +631,28 @@ The success sub-agent is responsible for:
 
 It turns the technical findings plus the triage framing into a customer-ready action plan.
 
+## Expected LLM Call Counts
+
+In a normal full run, the expected Kong-routed LLM call counts are:
+
+- orchestrator: `5`
+  - `3` tool-selection planner calls
+  - `1` triage brief call
+  - `1` executive summary call
+- support-agent: `3`
+  - `2` tool-selection planner calls
+  - `1` technical summary call
+- success-agent: `3`
+  - `2` tool-selection planner calls
+  - `1` success summary call
+
+So for a normal run:
+
+- `gpt-4o-mini-2024-07-18` should appear as `5`
+- `gemini-2.5-flash` should appear as `6`
+
+If Grafana does not show those counts for a fresh normal run, the first thing to verify is whether the affected LLM log lines in Loki carry the correct `run_id`.
+
 ## Implemented services
 
 - [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, live flow states, and event log
@@ -779,7 +801,7 @@ Loki:    http://localhost:3100/
 Grafana is pre-provisioned with:
 
 - a Loki datasource
-- a starter dashboard called `Kong Governance Overview`
+- a dashboard called `Kong Governance Overview`
 
 The default Grafana credentials are:
 
@@ -871,6 +893,8 @@ Each log line is labeled with:
   - the response status code
 - `status_class`
   - the HTTP class such as `2xx`, `4xx`, or `5xx`
+- `run_id`
+  - extracted from the `x-demo-run-id` request header when it is present
 
 ### How component classification works
 
@@ -892,7 +916,7 @@ This makes it straightforward to build Grafana panels for:
 
 ### Grafana dashboard
 
-The starter dashboard `Kong Governance Overview` includes:
+The dashboard `Kong Governance Overview` includes:
 
 - requests by component
 - errors by component
@@ -900,6 +924,27 @@ The starter dashboard `Kong Governance Overview` includes:
 - MCP requests
 - agent requests
 - a raw log stream panel for inspection
+
+The dashboard also includes a `Run ID` selector:
+
+- `All`
+  - shows all labeled runs in the selected time range
+  - excludes traffic where `run_id` is blank
+- a specific run id
+  - scopes the dashboard to one run
+
+The LLM cost panels and LLM call-count panels are intended to follow the active Grafana time range rather than a hardcoded lookback window.
+
+The `Average Cost Per Run By Agent` panel means:
+
+- first sum LLM cost per `(consumer, run_id)`
+- then average those per-run totals by agent
+
+Important note about historical data:
+
+- older Loki entries created before the run-id propagation fix may show incorrect per-run sub-agent LLM counts
+- those older runs cannot be corrected retroactively in Grafana because the blank `run_id` was already written into Loki
+- fresh runs after restarting the updated services should show the expected counts listed above
 
 ## Notes
 
