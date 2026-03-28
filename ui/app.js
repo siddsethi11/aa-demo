@@ -120,6 +120,7 @@ const componentVisibleSince = {};
 const MIN_COMPONENT_ACTIVE_MS = 350;
 const MIN_COMPONENT_ERROR_MS = 850;
 const MIN_RETURN_COMPONENT_ACTIVE_MS = 1100;
+const MIN_JUDGE_VISIBLE_MS = 4000;
 
 const scenePresets = {
   acme_default: {
@@ -1345,6 +1346,8 @@ function applyComponentState(component, state) {
   const minVisibleMs =
     currentState === "error"
       ? MIN_COMPONENT_ERROR_MS
+      : component === "judge-model"
+        ? MIN_JUDGE_VISIBLE_MS
       : (component === "dashboard" || component === "orchestrator" || component === "kong")
         ? MIN_RETURN_COMPONENT_ACTIVE_MS
         : MIN_COMPONENT_ACTIVE_MS;
@@ -2304,7 +2307,6 @@ function handleTraceEvent(payload) {
         markLine("kong-openai", "complete");
         markNode("kong", "active");
         activateJudgePath("active");
-        scheduleJudgeSettle();
         setFlowStage("Candidate response returned", "OpenAI returned the candidate response to Kong. Kong is about to invoke the judge model.");
         break;
       }
@@ -2340,7 +2342,6 @@ function handleTraceEvent(payload) {
       markNode("openai", "complete");
       markLine("kong-openai", "complete");
       activateJudgePath("active");
-      scheduleJudgeSettle();
       break;
     }
 
@@ -2349,8 +2350,7 @@ function handleTraceEvent(payload) {
       setFlowStage("Judge completed", "Kong received the judge score and is returning the governed result to the orchestrator.");
       activateJudgePath("active");
       markNode("kong", "active");
-      scheduleJudgeSettle(700);
-      scheduleJudgeReturnSettle(700);
+      scheduleJudgeReturnSettle(MIN_JUDGE_VISIBLE_MS);
       break;
     }
 
@@ -2512,7 +2512,6 @@ function handleTraceEvent(payload) {
         markNode("openai", "complete");
         markLine("kong-openai", "complete");
         activateJudgePath("active");
-        scheduleJudgeSettle();
         setFlowStage("Judge model evaluating", payload.summary || "Kong is sending the candidate response to the judge model for scoring.");
       }
       if (payload.stage === "pii_sanitizer_request") {
@@ -2599,7 +2598,7 @@ function handleTraceEvent(payload) {
         }
         activateJudgePath("active");
         markNode("kong", "active");
-        scheduleJudgeUiReturn(1400);
+        scheduleJudgeUiReturn(MIN_JUDGE_VISIBLE_MS + 600);
       } else if (traceState.scenario === "semantic_cache") {
         applyComponentState("kong", "active");
         if (!semanticCacheMissReturnPending) {
@@ -2720,7 +2719,7 @@ function handleTraceEvent(payload) {
         if (traceState.scenario === "llm_as_judge") {
           markNode("openai", "complete");
           markLine("kong-openai", "complete");
-          scheduleJudgeFlowComplete(2200);
+          scheduleJudgeFlowComplete(MIN_JUDGE_VISIBLE_MS + 1400);
         } else if (traceState.scenario === "semantic_cache") {
           activateRedisPath("complete");
           setOpenAiNodeState("complete");
