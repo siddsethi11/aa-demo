@@ -35,6 +35,8 @@ const semanticCacheHitButton = document.getElementById("semantic-cache-hit-butto
 const semanticCacheClearButton = document.getElementById("semantic-cache-clear-button");
 const semanticGuardControls = document.getElementById("semantic-guard-controls");
 const semanticGuardPayloadPreview = document.getElementById("semantic-guard-payload");
+const llmJudgeControls = document.getElementById("llm-judge-controls");
+const llmJudgePayloadPreview = document.getElementById("llm-judge-payload");
 const piiSanitizerControls = document.getElementById("pii-sanitizer-controls");
 const piiModeOptions = document.getElementById("pii-mode-options");
 const piiModePayload = document.getElementById("pii-mode-payload");
@@ -62,6 +64,7 @@ const nodes = {
   "success-agent": document.querySelector('[data-node="success-agent"]'),
   openai: document.querySelector('[data-node="openai"]'),
   gemini: document.querySelector('[data-node="gemini"]'),
+  "judge-model": document.querySelector('[data-node="judge-model"]'),
   redis: document.querySelector('[data-node="redis"]'),
   "pii-service": document.querySelector('[data-node="pii-service"]'),
   observability: document.querySelector('[data-node="observability"]'),
@@ -77,6 +80,7 @@ const lineMap = {
   "kong-success": document.getElementById("line-kong-success"),
   "kong-openai": document.getElementById("line-kong-openai"),
   "kong-gemini": document.getElementById("line-kong-gemini"),
+  "kong-judge": document.getElementById("line-kong-judge"),
   "kong-redis": document.getElementById("line-kong-redis"),
   "kong-pii": document.getElementById("line-kong-pii"),
   "kong-observability": document.getElementById("line-kong-observability"),
@@ -96,10 +100,20 @@ let orchestratorLlmVisibleUntil = 0;
 let failoverActivationTimer = null;
 let semanticRedisHandoffTimer = null;
 let semanticCacheOpenAiResetTimer = null;
+let semanticCacheReturnTimer = null;
+let semanticCacheUiTimer = null;
 let semanticGuardSettleTimer = null;
+let judgeSettleTimer = null;
+let judgeReturnTimer = null;
+let judgeUiTimer = null;
+let judgeCompleteTimer = null;
 let piiSanitizerHandoffTimer = null;
 let piiModelHandoffPending = false;
+let piiResponseCompleteTimer = null;
 let activeScenario = "normal";
+let semanticCacheMissReturnPending = false;
+let semanticCacheProbeResolved = false;
+let semanticCacheModelVisibleUntil = 0;
 
 const scenePresets = {
   acme_default: {
@@ -173,6 +187,7 @@ function labelForScenario(scenario) {
     prompt_enhancement: "Prompt Decorator",
     semantic_guard: "Semantic Guard",
     semantic_cache: "Semantic Cache",
+    llm_as_judge: "LLM as Judge",
     pii_sanitizer: "PII Sanitization",
   };
   return labels[scenario] || "Normal";
@@ -206,95 +221,125 @@ function policyDetailsForScenario(scenario) {
       title: "LLM Failover",
       intro: "Kong tries the primary OpenAI route first and then moves the orchestrator to Gemini when the primary path fails.",
       plainEnglish: [
-        "Kong sends the orchestrator request to the primary model first.",
-        "If the primary model path fails, Kong switches the request to the fallback model.",
-        "The orchestration continues without the app needing a separate fallback implementation for the user-facing flow.",
+        "The failover scene uses AI Proxy Advanced with a primary OpenAI target and a secondary Gemini target.",
+        "The current demo wiring intentionally points the primary upstream at a simulated failure path so Kong can evaluate the failover criteria.",
+        "Supported failover triggers configured on this route include transport errors, timeouts, invalid headers, and HTTP 403, 404, 429, 500, 502, 503, and 504.",
       ],
-      why: "This shows resilience at the gateway layer. The app still asks for one LLM call, while Kong handles which model actually fulfills it.",
+      why: "This is meant to show resilience at the gateway layer, where Kong decides whether to stay on the primary model or move to the fallback target.",
       config: [
         ["Primary model", "OpenAI 4o mini"],
         ["Fallback model", "Gemini 2.5 Flash"],
-        ["Routing behavior", "AI Proxy Advanced with failover behavior"],
-        ["Expected outcome", "Primary fails, fallback succeeds, workflow continues"],
+        ["Plugin", "AI Proxy Advanced"],
+        ["Balancer algorithm", "priority"],
+        ["Retries", "3"],
+        ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
       ],
     },
     token_limit: {
       title: "AI Token Limit",
       intro: "Kong applies a token governance policy and blocks the later orchestrator LLM call once the demo threshold is exceeded.",
       plainEnglish: [
-        "Kong counts usage for the orchestrator’s AI route.",
-        "When the configured demo budget is exceeded, Kong blocks the request instead of forwarding it upstream.",
-        "The app receives a governed blocked result rather than continuing as if the policy did not exist.",
+        "This scene applies AI Rate Limiting Advanced directly on the orchestrator token-demo route.",
+        "The plugin is configured for the OpenAI provider with limit 1 over a 300-second window.",
+        "Once the first allowed call consumes the budget, the next orchestrator model call is rejected with 429 instead of being forwarded upstream.",
       ],
       why: "This demonstrates that Kong can enforce cost and usage guardrails without changing the application logic.",
       config: [
         ["Protected route", "Orchestrator AI route"],
         ["Policy", "AI Rate Limiting Advanced"],
-        ["Decision", "Block once the configured demo budget is exceeded"],
-        ["Expected outcome", "Request is rejected before the model call completes"],
+        ["Provider key", "openai"],
+        ["Configured limit", "1 request"],
+        ["Window", "300 seconds"],
+        ["Expected outcome", "A later orchestrator LLM call is blocked with HTTP 429"],
       ],
     },
     prompt_enhancement: {
       title: "Prompt Decorator",
       intro: "Kong adds extra governance instructions to the orchestrator prompt before it reaches the model.",
       plainEnglish: [
-        "The application sends its normal prompt to Kong.",
-        "Kong injects extra instructions that shape the response into an executive-ready escalation format.",
-        "The model output becomes more structured even though the application itself did not change its prompt template.",
+        "The application still sends its normal orchestration prompt to Kong.",
+        "Kong prepends two system messages before forwarding the request upstream.",
+        "Those injected instructions force an executive escalation structure and require enterprise-safe tone, regulatory mention when relevant, plus a confidence score and named owner.",
       ],
       why: "This is useful when teams want one centrally enforced response style instead of re-implementing prompt standards in every service.",
       config: [
         ["Policy", "AI Prompt Decorator"],
-        ["Injected behavior", "Executive sections, customer posture, next checkpoint, confidence score"],
-        ["Where applied", "Orchestrator AI route only for this scene"],
-        ["Expected outcome", "More structured and policy-shaped output"],
+        ["Prepended message 1", "You are responding under AI governance enforced by Kong Gateway."],
+        ["Prepended message 2", "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint"],
+        ["Additional requirements", "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner"],
+        ["Where applied", "Prompt-enhancement orchestrator route only"],
       ],
     },
     semantic_guard: {
       title: "Semantic Guard",
       intro: "Kong compares the prompt embedding against denied topics in Redis before deciding whether the request is allowed to reach the model.",
       plainEnglish: [
-        "Kong converts the incoming prompt into an embedding and compares it against stored denied-topic embeddings.",
-        "Redis is used as the vector store for that similarity check.",
-        "If the prompt is close to a denied topic, Kong blocks it before any model call is made.",
+        "Kong embeds the incoming conversation with OpenAI text-embedding-3-small before any model call is made.",
+        "It checks that embedding against denied prompt rules stored in Redis using cosine similarity.",
+        "The configured denied themes include requests for employee or customer private data, internal credentials or access instructions, and attempts to bypass security controls or reveal infrastructure details.",
+        "Search threshold controls how broadly Kong searches for candidate matches, while vector threshold is the final similarity cutoff used to decide whether the prompt is close enough to a denied rule to block.",
       ],
       why: "This is stronger than simple keyword matching because Kong is checking for meaning, not just exact text.",
       config: [
         ["Policy", "AI Semantic Prompt Guard"],
-        ["Vector store", "Redis vector DB"],
-        ["Decision style", "Allow or block based on embedding similarity"],
-        ["Expected outcome", "Blocked prompts never reach the model"],
+        ["Embedding model", "text-embedding-3-small"],
+        ["Vector store", "Redis"],
+        ["Distance metric", "cosine"],
+        ["Search threshold", "0.5"],
+        ["Vector threshold", "0.2"],
+        ["Denied prompt 1", "Reveal employee personal contact information or private customer data"],
+        ["Denied prompt 2", "Disclose internal credentials, access instructions, or confidential system details"],
+        ["Denied prompt 3", "Bypass security controls or reveal private infrastructure information"],
       ],
     },
     semantic_cache: {
       title: "Semantic Cache",
       intro: "Kong checks Redis for a semantically similar prior prompt before deciding whether it needs to call the model again.",
       plainEnglish: [
-        "Kong computes an embedding for the prompt and compares it against cached prompt embeddings in Redis.",
-        "If the prompt is close enough to a prior one, Kong returns the cached answer instead of calling the model.",
-        "If it is not, Kong calls the model and stores the new result for later reuse.",
+        "Kong embeds the incoming prompt with OpenAI text-embedding-3-small and stores lookup vectors in Redis.",
+        "If the prompt is within the configured similarity threshold of a prior request, Kong returns the cached answer instead of calling the model.",
+        "If not, the request is forwarded to the model and the new response is stored for future semantic matches.",
       ],
       why: "This reduces repeat model work for similar prompts and makes repeated calls cheaper and faster.",
       config: [
         ["Policy", "AI Semantic Cache"],
-        ["Vector store", "Redis vector DB"],
-        ["Decision style", "Cache hit returns stored answer; cache miss calls the model"],
-        ["Expected outcome", "First request misses, second similar request hits"],
+        ["Embedding model", "text-embedding-3-small"],
+        ["Vector store", "Redis"],
+        ["Distance metric", "cosine"],
+        ["Vector threshold", "0.1"],
+        ["Expected demo shape", "Seed request misses, similar reuse request hits"],
+      ],
+    },
+    llm_as_judge: {
+      title: "LLM as Judge",
+      intro: "Kong sends the same request through multiple candidate models and then uses a separate judge model to score the returned answer for accuracy.",
+      plainEnglish: [
+        "AI Proxy Advanced fans the request across candidate models on the dedicated judge route.",
+        "Kong then invokes a separate judge model to evaluate the candidate response and assign a numeric accuracy score.",
+        "The response still returns through Kong, while the evaluation metadata is emitted into the audit logs for Grafana.",
+      ],
+      why: "This demonstrates model evaluation at the gateway layer without adding a separate scoring service in the application.",
+      config: [
+        ["Policy", "AI LLM as Judge"],
+        ["Candidate models", "OpenAI 4o mini and Gemini 2.5 Flash"],
+        ["Judge model", "Gemini 2.5 Flash"],
+        ["Expected outcome", "One response is returned and Kong logs judge latency plus an accuracy score"],
       ],
     },
     pii_sanitizer: {
       title: "PII Sanitization",
       intro: "Kong sanitizes sensitive data before it leaves the gateway and sanitizes the model response before it returns to the UI.",
       plainEnglish: [
-        "Kong first sends the request through the AI PII Service to detect and transform sensitive data.",
-        "Only after that sanitized request comes back does Kong forward it to the model.",
-        "When the model responds, Kong can sanitize the response as well before it goes back to the UI.",
+        "Kong sends the request through the AI PII Service before forwarding anything to the model.",
+        "The sanitizer is configured in BOTH directions, so request content and response content are both inspected.",
+        "This scene protects all supported PII plus credentials, and the active mode decides whether sensitive values are replaced with placeholders, synthetic values, or fully blocked.",
       ],
       why: "This lets teams protect sensitive information at the gateway layer, instead of depending on every application and model call to do it correctly.",
       config: [
         ["Policy", "AI Sanitizer"],
         ["Protected directions", "Request and response"],
-        ["Protected categories", "All supported PII fields plus credentials"],
+        ["Protected categories", "all_and_credentials"],
+        ["Backend service", "ai-pii-service:8080"],
         ["Mode", currentPiiMode()],
       ],
     },
@@ -543,12 +588,16 @@ function applyScenarioChoice(scenario) {
   }
   const isSemanticCache = activeScenario === "semantic_cache";
   const isSemanticGuard = activeScenario === "semantic_guard";
+  const isLlmJudge = activeScenario === "llm_as_judge";
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
   if (semanticCacheControls) {
     semanticCacheControls.hidden = !isSemanticCache;
   }
   if (semanticGuardControls) {
     semanticGuardControls.hidden = !isSemanticGuard;
+  }
+  if (llmJudgeControls) {
+    llmJudgeControls.hidden = !isLlmJudge;
   }
   if (piiSanitizerControls) {
     piiSanitizerControls.hidden = !isPiiSanitizer;
@@ -562,6 +611,9 @@ function applyScenarioChoice(scenario) {
   }
   if (isSemanticGuard) {
     renderSemanticGuardPayload();
+  }
+  if (isLlmJudge) {
+    renderLlmJudgePayload();
   }
   if (isPiiSanitizer) {
     renderPiiSanitizerPayloads();
@@ -633,6 +685,36 @@ function renderSemanticGuardPayload() {
     return;
   }
   semanticGuardPayloadPreview.textContent = pretty(semanticGuardPayload());
+}
+
+function llmJudgePayload() {
+  const base = currentFormPayload();
+  return {
+    governance_scenario: "llm_as_judge",
+    system_prompt:
+      "You are an executive escalation triage assistant. Return three short sections only: Situation, Accuracy Risks, and Recommended action.",
+    user_prompt: [
+      "Create a concise executive triage note for this enterprise customer escalation.",
+      `Account: ${base.account_name}`,
+      `Customer ID: ${base.customer_id}`,
+      `Issue summary: ${base.issue_summary}`,
+      `Product issue: ${base.product_issue}`,
+      `Billing issue: ${base.billing_issue}`,
+      `Incident ID: ${base.incident_id}`,
+      "Requirements:",
+      "1) State the business impact clearly.",
+      "2) Call out any assumptions or confidence risks in the available information.",
+      "3) End with the next action the account team should take in the next 24 hours.",
+      "Keep the response executive-friendly and under 220 words.",
+    ].join("\n"),
+  };
+}
+
+function renderLlmJudgePayload() {
+  if (!llmJudgePayloadPreview) {
+    return;
+  }
+  llmJudgePayloadPreview.textContent = pretty(llmJudgePayload());
 }
 
 function piiSanitizerPayload(mode) {
@@ -963,6 +1045,85 @@ function upsertLlmNode(payload) {
   return node;
 }
 
+function upsertJudgeNode(payload) {
+  const actor = payload.actor || "orchestrator";
+  const llmParent = upsertLlmNode({
+    actor,
+    stage: payload.stage || "llm_as_judge_probe",
+    timestamp: payload.timestamp,
+  });
+  const key = `judge:${actor}:${payload.stage || "llm_as_judge_probe"}`;
+  let nodeId = traceState.systemNodes[key];
+  if (!nodeId) {
+    nodeId = `system:${key}`;
+    traceState.systemNodes[key] = nodeId;
+    const node = createTraceNode(
+      nodeId,
+      traceState.nodes[llmParent.id].level + 1,
+      `Judge model invoked: ${payload.judge_model || "Gemini 2.5 Flash"}`,
+      "Kong is sending the candidate response to the judge model for scoring.",
+      {
+        actor,
+        timestamp: payload.timestamp,
+        model: payload.judge_model || "Gemini 2.5 Flash",
+      },
+    );
+    addTraceNode(node, llmParent.id);
+  }
+
+  const node = traceState.nodes[nodeId];
+  node.timestamp = payload.timestamp || node.timestamp;
+  node.meta.model = payload.judge_model || node.meta.model || "Gemini 2.5 Flash";
+  if (payload.input !== undefined) {
+    node.input = payload.input;
+  }
+  if (payload.output !== undefined) {
+    node.output = payload.output;
+  }
+  if (payload.duration_ms !== undefined) {
+    node.durationMs = payload.duration_ms;
+    node.status = "complete";
+  }
+  return node;
+}
+
+function upsertSemanticCacheProbeNode(payload, status = "active") {
+  const actor = payload.actor || "orchestrator";
+  const parentId = ensureActorRoot(actor);
+  const key = `semantic-cache-probe:${actor}`;
+  let nodeId = traceState.systemNodes[key];
+  if (!nodeId) {
+    nodeId = `system:${key}`;
+    traceState.systemNodes[key] = nodeId;
+    const node = createTraceNode(
+      nodeId,
+      traceState.nodes[parentId].level + 1,
+      "Redis semantic cache lookup",
+      "Kong is checking Redis for a semantically similar cached response before calling the model.",
+      {
+        actor,
+        timestamp: payload.timestamp,
+        status,
+      },
+    );
+    addTraceNode(node, parentId);
+  }
+
+  const node = traceState.nodes[nodeId];
+  node.timestamp = payload.timestamp || node.timestamp;
+  node.status = status;
+  if (payload.summary) {
+    node.summary = payload.summary;
+  }
+  if (payload.input !== undefined) {
+    node.input = payload.input;
+  }
+  if (payload.output !== undefined) {
+    node.output = payload.output;
+  }
+  return node;
+}
+
 function resetTopology() {
   if (failoverResetTimer) {
     clearTimeout(failoverResetTimer);
@@ -988,15 +1149,46 @@ function resetTopology() {
     clearTimeout(semanticCacheOpenAiResetTimer);
     semanticCacheOpenAiResetTimer = null;
   }
+  if (semanticCacheReturnTimer) {
+    clearTimeout(semanticCacheReturnTimer);
+    semanticCacheReturnTimer = null;
+  }
+  if (semanticCacheUiTimer) {
+    clearTimeout(semanticCacheUiTimer);
+    semanticCacheUiTimer = null;
+  }
   if (semanticGuardSettleTimer) {
     clearTimeout(semanticGuardSettleTimer);
     semanticGuardSettleTimer = null;
+  }
+  if (judgeSettleTimer) {
+    clearTimeout(judgeSettleTimer);
+    judgeSettleTimer = null;
+  }
+  if (judgeReturnTimer) {
+    clearTimeout(judgeReturnTimer);
+    judgeReturnTimer = null;
+  }
+  if (judgeUiTimer) {
+    clearTimeout(judgeUiTimer);
+    judgeUiTimer = null;
+  }
+  if (judgeCompleteTimer) {
+    clearTimeout(judgeCompleteTimer);
+    judgeCompleteTimer = null;
   }
   if (piiSanitizerHandoffTimer) {
     clearTimeout(piiSanitizerHandoffTimer);
     piiSanitizerHandoffTimer = null;
   }
+  if (piiResponseCompleteTimer) {
+    clearTimeout(piiResponseCompleteTimer);
+    piiResponseCompleteTimer = null;
+  }
   piiModelHandoffPending = false;
+  semanticCacheMissReturnPending = false;
+  semanticCacheProbeResolved = false;
+  semanticCacheModelVisibleUntil = 0;
   orchestratorLlmVisibleUntil = 0;
   Object.values(nodes).forEach((node) => node?.classList.remove("active", "complete", "error"));
   Object.values(lineMap).forEach((line) => line?.classList.remove("active", "complete", "error"));
@@ -1015,7 +1207,7 @@ function markNode(name, state) {
   }
   if (state === "complete") {
     node.classList.remove("active", "error");
-    node.classList.remove("complete");
+    node.classList.add("complete");
   }
   if (state === "error") {
     node.classList.remove("active", "complete");
@@ -1034,7 +1226,7 @@ function markLine(name, state) {
   }
   if (state === "complete") {
     line.classList.remove("active", "error");
-    line.classList.remove("complete");
+    line.classList.add("complete");
   }
   if (state === "error") {
     line.classList.remove("active", "complete");
@@ -1068,19 +1260,23 @@ function setLineVisibility(name, visible) {
 
 function updateScenarioInfraVisibility(scenario) {
   const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache";
+  const showJudge = scenario === "llm_as_judge";
   const showPii = scenario === "pii_sanitizer";
-  const focusedScenario = showRedis || showPii;
+  const focusedScenario = showRedis || showJudge || showPii;
 
   setScenarioVisibility("redis", showRedis);
   setLineVisibility("kong-redis", showRedis);
+
+  setScenarioVisibility("judge-model", showJudge);
+  setLineVisibility("kong-judge", showJudge);
 
   setScenarioVisibility("pii-service", showPii);
   setLineVisibility("kong-pii", showPii);
   setScenarioVisibility("openai", true);
   setLineVisibility("kong-openai", true);
 
-  setScenarioVisibility("gemini", !focusedScenario);
-  setLineVisibility("kong-gemini", !focusedScenario);
+  setScenarioVisibility("gemini", scenario === "llm_failover" || (!focusedScenario));
+  setLineVisibility("kong-gemini", scenario === "llm_failover" || (!focusedScenario));
 
   setScenarioVisibility("support-agent", !focusedScenario);
   setScenarioVisibility("success-agent", !focusedScenario);
@@ -1122,6 +1318,12 @@ function activateRedisPath(state = "active") {
   markLine("kong-redis", state);
 }
 
+function activateJudgePath(state = "active") {
+  markNode("judge-model", state);
+  markNode("kong", state);
+  markLine("kong-judge", state);
+}
+
 function setObservabilityPath(state = "active") {
   markNode("observability", state);
   markLine("kong-observability", state);
@@ -1129,6 +1331,96 @@ function setObservabilityPath(state = "active") {
 
 function completeRedisPath() {
   activateRedisPath("complete");
+}
+
+function completeRedisProbeKeepKongActive() {
+  markNode("redis", "complete");
+  markLine("kong-redis", "complete");
+  markNode("kong", "active");
+}
+
+function scheduleSemanticCacheReturn(delayMs = 900) {
+  if (semanticCacheReturnTimer) {
+    clearTimeout(semanticCacheReturnTimer);
+  }
+  semanticCacheReturnTimer = window.setTimeout(() => {
+    if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
+      activateActorPath("orchestrator", "complete");
+      markNode("kong", "active");
+    }
+    semanticCacheReturnTimer = null;
+  }, delayMs);
+}
+
+function scheduleSemanticCacheUiComplete(delayMs = 1600) {
+  if (semanticCacheUiTimer) {
+    clearTimeout(semanticCacheUiTimer);
+  }
+  semanticCacheUiTimer = window.setTimeout(() => {
+    if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
+      markNode("ui", "complete");
+      markLine("ui-kong", "complete");
+      markNode("kong", "complete");
+      semanticCacheMissReturnPending = false;
+    }
+    semanticCacheUiTimer = null;
+  }, delayMs);
+}
+
+function scheduleJudgeSettle(delayMs = 1200) {
+  if (judgeSettleTimer) {
+    clearTimeout(judgeSettleTimer);
+  }
+  judgeSettleTimer = window.setTimeout(() => {
+    if (traceState.scenario === "llm_as_judge") {
+      activateJudgePath("complete");
+      markNode("kong", "active");
+    }
+    judgeSettleTimer = null;
+  }, delayMs);
+}
+
+function scheduleJudgeReturnSettle(delayMs = 1200) {
+  if (judgeReturnTimer) {
+    clearTimeout(judgeReturnTimer);
+  }
+  judgeReturnTimer = window.setTimeout(() => {
+    if (traceState.scenario === "llm_as_judge") {
+      activateJudgePath("complete");
+      activateActorPath("orchestrator", "active");
+      markNode("kong", "active");
+    }
+    judgeReturnTimer = null;
+  }, delayMs);
+}
+
+function scheduleJudgeUiReturn(delayMs = 800) {
+  if (judgeUiTimer) {
+    clearTimeout(judgeUiTimer);
+  }
+  judgeUiTimer = window.setTimeout(() => {
+    if (traceState.scenario === "llm_as_judge") {
+      activateActorPath("orchestrator", "complete");
+      markNode("kong", "active");
+      markNode("ui", "active");
+      markLine("ui-kong", "active");
+    }
+    judgeUiTimer = null;
+  }, delayMs);
+}
+
+function scheduleJudgeFlowComplete(delayMs = 800) {
+  if (judgeCompleteTimer) {
+    clearTimeout(judgeCompleteTimer);
+  }
+  judgeCompleteTimer = window.setTimeout(() => {
+    if (traceState.scenario === "llm_as_judge") {
+      markNode("kong", "complete");
+      markNode("ui", "complete");
+      markLine("ui-kong", "complete");
+    }
+    judgeCompleteTimer = null;
+  }, delayMs);
 }
 
 function settleSemanticGuardTopology() {
@@ -1330,7 +1622,8 @@ function renderFinalOutput(result) {
   const successReply = unwrapStructuredValue(result.success_track?.customer_reply);
   const successTask = unwrapStructuredValue(result.success_track?.followup_task);
   const piiProbe = result.pii_sanitizer_probe;
-  const isFocusedProbe = Boolean(result.semantic_cache_probe || piiProbe);
+  const judgeProbe = result.llm_judge_probe;
+  const isFocusedProbe = Boolean(result.semantic_cache_probe || piiProbe || judgeProbe);
 
   finalOutput.innerHTML = `
     <section class="output-hero">
@@ -1375,6 +1668,30 @@ function renderFinalOutput(result) {
               ["X-Cache-TTL", result.semantic_cache_probe?.headers?.["x-cache-ttl"]],
               ["Age", result.semantic_cache_probe?.headers?.age],
             ])}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
+      ${
+        judgeProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>LLM as Judge Probe</strong>
+        <p class="output-section-copy">Created by the orchestrator in the LLM as Judge scenario. Kong evaluates the returned answer with a separate judge model and emits the score into the audit logs for Grafana.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Evaluation Route</span>
+            ${renderDefinitionList([
+              ["Scenario", "LLM as Judge"],
+              ["Candidate Models", "OpenAI 4o mini, Gemini 2.5 Flash"],
+              ["Judge Model", judgeProbe.judge_model || "Gemini 2.5 Flash"],
+            ])}
+            ${renderTextBlock(judgeProbe.scoring_note)}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(judgeProbe.original_prompt?.user_prompt)}
           </div>
         </div>
       </section>`
@@ -1538,15 +1855,42 @@ function resetTraceState() {
     clearTimeout(semanticCacheOpenAiResetTimer);
     semanticCacheOpenAiResetTimer = null;
   }
+  if (semanticCacheReturnTimer) {
+    clearTimeout(semanticCacheReturnTimer);
+    semanticCacheReturnTimer = null;
+  }
+  if (semanticCacheUiTimer) {
+    clearTimeout(semanticCacheUiTimer);
+    semanticCacheUiTimer = null;
+  }
   if (semanticGuardSettleTimer) {
     clearTimeout(semanticGuardSettleTimer);
     semanticGuardSettleTimer = null;
+  }
+  if (judgeSettleTimer) {
+    clearTimeout(judgeSettleTimer);
+    judgeSettleTimer = null;
+  }
+  if (judgeReturnTimer) {
+    clearTimeout(judgeReturnTimer);
+    judgeReturnTimer = null;
+  }
+  if (judgeUiTimer) {
+    clearTimeout(judgeUiTimer);
+    judgeUiTimer = null;
+  }
+  if (judgeCompleteTimer) {
+    clearTimeout(judgeCompleteTimer);
+    judgeCompleteTimer = null;
   }
   if (piiSanitizerHandoffTimer) {
     clearTimeout(piiSanitizerHandoffTimer);
     piiSanitizerHandoffTimer = null;
   }
   piiModelHandoffPending = false;
+  semanticCacheMissReturnPending = false;
+  semanticCacheProbeResolved = false;
+  semanticCacheModelVisibleUntil = 0;
   orchestratorLlmVisibleUntil = 0;
   traceState = createInitialTraceState();
   selectedTraceId = null;
@@ -1565,6 +1909,7 @@ function initializeRun(payload) {
   traceState = createInitialTraceState();
   traceState.runId = payload.run_id;
   traceState.scenario = payload.governance_scenario || "normal";
+  semanticCacheProbeResolved = false;
   activeScenario = traceState.scenario;
   updateScenarioInfraVisibility(traceState.scenario);
   runIdLabel.textContent = payload.run_id;
@@ -1621,13 +1966,7 @@ function handleTraceEvent(payload) {
       markLine("user-ui", "complete");
       markLine("ui-kong", "active");
       setObservabilityPath("active");
-      if (traceState.scenario === "semantic_guard") {
-        markNode("kong", "active");
-        markNode("orchestrator", "complete");
-        markLine("kong-orchestrator", "complete");
-      } else {
-        activateActorPath("orchestrator", "active");
-      }
+      activateActorPath("orchestrator", "active");
       break;
 
     case "scenario_selected": {
@@ -1648,10 +1987,25 @@ function handleTraceEvent(payload) {
     case "planning":
       ensureActorRoot("orchestrator");
       if (traceState.scenario === "semantic_cache") {
+        upsertSemanticCacheProbeNode(payload, "active");
         setFlowStage("Semantic cache probe", payload.message);
         hideTopologyActivity();
         clearOrchestratorLlmPath();
+        activateActorPath("orchestrator", "active");
         activateRedisPath("active");
+      } else if (traceState.scenario === "semantic_guard") {
+        setFlowStage("Semantic guard probe", payload.message);
+        hideTopologyActivity();
+        clearOrchestratorLlmPath();
+        activateActorPath("orchestrator", "active");
+        activateRedisPath("active");
+      } else if (traceState.scenario === "llm_as_judge") {
+        setFlowStage("LLM accuracy probe", payload.message);
+        hideTopologyActivity();
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        markNode("openai", "complete");
+        markLine("kong-openai", "complete");
       } else if (traceState.scenario === "pii_sanitizer") {
         setFlowStage("PII sanitization probe", payload.message);
         hideTopologyActivity();
@@ -1704,8 +2058,7 @@ function handleTraceEvent(payload) {
       setFlowStage(`LLM call: ${payload.stage}`, `${labelForActor(payload.actor || "orchestrator")} is calling its AI route through Kong.`);
       if (traceState.scenario === "semantic_guard") {
         hideTopologyActivity();
-        markNode("orchestrator", "complete");
-        markLine("kong-orchestrator", "complete");
+        activateActorPath("orchestrator", "active");
         activateRedisPath("active");
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
@@ -1714,7 +2067,23 @@ function handleTraceEvent(payload) {
         break;
       }
       if (traceState.scenario === "semantic_cache") {
-        activateRedisPath("active");
+        activateActorPath("orchestrator", "active");
+        markNode("ui", "active");
+        markLine("ui-kong", "active");
+        if (!semanticCacheProbeResolved) {
+          activateRedisPath("active");
+        } else {
+          completeRedisProbeKeepKongActive();
+          setOpenAiNodeState("active");
+          markLine("kong-openai", "active");
+        }
+        break;
+      }
+      if (traceState.scenario === "llm_as_judge") {
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        markNode("openai", "active");
+        markLine("kong-openai", "active");
         break;
       }
       if (traceState.scenario === "pii_sanitizer") {
@@ -1768,6 +2137,29 @@ function handleTraceEvent(payload) {
         break;
       }
       if (traceState.scenario === "semantic_cache") {
+        completeRedisProbeKeepKongActive();
+        setOpenAiNodeState("complete");
+        markLine("kong-openai", "complete");
+        if (semanticCacheMissReturnPending) {
+          setFlowStage("Cache miss response returned", "The LLM response returned through Kong. The return path is settling back through the orchestrator and dashboard.");
+          activateActorPath("orchestrator", "active");
+          markNode("ui", "active");
+          markLine("ui-kong", "active");
+          markNode("kong", "active");
+          const semanticCacheReturnDelay = Math.max(0, semanticCacheModelVisibleUntil - Date.now());
+          scheduleSemanticCacheReturn(semanticCacheReturnDelay + 500);
+          scheduleSemanticCacheUiComplete(semanticCacheReturnDelay + 1100);
+        }
+        break;
+      }
+      if (traceState.scenario === "llm_as_judge") {
+        activateActorPath(payload.actor || "orchestrator", "active");
+        markNode("openai", "complete");
+        markLine("kong-openai", "complete");
+        markNode("kong", "active");
+        activateJudgePath("active");
+        scheduleJudgeSettle();
+        setFlowStage("Candidate response returned", "OpenAI returned the candidate response to Kong. Kong is about to invoke the judge model.");
         break;
       }
       if (traceState.scenario === "pii_sanitizer") {
@@ -1776,10 +2168,12 @@ function handleTraceEvent(payload) {
           piiSanitizerHandoffTimer = null;
         }
         piiModelHandoffPending = false;
-        activatePiiPath("complete");
+        activatePiiResponsePath("active");
         markLine("kong-openai", "complete");
         setOpenAiNodeState("complete");
-        markNode("kong", "complete");
+        markNode("kong", "active");
+        markLine("ui-kong", "active");
+        markNode("ui", "active");
         break;
       }
       if (
@@ -1792,6 +2186,27 @@ function handleTraceEvent(payload) {
         markLlmPath(payload, "complete");
       }
       break;
+
+    case "judge_started": {
+      upsertJudgeNode(payload);
+      setFlowStage("Judge model evaluating", "Kong is sending the candidate response to Gemini 2.5 Flash for scoring.");
+      activateActorPath(payload.actor || "orchestrator", "active");
+      markNode("openai", "complete");
+      markLine("kong-openai", "complete");
+      activateJudgePath("active");
+      scheduleJudgeSettle();
+      break;
+    }
+
+    case "judge_completed": {
+      upsertJudgeNode(payload);
+      setFlowStage("Judge completed", "Kong received the judge score and is returning the governed result to the orchestrator.");
+      activateJudgePath("active");
+      markNode("kong", "active");
+      scheduleJudgeSettle(700);
+      scheduleJudgeReturnSettle(700);
+      break;
+    }
 
     case "policy_event": {
       const actor = payload.actor || "orchestrator";
@@ -1812,7 +2227,10 @@ function handleTraceEvent(payload) {
         semantic_cache_miss: "Semantic cache miss",
         semantic_cache_hit: "Semantic cache hit",
         pii_sanitizer: "PII sanitization policy applied",
+        pii_sanitizer_request: "PII request sanitization applied",
+        pii_sanitizer_response: "PII response sanitization applied",
         pii_sanitizer_blocked: "Kong PII sanitization blocked request",
+        llm_as_judge: "LLM as Judge evaluation applied",
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
       };
@@ -1890,7 +2308,20 @@ function handleTraceEvent(payload) {
         }, 1300);
       }
       if (payload.stage === "semantic_cache_miss") {
-        completeRedisPath();
+        semanticCacheProbeResolved = true;
+        semanticCacheMissReturnPending = true;
+        semanticCacheModelVisibleUntil = Date.now() + 1450;
+        upsertSemanticCacheProbeNode(
+          {
+            ...payload,
+            summary: payload.summary || "Redis did not contain a semantically similar cached response, so Kong is forwarding the request to the model.",
+          },
+          "complete",
+        );
+        activateActorPath("orchestrator", "active");
+        markNode("ui", "active");
+        markLine("ui-kong", "active");
+        activateRedisPath("active");
         if (semanticRedisHandoffTimer) {
           clearTimeout(semanticRedisHandoffTimer);
         }
@@ -1899,6 +2330,7 @@ function handleTraceEvent(payload) {
           semanticCacheOpenAiResetTimer = null;
         }
         semanticRedisHandoffTimer = window.setTimeout(() => {
+          completeRedisProbeKeepKongActive();
           setOpenAiNodeState("active");
           markLine("kong-openai", "active");
           semanticCacheOpenAiResetTimer = window.setTimeout(() => {
@@ -1910,6 +2342,16 @@ function handleTraceEvent(payload) {
         }, 550);
       }
       if (payload.stage === "semantic_cache_hit") {
+        semanticCacheProbeResolved = true;
+        semanticCacheMissReturnPending = false;
+        upsertSemanticCacheProbeNode(
+          {
+            ...payload,
+            summary: payload.summary || "Redis contained a semantically similar cached response, so Kong returned it without invoking the model.",
+          },
+          "complete",
+        );
+        activateActorPath("orchestrator", "active");
         if (semanticRedisHandoffTimer) {
           clearTimeout(semanticRedisHandoffTimer);
           semanticRedisHandoffTimer = null;
@@ -1921,6 +2363,29 @@ function handleTraceEvent(payload) {
         completeRedisPath();
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
+      }
+      if (payload.stage === "llm_as_judge") {
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        markNode("openai", "complete");
+        markLine("kong-openai", "complete");
+        activateJudgePath("active");
+        scheduleJudgeSettle();
+        setFlowStage("Judge model evaluating", payload.summary || "Kong is sending the candidate response to the judge model for scoring.");
+      }
+      if (payload.stage === "pii_sanitizer_request") {
+        setFlowStage("PII request sanitization", payload.summary || "Kong is sanitizing the upstream request before the model call.");
+      }
+      if (payload.stage === "pii_sanitizer_response") {
+        if (piiResponseCompleteTimer) {
+          clearTimeout(piiResponseCompleteTimer);
+          piiResponseCompleteTimer = null;
+        }
+        activatePiiPath("active");
+        markNode("kong", "active");
+        markNode("ui", "active");
+        markLine("ui-kong", "active");
+        setFlowStage("PII response sanitization", payload.summary || "Kong is sanitizing the downstream response before it returns to the UI.");
       }
       if (payload.stage === "pii_sanitizer") {
         activatePiiPath("active");
@@ -1979,33 +2444,70 @@ function handleTraceEvent(payload) {
       );
       finalNode.output = payload.output;
       addTraceNode(finalNode, "run");
+      if (payload.output) {
+        renderFinalOutput(payload.output);
+      }
       selectedTraceId = "final-response";
       setFlowStage("Run complete", "The orchestrator completed synthesis and the final output is ready.");
-      if (traceState.scenario !== "semantic_guard") {
+      if (traceState.scenario === "llm_as_judge") {
+        if (judgeSettleTimer) {
+          clearTimeout(judgeSettleTimer);
+          judgeSettleTimer = null;
+        }
+        activateJudgePath("active");
+        markNode("kong", "active");
+        scheduleJudgeUiReturn(1400);
+      } else if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
+        activateActorPath("orchestrator", "active");
+        markNode("ui", "active");
+        markLine("ui-kong", "active");
+        markNode("kong", "active");
+      } else if (traceState.scenario !== "semantic_guard") {
         activateActorPath("orchestrator", "complete");
       }
-      completeActorRoot("orchestrator", payload.timestamp);
-      if (traceState.scenario !== "semantic_guard") {
+      if (!(traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending)) {
+        completeActorRoot("orchestrator", payload.timestamp);
+      }
+      if (traceState.scenario === "llm_as_judge") {
+        // The judge scenario returns through Kong back to the orchestrator and UI.
+      } else if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
+        // Cache miss return sequencing is driven from llm_completed.
+      } else if (traceState.scenario !== "semantic_guard") {
         markNode("kong", "complete");
         markLine("ui-kong", "complete");
       }
       setObservabilityPath("complete");
       if (
+        traceState.scenario === "llm_as_judge" ||
         traceState.scenario === "semantic_cache" ||
         traceState.scenario === "pii_sanitizer" ||
         traceState.scenario === "semantic_guard"
       ) {
         hideTopologyActivity();
-        if (traceState.scenario === "semantic_cache") {
+        if (traceState.scenario === "llm_as_judge") {
+          markNode("openai", "complete");
+          markLine("kong-openai", "complete");
+          if (!judgeReturnTimer && !judgeUiTimer) {
+            markNode("kong", "complete");
+            activateJudgePath("complete");
+          }
+        } else if (traceState.scenario === "semantic_cache") {
           activateRedisPath("complete");
           setOpenAiNodeState("complete");
           markLine("kong-openai", "complete");
+          if (!semanticCacheMissReturnPending) {
+            markNode("kong", "complete");
+          }
         } else if (traceState.scenario === "semantic_guard") {
           // Let the semantic guard policy event own the visible block/reset sequence.
         } else {
           if (piiSanitizerHandoffTimer) {
             clearTimeout(piiSanitizerHandoffTimer);
             piiSanitizerHandoffTimer = null;
+          }
+          if (piiResponseCompleteTimer) {
+            clearTimeout(piiResponseCompleteTimer);
+            piiResponseCompleteTimer = null;
           }
           piiModelHandoffPending = false;
           if (payload.output?.policy_outcome === "blocked") {
@@ -2015,10 +2517,11 @@ function handleTraceEvent(payload) {
             markNode("ui", "error");
             markLine("ui-kong", "error");
           } else {
-            activatePiiPath("complete");
+            activatePiiResponsePath("active");
             markLine("kong-openai", "complete");
-            markNode("ui", "complete");
-            markLine("ui-kong", "complete");
+            markNode("kong", "active");
+            markNode("ui", "active");
+            markLine("ui-kong", "active");
           }
           setOpenAiNodeState("complete");
         }
@@ -2028,6 +2531,9 @@ function handleTraceEvent(payload) {
 
     case "run_completed": {
       const runNode = traceState.nodes.run;
+      if (payload.output && !traceState.nodes["final-response"]) {
+        renderFinalOutput(payload.output);
+      }
       runNode.output =
         payload.output?.headline || payload.output?.policy_outcome
           ? {
@@ -2044,24 +2550,40 @@ function handleTraceEvent(payload) {
         runNode.status = "complete";
         setRunState("complete");
       }
-      completeActorRoot("orchestrator", payload.timestamp, payload.duration_ms);
+      if (!(traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending)) {
+        completeActorRoot("orchestrator", payload.timestamp, payload.duration_ms);
+      }
       if (
+        traceState.scenario === "llm_as_judge" ||
         traceState.scenario === "semantic_cache" ||
         traceState.scenario === "pii_sanitizer" ||
         traceState.scenario === "semantic_guard"
       ) {
         hideTopologyActivity();
         setObservabilityPath("complete");
-        if (traceState.scenario === "semantic_cache") {
+        if (traceState.scenario === "llm_as_judge") {
+          markNode("openai", "complete");
+          markLine("kong-openai", "complete");
+          scheduleJudgeFlowComplete(2200);
+        } else if (traceState.scenario === "semantic_cache") {
           activateRedisPath("complete");
           setOpenAiNodeState("complete");
           markLine("kong-openai", "complete");
+          if (!semanticCacheMissReturnPending) {
+            markNode("ui", "complete");
+            markLine("ui-kong", "complete");
+            markNode("kong", "complete");
+          }
         } else if (traceState.scenario === "semantic_guard") {
           // Let the semantic guard policy event own the visible block/reset sequence.
         } else {
           if (piiSanitizerHandoffTimer) {
             clearTimeout(piiSanitizerHandoffTimer);
             piiSanitizerHandoffTimer = null;
+          }
+          if (piiResponseCompleteTimer) {
+            clearTimeout(piiResponseCompleteTimer);
+            piiResponseCompleteTimer = null;
           }
           piiModelHandoffPending = false;
           if (payload.output?.policy_outcome === "blocked") {
@@ -2071,10 +2593,20 @@ function handleTraceEvent(payload) {
             markNode("ui", "error");
             markLine("ui-kong", "error");
           } else {
-            activatePiiPath("complete");
+            activatePiiResponsePath("active");
             markLine("kong-openai", "complete");
-            markNode("ui", "complete");
-            markLine("ui-kong", "complete");
+            markNode("kong", "active");
+            markNode("ui", "active");
+            markLine("ui-kong", "active");
+            piiResponseCompleteTimer = window.setTimeout(() => {
+              if (traceState.scenario === "pii_sanitizer") {
+                activatePiiPath("complete");
+                markNode("kong", "complete");
+                markNode("ui", "complete");
+                markLine("ui-kong", "complete");
+              }
+              piiResponseCompleteTimer = null;
+            }, 900);
           }
           setOpenAiNodeState("complete");
         }
@@ -2292,6 +2824,9 @@ playForm.addEventListener("input", () => {
   }
   if (activeScenario === "semantic_guard") {
     renderSemanticGuardPayload();
+  }
+  if (activeScenario === "llm_as_judge") {
+    renderLlmJudgePayload();
   }
   if (activeScenario === "pii_sanitizer") {
     renderPiiSanitizerPayloads();

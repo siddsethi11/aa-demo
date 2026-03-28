@@ -249,6 +249,7 @@ Operational caveats:
 - run history is not persisted to Redis, Loki, or disk
 - restarting or recreating the orchestrator clears all saved runs
 - after the orchestrator rebuild/restart done for this feature, only new runs created afterward will appear in the dropdown
+- the selected historical run now also updates the `View Run Output` pane, not just the tree trace
 
 Related runtime issue we hit:
 - after rebuilding `ui` and `orchestrator`, Kong temporarily served `502` for `http://localhost:8000`
@@ -258,6 +259,73 @@ Related runtime issue we hit:
 ## Semantic Cache / Guard Metrics
 
 User asked for:
+
+## Recent Governance / UI Fixes
+
+### Token-limit scenario
+
+Observed issue:
+- Kong correctly returned `429` on `/ai/orchestrator-token-demo/chat/completions`
+- orchestrator still surfaced `500`
+
+Root cause:
+- token-limit handling still assumed OpenAI SDK exceptions
+- shared LLM client now uses `httpx`, so Kong policy failures arrived as `httpx.HTTPStatusError`
+
+Fix applied:
+- `services/orchestrator/app.py`
+- token-limit `429` and semantic-guard `400` are now handled correctly for the `httpx` path
+- governed blocked responses now return as structured policy results instead of `500`
+
+### PII sanitizer request/response trace
+
+Observed issue:
+- placeholder and synthetic modes visibly passed through the PII service twice
+- the tree trace only showed one generic sanitizer step
+
+Fix applied:
+- `services/orchestrator/app.py` now emits:
+  - `pii_sanitizer_request`
+  - `pii_sanitizer_response`
+- `ui/app.js` renders these as separate trace nodes
+
+Additional UI fix:
+- the response-side PII box on the topology return path was not visibly highlighted because the return completed too quickly
+- a dedicated dwell timer was added so the response-side PII highlight is now visible before settling
+
+## Failover Findings
+
+This became a separate debugging thread.
+
+What was tested:
+- invalid OpenAI auth returning `401`
+- invalid model name returning provider-native `404`
+- request-termination simulator route returning `503`
+- unreachable upstream URL returning transport timeout/error
+- Kong `3.13.0.1`
+- Kong `3.12.0.0`
+
+What was learned:
+- `401` is not usable because this Kong version does not support `http_401` in `failover_criteria`
+- invalid-model `404` was not usable in practice because the Kong AI route surfaced it as `400`
+- request-termination and unreachable-upstream simulations both showed the same problem:
+  - Kong logically considered fallback targets
+  - but the effective upstream in logs still reflected the primary target's `upstream_url`
+  - fallback targets were then marked failed without clear evidence of a real provider call
+
+Most important conclusion:
+- there is strong evidence of an `ai-proxy-advanced` bug or limitation in per-target `upstream_url` handling during failover
+- the clearest clue was that one failover experiment only started working when the OpenAI target's `upstream_url` was pointed at a Gemini endpoint
+- that suggests `upstream_url` is influencing transport beyond the primary target in ways that are not expected
+
+Version comparison:
+- reproduces on Kong Enterprise `3.13.0.1`
+- also reproduces on Kong Enterprise `3.12.0.0`
+- therefore this does not look like a 3.13-only regression
+
+Current practical state:
+- local `docker-compose.yml` was returned to `kong/kong-gateway:3.13.0.1`
+- failover scenario should be treated as experimental in this repo unless re-validated with a proven provider-native failover condition that Kong surfaces as a supported criterion
 - semantic guard blocked requests
 - semantic cache hits
 - semantic cache misses

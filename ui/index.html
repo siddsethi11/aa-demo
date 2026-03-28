@@ -90,6 +90,7 @@
                 <path id="line-kong-success" d="M660 456 L660 782 L404 782" />
                 <path id="line-kong-openai" d="M830 340 L1088 186" />
                 <path id="line-kong-gemini" d="M830 390 L1088 380" />
+                <path id="line-kong-judge" d="M830 360 L1010 360 L1010 560 L1090 560" />
                 <path id="line-kong-mcp" d="M740 456 L990 456 L990 700" />
                 <path id="line-mcp-backend" d="M1064 810 L1190 810" />
                 <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
@@ -144,6 +145,12 @@
                 <span class="node-label">Failover / Shared</span>
                 <h3>Gemini 2.5 Flash</h3>
                 <p>Orchestrator failover and the sub-agent LLM route.</p>
+              </article>
+
+              <article class="topology-node judge-node scenario-optional" data-node="judge-model">
+                <span class="node-label">Judge</span>
+                <h3>Gemini 2.5 Flash</h3>
+                <p>Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.</p>
               </article>
 
               <article class="topology-node redis-node scenario-optional" data-node="redis">
@@ -264,6 +271,10 @@
                 <span>Semantic Cache</span>
               </label>
               <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="llm_as_judge" />
+                <span>LLM as Judge</span>
+              </label>
+              <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="pii_sanitizer" />
                 <span>PII Sanitization</span>
               </label>
@@ -323,6 +334,13 @@
               <span class="probe-label">Semantic Guard Request</span>
               <p class="probe-copy">This is the actual orchestrator prompt body sent through Kong for the Semantic Guard scenario. Kong compares embeddings against denied topics before allowing any model call.</p>
               <pre id="semantic-guard-payload" class="probe-payload"></pre>
+            </article>
+          </section>
+          <section id="llm-judge-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">LLM as Judge Request</span>
+              <p class="probe-copy">This is the orchestrator prompt body sent through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy.</p>
+              <pre id="llm-judge-payload" class="probe-payload"></pre>
             </article>
           </section>
           <section id="pii-sanitizer-controls" class="probe-controls" hidden>

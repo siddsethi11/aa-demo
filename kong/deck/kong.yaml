@@ -49,9 +49,58 @@ plugins:
           local mcp_rpc = mcp['rpc'] or {}
           local mcp_entry = mcp_rpc[1] or {}
           local proxy = ai['proxy'] or {}
+          local proxy_payload = proxy['payload'] or {}
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
           local cache = proxy['cache'] or {}
+          local judge = proxy['ai-llm-as-judge'] or {}
+          local judge_meta = judge['meta'] or {}
+          local judge_usage = judge['usage'] or {}
+          local function extract_request_text(messages)
+            if type(messages) ~= 'table' then
+              return ''
+            end
+            local parts = {}
+            for _, message in ipairs(messages) do
+              local content = type(message) == 'table' and message['content'] or nil
+              if type(content) == 'string' and content ~= '' then
+                table.insert(parts, content)
+              elseif type(content) == 'table' then
+                local nested = {}
+                for _, item in ipairs(content) do
+                  if type(item) == 'table' and item['type'] == 'text' and item['text'] then
+                    table.insert(nested, tostring(item['text']))
+                  end
+                end
+                if #nested > 0 then
+                  table.insert(parts, table.concat(nested, ' '))
+                end
+              end
+            end
+            return table.concat(parts, '\n\n')
+          end
+          local function extract_response_text(response_payload)
+            if type(response_payload) ~= 'table' then
+              return ''
+            end
+            local choices = response_payload['choices']
+            local first = type(choices) == 'table' and choices[1] or nil
+            local message = type(first) == 'table' and first['message'] or {}
+            local content = type(message) == 'table' and message['content'] or nil
+            if type(content) == 'string' then
+              return content
+            end
+            if type(content) == 'table' then
+              local nested = {}
+              for _, item in ipairs(content) do
+                if type(item) == 'table' and item['type'] == 'text' and item['text'] then
+                  table.insert(nested, tostring(item['text']))
+                end
+              end
+              return table.concat(nested, ' ')
+            end
+            return ''
+          end
           local prompt_tokens = tonumber(usage['prompt_tokens'] or usage['input_tokens'] or 0) or 0
           local completion_tokens = tonumber(usage['completion_tokens'] or usage['output_tokens'] or 0) or 0
           local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
@@ -84,11 +133,19 @@ plugins:
           log_payload['llm_usage_cost'] = usage_cost
           log_payload['llm_usage_model'] = model_name
           log_payload['llm_usage_provider'] = provider_name
+          log_payload['llm_latency_ms'] = tonumber(meta['llm_latency'] or 0) or 0
           log_payload['ai_cache_status'] = tostring(cache['cache_status'] or '')
           log_payload['ai_cache_fetch_latency'] = tonumber(cache['fetch_latency'] or 0) or 0
           log_payload['ai_cache_embeddings_provider'] = tostring(cache['embeddings_provider'] or '')
           log_payload['ai_cache_embeddings_model'] = tostring(cache['embeddings_model'] or '')
           log_payload['ai_cache_embeddings_latency'] = tonumber(cache['embeddings_latency'] or 0) or 0
+          log_payload['judge_input'] = extract_request_text(proxy_payload['request'] and proxy_payload['request']['messages'] or {})
+          log_payload['judge_output'] = extract_response_text(proxy_payload['response'] or {})
+          log_payload['judge_inference_model'] = tostring(judge_meta['request_model'] or '')
+          log_payload['judge_model'] = tostring(judge_meta['response_model'] or '')
+          log_payload['judge_provider'] = tostring(judge_meta['provider_name'] or '')
+          log_payload['judge_latency_ms'] = tonumber(judge_meta['llm_latency'] or 0) or 0
+          log_payload['judge_accuracy'] = tonumber(judge_usage['llm_accuracy'] or 0) or 0
           log_payload['run_id'] = run_id
           log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
           log_payload['mcp_method'] = tostring(mcp_entry['method'] or '')
@@ -149,7 +206,9 @@ services:
             failover_criteria:
               - error
               - timeout
+              - http_404
               - non_idempotent
+              - http_403
               - http_429
               - http_502
           targets:
@@ -181,6 +240,7 @@ services:
                 options:
                   input_cost: 0.30
                   output_cost: 2.50
+                  upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
               weight: 50
 
   - name: ai-orchestrator-failover-demo-service
@@ -192,6 +252,17 @@ services:
         strip_path: false
         methods:
           - POST
+      - name: ai-orchestrator-failover-simulator-route
+        paths:
+          - /llm-failure-simulator
+        strip_path: false
+        methods:
+          - POST
+        plugins:
+          - name: request-termination
+            config:
+              status_code: 503
+              message: Simulated primary LLM outage
     plugins:
       - name: key-auth
         config:
@@ -201,18 +272,33 @@ services:
         config:
           balancer:
             algorithm: priority
-            retries: 1
+            connect_timeout: 60000
+            fail_timeout: 10000
             failover_criteria:
               - error
-              - timeout
-              - non_idempotent
+              - http_403
+              - http_404
               - http_429
+              - http_500
               - http_502
+              - http_503
+              - http_504
+              - invalid_header
+              - non_idempotent
+              - timeout
+            hash_on_header: X-Kong-LLM-Request-ID
+            latency_strategy: tpot
+            max_fails: 3
+            read_timeout: 60000
+            retries: 3
+            slots: 10000
+            tokens_count_strategy: total-tokens
+            write_timeout: 60000
           targets:
             - route_type: llm/v1/chat
               auth:
                 header_name: Authorization
-                header_value: Bearer invalid-failover-demo-key
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
               logging:
                 log_payloads: true
                 log_statistics: true
@@ -222,6 +308,7 @@ services:
                 options:
                   input_cost: 0.15
                   output_cost: 0.60
+                  upstream_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
               weight: 100
             - route_type: llm/v1/chat
               auth:
@@ -427,6 +514,105 @@ services:
                 options:
                   input_cost: 0.15
                   output_cost: 0.60
+
+  - name: ai-orchestrator-judge-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-judge-demo-chat-route
+        paths:
+          - /ai/orchestrator-judge-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-llm-as-judge
+        config:
+          prompt: |
+            You are a strict evaluator. You will be given a request and a response.
+            Your task is to judge whether the response is correct and useful for executive triage.
+            Assign a score between 1 and 100, where 100 is completely correct and highly useful,
+            and 1 is incorrect, misleading, or irrelevant. Return a single number only.
+          http_timeout: 60000
+          https_verify: true
+          ignore_assistant_prompts: true
+          ignore_system_prompts: true
+          ignore_tool_prompts: true
+          sampling_rate: 1
+          llm:
+            auth:
+              allow_override: false
+              param_name: key
+              param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+              param_location: query
+            logging:
+              log_payloads: true
+              log_statistics: true
+            model:
+              provider: gemini
+              name: ${{ env "DECK_GEMINI_MODEL" }}
+              options:
+                max_tokens: 5
+                temperature: 0.2
+                top_p: 1
+            route_type: llm/v1/chat
+          message_countback: 3
+      - name: ai-proxy-advanced
+        config:
+          balancer:
+            algorithm: lowest-usage
+            connect_timeout: 60000
+            failover_criteria:
+              - error
+              - timeout
+              - non_idempotent
+              - http_429
+              - http_502
+            hash_on_header: X-Kong-LLM-Request-ID
+            latency_strategy: tpot
+            read_timeout: 60000
+            retries: 1
+            slots: 10000
+            tokens_count_strategy: llm-accuracy
+            write_timeout: 60000
+          genai_category: text/generation
+          llm_format: openai
+          max_request_body_size: 8192
+          model_name_header: true
+          response_streaming: allow
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+              weight: 100
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
+              weight: 100
 
   - name: ai-orchestrator-pii-placeholder-demo-service
     url: https://api.openai.com

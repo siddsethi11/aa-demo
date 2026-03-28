@@ -45,6 +45,8 @@ REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
 COMPOSE_PROJECT_DIR = os.getenv("OBSERVABILITY_COMPOSE_DIR", "/workspace")
 COMPOSE_PROJECT_NAME = os.getenv("OBSERVABILITY_COMPOSE_PROJECT_NAME", "aa-demo")
 COMPOSE_FILE_PATH = os.getenv("OBSERVABILITY_COMPOSE_FILE", "docker-compose.yml")
+SUBAGENT_DISCOVERY_ATTEMPTS = 3
+SUBAGENT_DISCOVERY_BACKOFF_MS = 350
 
 
 class PlayRequest(BaseModel):
@@ -82,6 +84,7 @@ class OrchestratorState(TypedDict, total=False):
     open_tickets: Any
     semantic_cache_probe: dict[str, Any]
     pii_sanitizer_probe: dict[str, Any]
+    llm_judge_probe: dict[str, Any]
     triage_brief: dict[str, Any]
     support_track: dict[str, Any]
     success_track: dict[str, Any]
@@ -112,6 +115,7 @@ def ai_route_for_scenario(scenario: str, pii_mode: str = "placeholder") -> str:
         "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
         "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
+        "llm_as_judge": f"{KONG_PROXY_URL}/ai/orchestrator-judge-demo",
         "pii_sanitizer": (
             f"{KONG_PROXY_URL}/ai/orchestrator-pii-block-demo"
             if pii_mode == "block"
@@ -133,6 +137,7 @@ def scenario_summary(scenario: str) -> str:
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
         "semantic_cache": "Kong semantic cache is expected to serve a repeated orchestrator prompt from Redis after the first miss populates the cache.",
+        "llm_as_judge": "Kong AI LLM as Judge is expected to score the candidate model response for accuracy using a separate judge model.",
         "pii_sanitizer": "Kong AI PII Sanitizer is expected to anonymize sensitive fields in both the request sent upstream and the response returned to the client.",
     }
     return summaries.get(scenario, summaries["normal"])
@@ -201,6 +206,29 @@ def build_semantic_cache_prompts(request: PlayRequest) -> dict[str, str]:
             "Return a concise response with two sections: Situation and Recommended action."
         ),
         "user_prompt": build_semantic_cache_user_prompt(request, request.semantic_cache_step),
+    }
+
+
+def build_llm_judge_prompts(request: PlayRequest) -> dict[str, str]:
+    return {
+        "system_prompt": (
+            "You are an executive escalation triage assistant. "
+            "Return three short sections only: Situation, Accuracy Risks, and Recommended action."
+        ),
+        "user_prompt": (
+            "Create a concise executive triage note for this enterprise customer escalation.\n"
+            f"Account: {request.account_name}\n"
+            f"Customer ID: {request.customer_id}\n"
+            f"Issue summary: {request.issue_summary}\n"
+            f"Product issue: {request.product_issue}\n"
+            f"Billing issue: {request.billing_issue}\n"
+            f"Incident ID: {request.incident_id}\n"
+            "Requirements:\n"
+            "1) State the business impact clearly.\n"
+            "2) Call out any assumptions or confidence risks in the available information.\n"
+            "3) End with the next action the account team should take in the next 24 hours.\n"
+            "Keep the response executive-friendly and under 220 words."
+        ),
     }
 
 
@@ -304,6 +332,53 @@ async def generate_for_scenario(
 ) -> dict[str, Any]:
     try:
         return await llm.generate(base_url=base_url, run_id=run_id, **prompts)
+    except httpx.HTTPStatusError as exc:
+        if scenario == "token_limit" and exc.response.status_code == 429:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="token_limit",
+                llm_stage=stage,
+                summary=f"Kong AI token governance blocked {stage}.",
+                output={"status_code": exc.response.status_code, "message": str(exc)},
+            )
+        if scenario == "semantic_guard" and exc.response.status_code == 400:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="semantic_guard",
+                llm_stage=stage,
+                summary=f"Kong semantic prompt guard blocked {stage} because the prompt matched a denied topic.",
+                output={"status_code": exc.response.status_code, "message": str(exc)},
+            )
+        if scenario == "llm_failover" and exc.response.status_code in {401, 403}:
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="failover_primary_failed",
+                llm_stage=stage,
+                summary=f"Kong attempted the primary OpenAI target and received an authentication failure during {stage}.",
+                output={"status_code": exc.response.status_code, "message": str(exc)},
+            )
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="failover",
+                llm_stage=stage,
+                summary=f"Kong is redirecting the orchestrator to Gemini after the primary OpenAI path failed during {stage}.",
+                output={"selected_model": GEMINI_FALLBACK_MODEL, "fallback_route": GEMINI_FALLBACK_URL},
+            )
+            return await llm.generate(
+                base_url=GEMINI_FALLBACK_URL,
+                model=GEMINI_FALLBACK_MODEL,
+                run_id=run_id,
+                **prompts,
+            )
+        raise
     except AuthenticationError as exc:
         if scenario != "llm_failover":
             raise
@@ -369,16 +444,29 @@ async def generate_for_scenario(
 
 
 async def discover_agent(route_prefix: str, run_id: str | None = None) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            f"{KONG_PROXY_URL}{route_prefix}/.well-known/agent.json",
-            headers={
-                "apikey": AGENT_API_KEY,
-                **({"x-demo-run-id": run_id} if run_id else {}),
-            },
-        )
-        response.raise_for_status()
-        return response.json()
+    headers = {
+        "apikey": AGENT_API_KEY,
+        **({"x-demo-run-id": run_id} if run_id else {}),
+    }
+    last_error: Exception | None = None
+
+    for attempt in range(1, SUBAGENT_DISCOVERY_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{KONG_PROXY_URL}{route_prefix}/.well-known/agent.json",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return response.json()
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+            last_error = exc
+            if attempt == SUBAGENT_DISCOVERY_ATTEMPTS:
+                break
+            await asyncio.sleep((SUBAGENT_DISCOVERY_BACKOFF_MS * attempt) / 1000)
+
+    assert last_error is not None
+    raise last_error
 
 
 async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -842,7 +930,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             run_id,
             "policy_event",
             actor="orchestrator",
-            stage="pii_sanitizer",
+            stage="pii_sanitizer_request",
             llm_stage=stage,
             summary=(
                 "Kong AI PII Sanitizer is configured to block the request when supported PII categories or credentials are detected."
@@ -925,6 +1013,31 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             output=pii_output,
             duration_ms=timed_ms(llm_started),
         )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="pii_sanitizer_response",
+            llm_stage=stage,
+            summary=(
+                "Kong AI PII Sanitizer inspected and sanitized the downstream model response before returning it to the UI."
+                if pii_sanitizer_mode != "block"
+                else "Kong AI PII Sanitizer inspected the downstream model response before returning it to the UI."
+            ),
+            input={
+                "sanitization_mode": "BOTH",
+                "redact_type": pii_sanitizer_mode,
+                "anonymize": ["all_and_credentials"],
+                "model_response": pii_output["summary"],
+            },
+            output={
+                "sanitization_mode": "BOTH",
+                "redact_type": pii_sanitizer_mode,
+                "protected_direction": "response",
+                "anonymized_categories": pii_anonymized_categories(),
+                "sanitized_response": pii_output["summary"],
+            },
+        )
         final_response = {
             "headline": "PII sanitization probe completed",
             "governance_scenario": scenario,
@@ -940,6 +1053,102 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             },
             "executive_brief": pii_output,
             "recommended_summary": pii_output["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "result": final_response}
+    if scenario == "llm_as_judge":
+        prompts = build_llm_judge_prompts(request)
+        stage = "llm_as_judge_probe"
+        await emit(
+            run_id,
+            "planning",
+            message=(
+                "Kong AI LLM as Judge is comparing candidate model output and scoring it for accuracy using a separate judge model."
+            ),
+        )
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
+        llm_started = time.perf_counter()
+        judge_result = await llm.generate_with_headers(
+            base_url=ai_route_base_url,
+            model="gpt-4o-mini",
+            run_id=run_id,
+            **prompts,
+        )
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            llm_used=judge_result["llm_used"],
+            model=judge_result["model"],
+            output=judge_result,
+            duration_ms=timed_ms(llm_started),
+        )
+        await emit(
+            run_id,
+            "judge_started",
+            actor="orchestrator",
+            stage=stage,
+            judge_model=GEMINI_FALLBACK_MODEL,
+            input={
+                "candidate_model": judge_result["model"],
+                "candidate_summary": judge_result["summary"],
+            },
+        )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="llm_as_judge",
+            llm_stage=stage,
+            summary=(
+                "Kong AI LLM as Judge evaluated the candidate response and emitted accuracy metadata into the audit logs."
+            ),
+            input={"original_prompt": prompts},
+            output={
+                "candidate_model": judge_result["model"],
+                "judge_model": GEMINI_FALLBACK_MODEL,
+                "expected_audit_fields": [
+                    "judge_inference_model",
+                    "judge_model",
+                    "judge_latency_ms",
+                    "judge_accuracy",
+                ],
+            },
+        )
+        await emit(
+            run_id,
+            "judge_completed",
+            actor="orchestrator",
+            stage=stage,
+            judge_model=GEMINI_FALLBACK_MODEL,
+            output={
+                "judge_model": GEMINI_FALLBACK_MODEL,
+                "score_source": "Kong AI Gateway audit logs",
+            },
+        )
+        final_response = {
+            "headline": "LLM as Judge probe completed",
+            "governance_scenario": scenario,
+            "llm_judge_probe": {
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "judge_model": GEMINI_FALLBACK_MODEL,
+                "scoring_note": (
+                    "Accuracy scoring is emitted by Kong audit logs and should be inspected in Grafana in the LLM as Judge panels."
+                ),
+            },
+            "executive_brief": judge_result,
+            "recommended_summary": judge_result["summary"],
             "available_tools": [],
             "called_mcp_tools": [],
             "tool_plan_steps": [],
@@ -1023,7 +1232,14 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "ai_route_base_url": ai_route_base_url,
             }
         )
-    except (RateLimitError, APIStatusError) as exc:
+    except (RateLimitError, APIStatusError, httpx.HTTPStatusError) as exc:
+        status_code = getattr(exc, "status_code", None)
+        if status_code is None and isinstance(exc, httpx.HTTPStatusError):
+            status_code = exc.response.status_code
+        if scenario == "token_limit" and status_code != 429 and not isinstance(exc, RateLimitError):
+            raise
+        if scenario == "semantic_guard" and status_code != 400:
+            raise
         if scenario not in {"token_limit", "semantic_guard"}:
             raise
         policy_headline = (

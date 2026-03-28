@@ -640,11 +640,21 @@ button:hover {
 }
 
 .redis-node,
+.judge-node,
 .pii-node,
 .observability-node {
   top: 468px;
   right: 88px;
   width: 220px;
+}
+
+.judge-node {
+  top: 468px;
+  right: 88px;
+  border-color: rgba(243, 179, 84, 0.56);
+  background:
+    linear-gradient(180deg, rgba(243, 179, 84, 0.14), rgba(243, 179, 84, 0.04)),
+    rgba(11, 13, 18, 0.94);
 }
 
 .redis-node {

@@ -1131,6 +1131,153 @@
       ],
       "title": "MCP Tool Executions Over Time",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 92
+      },
+      "id": 320,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=\"llm\",route=\"ai-orchestrator-judge-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | judge_model != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM as Judge Evaluations",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": true,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "judge_input",
+                "judge_output",
+                "judge_inference_model",
+                "llm_latency_ms",
+                "judge_model",
+                "judge_latency_ms",
+                "judge_accuracy"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "judge_input": 0,
+              "judge_output": 1,
+              "judge_inference_model": 2,
+              "llm_latency_ms": 3,
+              "judge_model": 4,
+              "judge_latency_ms": 5,
+              "judge_accuracy": 6
+            },
+            "renameByName": {
+              "judge_accuracy": "Score (Accuracy)",
+              "judge_inference_model": "Inference Model",
+              "judge_input": "Input",
+              "judge_latency_ms": "Judge Model Latency (ms)",
+              "judge_model": "Judge Model",
+              "judge_output": "Output",
+              "llm_latency_ms": "LLM Latency (ms)"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 102
+      },
+      "id": 321,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=\"llm\",route=\"ai-orchestrator-judge-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM as Judge Raw Logs",
+      "type": "logs"
     }
   ],
   "refresh": "10s",
@@ -1184,6 +1331,6 @@
   "timezone": "",
   "title": "Kong Governance Overview",
   "uid": "kong-governance-overview",
-  "version": 5,
+  "version": 6,
   "weekStart": ""
 }

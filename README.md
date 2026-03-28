@@ -84,7 +84,7 @@ The AI routes are split by caller type:
   - secondary failover target: `gemini-2.5-flash`
 - `/ai/orchestrator-failover-demo/chat/completions`
   - used only for the orchestrator failover scenario
-  - intentionally starts with a broken OpenAI primary path so the demo can show fallback behavior
+  - used for current failover experimentation with Kong `ai-proxy-advanced`
 - `/ai/orchestrator-token-demo/chat/completions`
   - used only for the AI token limit scenario
   - protected by Kong `ai-rate-limiting-advanced`
@@ -147,18 +147,21 @@ This scenario demonstrates what happens when the orchestrator's primary model pa
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-failover-demo/chat/completions`
-- that route is configured so the OpenAI primary path fails deterministically
-- the run emits explicit policy events showing:
-  - the primary OpenAI path was attempted
-  - the primary path failed
-  - Gemini was selected as the fallback model
-- the orchestrator then continues the rest of the run using Gemini
+- the route is configured to experiment with Kong-managed failover behavior in `ai-proxy-advanced`
 - the support and success sub-agents still use their normal Gemini sub-agent route
 
 Important note:
 
-- in the current implementation, the demo shows the failover outcome through Kong-routed calls and orchestrator policy handling after the primary path returns `401`
-- the visible result is still the intended demo story: OpenAI fails, Gemini completes the run
+- this scenario is currently a debugging path, not a proven deterministic demo
+- multiple failover experiments were tested:
+  - primary `401`
+  - invalid model name
+  - request-termination simulator route
+  - unreachable upstream
+- in this repo/runtime, the strongest finding is that target-specific `upstream_url` handling appears to interfere with failover target isolation
+- specifically, when the primary target uses `upstream_url`, Kong may still log and fail the fallback target against that same effective upstream
+- one experimental configuration only started working when the OpenAI target's `upstream_url` was pointed at a Gemini endpoint, which strongly suggests unexpected `upstream_url` behavior rather than correct target failover semantics
+- current conclusion: this is likely an `ai-proxy-advanced` bug or limitation in per-target `upstream_url` handling during failover, and the failover scene should be treated as experimental unless verified again against a working Kong-supported provider-native failure
 
 ### 3. AI Token Limit
 
@@ -185,6 +188,7 @@ Important note:
 - it is using the plugin configuration above on the scenario route
 - in live logs, Kong reports `AI token rate limit exceeded for provider(s): openai`
 - for demo purposes, the effect is deterministic: the scenario shows a policy block after the first counted orchestrator AI usage on that route
+- the orchestrator now handles Kong `429` responses from the shared `httpx` LLM client correctly; earlier versions let those surface as `500`
 
 ### 4. Prompt Decorator
 
@@ -253,6 +257,13 @@ Behind the scenes:
 - the trace shows a `Kong semantic guard blocked request` event under the affected orchestrator LLM step
 
 This mode is useful for showing semantic policy enforcement at the gateway layer instead of relying on exact keyword matches inside the application.
+
+The `+` policy panel in the UI now shows the exact denied prompt families and explains the thresholds:
+
+- `search.threshold`
+  - broader candidate-search threshold for finding possible semantic matches
+- `vectordb.threshold`
+  - final similarity cutoff used for the block decision
 
 ### 6. Semantic Cache
 
