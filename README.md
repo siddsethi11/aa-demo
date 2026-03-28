@@ -922,6 +922,120 @@ This makes it straightforward to build Grafana panels for:
 - agent request volume and failures
 - backend and UI traffic split by status
 
+### How `run_id` correlates the system
+
+The demo uses a single `run_id` to correlate one end-to-end execution across:
+
+- the browser UI
+- the orchestrator
+- both sub-agents
+- Kong gateway logs
+- Loki log records
+- Grafana dashboard filters
+
+For a technical audience, the important point is that `run_id` is not only a UI concept. It is the correlation key that ties together both control-plane events and data-plane traffic.
+
+#### 1. `run_id` creation
+
+At the start of a run, the UI creates a `run_id` if one is not already present and sends it with the request body and request headers.
+
+- request body field: `run_id`
+- request header: `x-demo-run-id`
+
+This means the same identifier is available to:
+
+- the orchestrator application logic
+- Kong request logging
+- downstream agent and MCP calls that continue propagating the header
+
+#### 2. Orchestrator scope
+
+The orchestrator treats `run_id` as the execution identifier for the full workflow.
+
+It uses that same value to:
+
+- emit websocket trace events for the UI tree
+- call LLM routes through Kong
+- call MCP through Kong
+- invoke the support-agent and success-agent
+- construct the final response returned to the UI
+
+In practice, this means all orchestration steps for a single execution are grouped under one `run_id`, even when the workflow fans out into multiple agent and tool calls.
+
+#### 3. Propagation to sub-agents and tools
+
+The orchestrator passes `run_id` into the sub-agent request payloads. Each sub-agent then reuses that same `run_id` when it:
+
+- emits trace events back to the orchestrator
+- calls MCP tools through `KongMCPClient`
+- calls LLM routes through the shared LLM client
+
+This matters because the workflow is distributed. Without explicit propagation, the support-agent and success-agent traffic would look like unrelated requests in Loki and Grafana.
+
+#### 4. Header-level correlation in Kong
+
+Kong extracts `run_id` from the `x-demo-run-id` header inside the logging plugin and writes it into the structured log payload.
+
+That gives every logged request a stable correlation field alongside:
+
+- `component`
+- `service`
+- `route`
+- `consumer`
+- `status`
+
+So a single `run_id` can be used to join together:
+
+- orchestrator LLM calls
+- sub-agent LLM calls
+- MCP tool calls
+- agent-to-agent traffic
+- any other gateway request that carried the same header
+
+#### 5. Loki as the correlation store
+
+Loki stores `run_id` as a structured field that the dashboard queries can filter on.
+
+That is what enables questions like:
+
+- "Show me only the LLM calls for this run"
+- "What was the total cost for this run"
+- "Which MCP tools were called during this run"
+- "Why does this run have fewer support-agent LLM calls than expected"
+
+Without `run_id`, Grafana could still show aggregate traffic, but it could not reliably isolate one workflow execution from another.
+
+#### 6. Grafana usage
+
+The governance dashboard exposes a `Run ID` variable.
+
+- `All`
+  - shows all labeled runs in the selected time range
+- specific `run_id`
+  - scopes queries to one execution
+
+This is why the dashboard can act both as:
+
+- an overall governance dashboard
+- a per-run investigation view
+
+#### 7. Failure mode to watch for
+
+If any service makes downstream requests without propagating `run_id`, the workflow will fragment operationally:
+
+- the run still executes
+- Kong still logs the requests
+- but those log lines will have blank or missing `run_id`
+- Grafana run-scoped panels will undercount that run
+
+That exact failure happened earlier with sub-agent planner LLM calls. The requests succeeded, but because `run_id` was not consistently propagated, the per-run LLM count panels showed `1` instead of `3` for support and success on affected historical runs.
+
+So the technical rule in this repo is simple:
+
+- every request that should belong to one business execution must carry the same `run_id`
+- every internal service hop must preserve that value
+- every observability query that claims to be "per run" depends on that propagation being correct
+
 ### Grafana dashboard
 
 The dashboard `Kong Governance Overview` includes:
