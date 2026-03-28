@@ -186,7 +186,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_cost [$__range]))",
+          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" | unwrap llm_usage_cost [$__range]))",
           "legendFormat": "{{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
@@ -498,7 +498,10 @@
         },
         "showUnfilled": true,
         "sizing": "auto",
-        "text": {}
+        "text": {
+          "titleSize": 20,
+          "valueSize": 48
+        }
       },
       "targets": [
         {
@@ -508,9 +511,25 @@
           },
           "editorMode": "code",
           "expr": "sum by (consumer,llm_usage_model) (count_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" [$__range]))",
-          "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
+          "legendFormat": "{{consumer}} / {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "-agent / ",
+            "renamePattern": " / "
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "-20[0-9]{2}-[0-9]{2}-[0-9]{2}$",
+            "renamePattern": ""
+          }
         }
       ],
       "title": "LLM Calls By Agent And Model Name",
@@ -570,7 +589,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [1h]))",
+          "expr": "sum by (llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" | unwrap llm_usage_total_tokens [1h]))",
           "legendFormat": "{{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
@@ -624,7 +643,10 @@
         },
         "showUnfilled": true,
         "sizing": "auto",
-        "text": {}
+        "text": {
+          "titleSize": 20,
+          "valueSize": 48
+        }
       },
       "targets": [
         {
@@ -633,10 +655,26 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [1h]))",
-          "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
+          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" | unwrap llm_usage_total_tokens [1h]))",
+          "legendFormat": "{{consumer}} / {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "-agent / ",
+            "renamePattern": " / "
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "-20[0-9]{2}-[0-9]{2}-[0-9]{2}$",
+            "renamePattern": ""
+          }
         }
       ],
       "title": "Tokens Consumed By Agent And Model Name",
@@ -839,7 +877,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [5m]))",
+          "expr": "sum by (consumer,llm_usage_model) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" | unwrap llm_usage_total_tokens [5m]))",
           "legendFormat": "{{consumer}} -> {{llm_usage_model}}",
           "queryType": "range",
           "refId": "A"
@@ -957,6 +995,6 @@
   "timezone": "",
   "title": "Kong Governance Overview",
   "uid": "kong-governance-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
