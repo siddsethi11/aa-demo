@@ -57,6 +57,7 @@ async def fetch_tool_inventory(state: SuccessState) -> SuccessState:
     params = state["params"]
     client = KongMCPClient(MCP_URL, API_KEY, "success-agent", run_id=params["run_id"])
     started = time.perf_counter()
+    await emit_trace(params["run_id"], "tool_list_started", actor="success-agent")
     tools = await client.list_tools()
     available_tools = [tool.get("name") for tool in tools]
     await emit_trace(
@@ -129,7 +130,7 @@ async def prepare_customer_actions(state: SuccessState) -> SuccessState:
             current_context=current_context,
         )
         stage = f"tool_selection_{step_number}"
-        await emit_trace(params["run_id"], "llm_started", actor="success-agent", stage=stage, input=prompts)
+        await emit_trace(params["run_id"], "llm_started", actor="success-agent", stage=stage, component="gemini", input=prompts)
         started = time.perf_counter()
         tool_decision = await llm.choose_next_tool(
             account_name=params["account_name"],
@@ -146,6 +147,7 @@ async def prepare_customer_actions(state: SuccessState) -> SuccessState:
             "llm_completed",
             actor="success-agent",
             stage=stage,
+            component="gemini",
             llm_used=tool_decision["llm_used"],
             model=tool_decision["model"],
             output=tool_decision,
@@ -207,7 +209,7 @@ async def generate_success_summary(state: SuccessState) -> SuccessState:
         "system_prompt": system_prompt,
         "user_prompt": user_prompt,
     }
-    await emit_trace(params["run_id"], "llm_started", actor="success-agent", stage="success_summary", input=llm_input)
+    await emit_trace(params["run_id"], "llm_started", actor="success-agent", stage="success_summary", component="gemini", input=llm_input)
     started = time.perf_counter()
     if not llm.enabled:
         result = {
@@ -225,6 +227,7 @@ async def generate_success_summary(state: SuccessState) -> SuccessState:
             "llm_completed",
             actor="success-agent",
             stage="success_summary",
+            component="gemini",
             llm_used=False,
             model=None,
             output=result["llm_summary"],
@@ -241,6 +244,7 @@ async def generate_success_summary(state: SuccessState) -> SuccessState:
         "llm_completed",
         actor="success-agent",
         stage="success_summary",
+        component="gemini",
         llm_used=llm_summary["llm_used"],
         model=llm_summary["model"],
         output=llm_summary,

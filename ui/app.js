@@ -115,6 +115,11 @@ let activeScenario = "normal";
 let semanticCacheMissReturnPending = false;
 let semanticCacheProbeResolved = false;
 let semanticCacheModelVisibleUntil = 0;
+const componentStateTimers = {};
+const componentVisibleSince = {};
+const MIN_COMPONENT_ACTIVE_MS = 350;
+const MIN_COMPONENT_ERROR_MS = 850;
+const MIN_RETURN_COMPONENT_ACTIVE_MS = 1100;
 
 const scenePresets = {
   acme_default: {
@@ -1155,6 +1160,9 @@ function upsertSemanticCacheProbeNode(payload, status = "active") {
 }
 
 function resetTopology() {
+  Object.values(componentStateTimers).forEach((timer) => clearTimeout(timer));
+  Object.keys(componentStateTimers).forEach((key) => delete componentStateTimers[key]);
+  Object.keys(componentVisibleSince).forEach((key) => delete componentVisibleSince[key]);
   if (failoverResetTimer) {
     clearTimeout(failoverResetTimer);
     failoverResetTimer = null;
@@ -1262,6 +1270,96 @@ function markLine(name, state) {
     line.classList.remove("active", "complete");
     line.classList.add("error");
   }
+}
+
+function clearComponentTimer(component) {
+  if (componentStateTimers[component]) {
+    clearTimeout(componentStateTimers[component]);
+    delete componentStateTimers[component];
+  }
+}
+
+function applyComponentState(component, state) {
+  const applyNow = () => {
+    if (component === "dashboard") {
+      markNode("ui", state);
+      markLine("ui-kong", state);
+      return;
+    }
+    if (component === "kong") {
+      markNode("kong", state);
+      return;
+    }
+    if (component === "orchestrator" || component === "support-agent" || component === "success-agent") {
+      activateActorPath(component, state);
+      return;
+    }
+    if (component === "openai") {
+      markNode("kong", state === "complete" ? "active" : state);
+      markNode("openai", state);
+      markLine("kong-openai", state);
+      return;
+    }
+    if (component === "gemini") {
+      markNode("kong", state === "complete" ? "active" : state);
+      markNode("gemini", state);
+      markLine("kong-gemini", state);
+      return;
+    }
+    if (component === "judge-model") {
+      activateJudgePath(state);
+      return;
+    }
+    if (component === "redis") {
+      activateRedisPath(state);
+      return;
+    }
+    if (component === "pii-service") {
+      activatePiiPath(state);
+      return;
+    }
+    if (component === "observability") {
+      setObservabilityPath(state);
+    }
+  };
+
+  clearComponentTimer(component);
+
+  if (state === "active" || state === "error") {
+    componentVisibleSince[component] = Date.now();
+    applyNow();
+    return;
+  }
+
+  const currentState = (() => {
+    if (component === "dashboard") {
+      if (nodes.ui?.classList.contains("error")) return "error";
+      if (nodes.ui?.classList.contains("active")) return "active";
+      return "complete";
+    }
+    const node = nodes[component];
+    if (node?.classList.contains("error")) return "error";
+    if (node?.classList.contains("active")) return "active";
+    return "complete";
+  })();
+  const minVisibleMs =
+    currentState === "error"
+      ? MIN_COMPONENT_ERROR_MS
+      : (component === "dashboard" || component === "orchestrator" || component === "kong")
+        ? MIN_RETURN_COMPONENT_ACTIVE_MS
+        : MIN_COMPONENT_ACTIVE_MS;
+  const elapsed = Date.now() - (componentVisibleSince[component] || 0);
+  const remaining = Math.max(0, minVisibleMs - elapsed);
+
+  if (!remaining) {
+    applyNow();
+    return;
+  }
+
+  componentStateTimers[component] = window.setTimeout(() => {
+    applyNow();
+    delete componentStateTimers[component];
+  }, remaining);
 }
 
 function showTopologyActivity(label) {
@@ -1546,7 +1644,7 @@ function showFailurePath(kind = "orchestrator") {
   }
 }
 
-function setMcpPathState(state, lingerMs = 0) {
+function setMcpPathState(state, lingerMs = 0, actor = "orchestrator") {
   if (mcpAnimationTimer) {
     clearTimeout(mcpAnimationTimer);
     mcpAnimationTimer = null;
@@ -1561,19 +1659,19 @@ function setMcpPathState(state, lingerMs = 0) {
     if (remainingVisibleMs > 0) {
       pendingMcpActivationTimer = window.setTimeout(() => {
         clearOrchestratorLlmPath();
-        activateToolPath("orchestrator", "active");
+        activateToolPath(actor, "active");
         pendingMcpActivationTimer = null;
       }, remainingVisibleMs);
       return;
     }
     clearOrchestratorLlmPath();
-    activateToolPath("orchestrator", "active");
+    activateToolPath(actor, "active");
     return;
   }
 
-  activateToolPath("orchestrator", "active");
+  activateToolPath(actor, "active");
   mcpAnimationTimer = window.setTimeout(() => {
-    activateToolPath("orchestrator", "complete");
+    activateToolPath(actor, "complete");
     hideTopologyActivity();
     mcpAnimationTimer = null;
   }, lingerMs || 900);
@@ -1857,6 +1955,9 @@ function renderFinalOutput(result) {
 }
 
 function resetTraceState() {
+  Object.values(componentStateTimers).forEach((timer) => clearTimeout(timer));
+  Object.keys(componentStateTimers).forEach((key) => delete componentStateTimers[key]);
+  Object.keys(componentVisibleSince).forEach((key) => delete componentVisibleSince[key]);
   if (mcpAnimationTimer) {
     clearTimeout(mcpAnimationTimer);
     mcpAnimationTimer = null;
@@ -2051,6 +2152,15 @@ function handleTraceEvent(payload) {
       }
       break;
 
+    case "component_status":
+      applyComponentState(payload.component, payload.status);
+      break;
+
+    case "tool_list_started":
+      setFlowStage("Fetching MCP tool list", `${labelForActor(payload.actor || "orchestrator")} is resolving the allowed MCP tools through Kong.`);
+      setMcpPathState("active", 0, payload.actor || "orchestrator");
+      break;
+
     case "tool_list_received": {
       const actor = payload.actor || "orchestrator";
       const parentId = ensureActorRoot(actor);
@@ -2063,7 +2173,7 @@ function handleTraceEvent(payload) {
       );
       node.output = payload.tools;
       node.status = "complete";
-      setMcpPathState("complete", 1000);
+      setMcpPathState("complete", 1000, actor);
       break;
     }
 
@@ -2071,21 +2181,24 @@ function handleTraceEvent(payload) {
       upsertToolNode(payload);
       setFlowStage(`Tool call: ${payload.tool}`, `${labelForActor(payload.actor || "orchestrator")} is calling an MCP tool through Kong.`);
       showTopologyActivity(payload.tool);
-      setMcpPathState("active");
+      setMcpPathState("active", 0, payload.actor || "orchestrator");
       break;
 
     case "tool_call_completed":
       upsertToolNode(payload);
-      setMcpPathState("complete", 1100);
+      setMcpPathState("complete", 1100, payload.actor || "orchestrator");
       break;
 
     case "tool_calls_completed":
-      setMcpPathState("complete", 1300);
+      setMcpPathState("complete", 1300, payload.actor || "orchestrator");
       break;
 
     case "llm_started":
       upsertLlmNode(payload);
       setFlowStage(`LLM call: ${payload.stage}`, `${labelForActor(payload.actor || "orchestrator")} is calling its AI route through Kong.`);
+      if (payload.component) {
+        applyComponentState(payload.component, "active");
+      }
       if (traceState.scenario === "semantic_guard") {
         hideTopologyActivity();
         activateActorPath("orchestrator", "active");
@@ -2158,6 +2271,9 @@ function handleTraceEvent(payload) {
 
     case "llm_completed":
       upsertLlmNode(payload);
+      if (payload.component) {
+        applyComponentState(payload.component, "complete");
+      }
       if (traceState.scenario === "semantic_guard") {
         completeRedisPath();
         setOpenAiNodeState("complete");
@@ -2312,7 +2428,7 @@ function handleTraceEvent(payload) {
         }
       }
       if (payload.stage === "token_limit") {
-        showFailurePath("openai");
+        setFlowStage("Token policy blocked request", payload.summary || "Kong AI token governance blocked the OpenAI path.");
       }
       if (payload.stage === "semantic_guard") {
         completeRedisPath();
@@ -2479,6 +2595,7 @@ function handleTraceEvent(payload) {
       }
       selectedTraceId = "final-response";
       setFlowStage("Run complete", "The orchestrator completed synthesis and the final output is ready.");
+      const isBlockedResponse = payload.output?.policy_outcome === "blocked";
       if (traceState.scenario === "llm_as_judge") {
         if (judgeSettleTimer) {
           clearTimeout(judgeSettleTimer);
@@ -2492,6 +2609,11 @@ function handleTraceEvent(payload) {
         markNode("ui", "active");
         markLine("ui-kong", "active");
         markNode("kong", "active");
+      } else if (isBlockedResponse && traceState.scenario !== "semantic_guard") {
+        applyComponentState("openai", "complete");
+        applyComponentState("orchestrator", "active");
+        applyComponentState("kong", "active");
+        applyComponentState("dashboard", "active");
       } else if (traceState.scenario !== "semantic_guard") {
         activateActorPath("orchestrator", "complete");
       }
@@ -2502,6 +2624,10 @@ function handleTraceEvent(payload) {
         // The judge scenario returns through Kong back to the orchestrator and UI.
       } else if (traceState.scenario === "semantic_cache" && semanticCacheMissReturnPending) {
         // Cache miss return sequencing is driven from llm_completed.
+      } else if (isBlockedResponse && traceState.scenario !== "semantic_guard") {
+        markNode("kong", "active");
+        markNode("ui", "active");
+        markLine("ui-kong", "active");
       } else if (traceState.scenario !== "semantic_guard") {
         markNode("kong", "complete");
         markLine("ui-kong", "complete");

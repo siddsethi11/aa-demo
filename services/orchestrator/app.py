@@ -105,6 +105,10 @@ async def emit(run_id: str, event_type: str, **payload: Any) -> None:
     )
 
 
+async def emit_component(run_id: str, component: str, status: str, **payload: Any) -> None:
+    await emit(run_id, "component_status", component=component, status=status, **payload)
+
+
 def timed_ms(started_at: float) -> int:
     return round((time.perf_counter() - started_at) * 1000)
 
@@ -360,6 +364,7 @@ async def generate_for_scenario(
         return await llm.generate(base_url=base_url, run_id=run_id, **prompts)
     except httpx.HTTPStatusError as exc:
         if scenario == "token_limit" and exc.response.status_code == 429:
+            await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
             await emit(
                 run_id,
                 "policy_event",
@@ -370,6 +375,7 @@ async def generate_for_scenario(
                 output={"status_code": exc.response.status_code, "message": str(exc)},
             )
         if scenario == "semantic_guard" and exc.response.status_code == 400:
+            await emit_component(run_id, "redis", "complete", actor="orchestrator", stage=stage)
             await emit(
                 run_id,
                 "policy_event",
@@ -380,6 +386,7 @@ async def generate_for_scenario(
                 output={"status_code": exc.response.status_code, "message": str(exc)},
             )
         if scenario == "llm_failover" and exc.response.status_code in {401, 403}:
+            await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
             await emit(
                 run_id,
                 "policy_event",
@@ -398,6 +405,8 @@ async def generate_for_scenario(
                 summary=f"Kong is redirecting the orchestrator to Gemini after the primary OpenAI path failed during {stage}.",
                 output={"selected_model": GEMINI_FALLBACK_MODEL, "fallback_route": GEMINI_FALLBACK_URL},
             )
+            await emit_component(run_id, "openai", "complete", actor="orchestrator", stage=stage)
+            await emit_component(run_id, "gemini", "active", actor="orchestrator", stage=stage)
             return await llm.generate(
                 base_url=GEMINI_FALLBACK_URL,
                 model=GEMINI_FALLBACK_MODEL,
@@ -408,6 +417,7 @@ async def generate_for_scenario(
     except AuthenticationError as exc:
         if scenario != "llm_failover":
             raise
+        await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
         await emit(
             run_id,
             "policy_event",
@@ -426,6 +436,8 @@ async def generate_for_scenario(
             summary=f"Kong is redirecting the orchestrator to Gemini after the primary OpenAI path failed during {stage}.",
             output={"selected_model": GEMINI_FALLBACK_MODEL, "fallback_route": GEMINI_FALLBACK_URL},
         )
+        await emit_component(run_id, "openai", "complete", actor="orchestrator", stage=stage)
+        await emit_component(run_id, "gemini", "active", actor="orchestrator", stage=stage)
         fallback = await llm.generate(
             base_url=GEMINI_FALLBACK_URL,
             model=GEMINI_FALLBACK_MODEL,
@@ -435,6 +447,7 @@ async def generate_for_scenario(
         return fallback
     except RateLimitError as exc:
         if scenario == "token_limit":
+            await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
             await emit(
                 run_id,
                 "policy_event",
@@ -447,6 +460,7 @@ async def generate_for_scenario(
         raise
     except APIStatusError as exc:
         if scenario == "token_limit" and exc.status_code == 429:
+            await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
             await emit(
                 run_id,
                 "policy_event",
@@ -457,6 +471,7 @@ async def generate_for_scenario(
                 output={"status_code": exc.status_code, "message": str(exc)},
             )
         if scenario == "semantic_guard" and exc.status_code == 400:
+            await emit_component(run_id, "redis", "complete", actor="orchestrator", stage=stage)
             await emit(
                 run_id,
                 "policy_event",
@@ -542,6 +557,7 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
     mcp = KongMCPClient(f"{KONG_PROXY_URL}/mock-mcp", AGENT_API_KEY, "orchestrator", run_id=run_id)
     await emit(run_id, "planning", message="Fetching account context through Kong MCP.")
     list_started = time.perf_counter()
+    await emit(run_id, "tool_list_started", actor="orchestrator")
     tools = await mcp.list_tools()
     available_tools = [tool.get("name") for tool in tools]
     await emit(
@@ -595,6 +611,7 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
             "llm_started",
             actor="orchestrator",
             stage=stage,
+            component="openai",
             input=prompts,
         )
         plan_started = time.perf_counter()
@@ -624,6 +641,7 @@ async def fetch_context(state: OrchestratorState) -> OrchestratorState:
             "llm_completed",
             actor="orchestrator",
             stage=stage,
+            component=tool_decision["model"] if tool_decision.get("model") else "openai",
             llm_used=tool_decision["llm_used"],
             model=tool_decision["model"],
             output=tool_decision,
@@ -718,6 +736,7 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
             if semantic_cache_step == "seed"
             else "Kong semantic cache reused the orchestrator prompt from Redis."
         )
+        await emit_component(run_id, "redis", "active", actor="orchestrator", stage=stage_name)
         await emit(run_id, "llm_started", actor="orchestrator", stage=stage_name, input=llm_input)
         started = time.perf_counter()
         triage_brief = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **triage_prompts)
@@ -734,7 +753,10 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
             summary=stage_summary,
             output=triage_brief["cache_headers"],
         )
+        await emit_component(run_id, "redis", "complete", actor="orchestrator", stage=stage_name)
     else:
+        if scenario == "semantic_guard":
+            await emit_component(run_id, "redis", "active", actor="orchestrator", stage="triage_plan")
         await emit(run_id, "llm_started", actor="orchestrator", stage="triage_plan", input=llm_input)
         started = time.perf_counter()
         triage_brief = await generate_for_scenario(
@@ -749,6 +771,7 @@ async def generate_triage_brief(state: OrchestratorState) -> OrchestratorState:
         "llm_completed",
         actor="orchestrator",
         stage="triage_cache_seed" if scenario == "semantic_cache" and semantic_cache_step == "seed" else "triage_plan",
+        component=triage_brief["model"] if triage_brief.get("model") else "openai",
         llm_used=triage_brief["llm_used"],
         model=triage_brief["model"],
         output=triage_brief,
@@ -866,6 +889,7 @@ async def finalize_response(state: OrchestratorState) -> OrchestratorState:
         "llm_completed",
         actor="orchestrator",
         stage="executive_summary",
+        component=executive_brief["model"] if executive_brief.get("model") else "openai",
         llm_used=executive_brief["llm_used"],
         model=executive_brief["model"],
         output=executive_brief,
@@ -927,6 +951,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         input=request.model_dump(),
         governance_scenario=scenario,
     )
+    await emit_component(run_id, "kong", "active")
     await emit(
         run_id,
         "scenario_selected",
@@ -978,7 +1003,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "anonymized_categories": pii_anonymized_categories(),
             },
         )
-        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
+        await emit_component(run_id, "pii-service", "active", actor="orchestrator", stage=stage)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
         llm_started = time.perf_counter()
         try:
             pii_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
@@ -995,6 +1021,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 summary="Kong AI PII Sanitizer blocked the request because supported PII or credentials were detected.",
                 output={"status_code": status_code, "message": str(exc), "mode": pii_sanitizer_mode},
             )
+            await emit_component(run_id, "pii-service", "complete", actor="orchestrator", stage=stage)
             blocked_response = {
                 "headline": "PII sanitization request blocked",
                 "governance_scenario": scenario,
@@ -1026,6 +1053,10 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "error": str(exc),
             }
             await emit(run_id, "final_response", headline=blocked_response["headline"], output=blocked_response)
+            await emit_component(run_id, "dashboard", "complete")
+            await emit_component(run_id, "kong", "complete")
+            await emit_component(run_id, "orchestrator", "complete")
+            await emit_component(run_id, "observability", "complete")
             await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=blocked_response)
             return {"run_id": run_id, "result": blocked_response}
         pii_output = without_cache_headers(pii_result)
@@ -1034,11 +1065,13 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "llm_completed",
             actor="orchestrator",
             stage=stage,
+            component=pii_output["model"] if pii_output.get("model") else "openai",
             llm_used=pii_output["llm_used"],
             model=pii_output["model"],
             output=pii_output,
             duration_ms=timed_ms(llm_started),
         )
+        await emit_component(run_id, "pii-service", "active", actor="orchestrator", stage=stage)
         await emit(
             run_id,
             "policy_event",
@@ -1064,6 +1097,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "sanitized_response": pii_output["summary"],
             },
         )
+        await emit_component(run_id, "pii-service", "complete", actor="orchestrator", stage=stage)
         final_response = {
             "headline": "PII sanitization probe completed",
             "governance_scenario": scenario,
@@ -1089,6 +1123,10 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             },
         }
         await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
         return {"run_id": run_id, "result": final_response}
     if scenario == "llm_as_judge":
@@ -1101,7 +1139,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "Kong AI LLM as Judge is comparing candidate model output and scoring it for accuracy using a separate judge model."
             ),
         )
-        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
         llm_started = time.perf_counter()
         judge_result = await llm.generate_with_headers(
             base_url=ai_route_base_url,
@@ -1114,11 +1152,13 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "llm_completed",
             actor="orchestrator",
             stage=stage,
+            component=judge_result["model"] if judge_result.get("model") else "openai",
             llm_used=judge_result["llm_used"],
             model=judge_result["model"],
             output=judge_result,
             duration_ms=timed_ms(llm_started),
         )
+        await emit_component(run_id, "judge-model", "active", actor="orchestrator", stage=stage)
         await emit(
             run_id,
             "judge_started",
@@ -1162,6 +1202,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "score_source": "Kong AI Gateway audit logs",
             },
         )
+        await emit_component(run_id, "judge-model", "complete", actor="orchestrator", stage=stage)
         final_response = {
             "headline": "LLM as Judge probe completed",
             "governance_scenario": scenario,
@@ -1185,6 +1226,10 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             },
         }
         await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
         return {"run_id": run_id, "result": final_response}
     if scenario == "semantic_cache":
@@ -1196,7 +1241,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             else "Second semantic-cache request through Kong. This should reuse the cached response."
         )
         await emit(run_id, "planning", message=stage_summary)
-        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, input=prompts)
+        await emit_component(run_id, "redis", "active", actor="orchestrator", stage=stage)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
         llm_started = time.perf_counter()
         triage_result = await llm.generate_with_headers(base_url=ai_route_base_url, run_id=run_id, **prompts)
         cache_status = (triage_result.get("cache_headers", {}).get("x-cache-status") or "").lower()
@@ -1215,11 +1261,13 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             summary=policy_summary,
             output=triage_result.get("cache_headers"),
         )
+        await emit_component(run_id, "redis", "complete", actor="orchestrator", stage=stage)
         await emit(
             run_id,
             "llm_completed",
             actor="orchestrator",
             stage=stage,
+            component=triage_result["model"] if triage_result.get("model") else "openai",
             llm_used=triage_result["llm_used"],
             model=triage_result["model"],
             output=triage_result,
@@ -1245,6 +1293,10 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             },
         }
         await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
         return {"run_id": run_id, "result": final_response}
     try:
@@ -1298,9 +1350,19 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "recommended_summary": policy_summary,
             "error": str(exc),
         }
+        await emit_component(run_id, "orchestrator", "active")
+        await emit_component(run_id, "dashboard", "active")
         await emit(run_id, "final_response", headline=blocked_result["headline"], output=blocked_result)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=blocked_result)
         return {"run_id": run_id, "result": blocked_result}
+    await emit_component(run_id, "dashboard", "complete")
+    await emit_component(run_id, "kong", "complete")
+    await emit_component(run_id, "orchestrator", "complete")
+    await emit_component(run_id, "observability", "complete")
     await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=graph_result["result"])
     return {"run_id": run_id, "result": graph_result["result"]}
 
