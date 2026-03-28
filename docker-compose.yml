@@ -102,6 +102,12 @@ services:
       AGENT_API_KEY: orchestrator-demo-key
       TRACE_WS_PATH: /trace
       OPENAI_MODEL: gpt-4o-mini
+      OBSERVABILITY_COMPOSE_DIR: ${PWD}
+      OBSERVABILITY_COMPOSE_PROJECT_NAME: aa-demo
+      OBSERVABILITY_COMPOSE_FILE: docker-compose.yml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}:${PWD}:ro
 
   support-agent:
     build:

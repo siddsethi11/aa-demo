@@ -40,6 +40,10 @@ Important environment wiring:
 - success-agent uses `AGENT_API_KEY=success-demo-key`
 - orchestrator LLM base URL: `http://kong-dp:8000/ai/orchestrator`
 - sub-agent LLM base URL: `http://kong-dp:8000/ai/subagent`
+- orchestrator now also has Docker access for the demo-only observability reset flow:
+  - Docker socket mounted
+  - repo mounted read-only at the host-absolute path
+  - `docker-compose` installed in the service image
 
 ## Expected LLM Call Counts Per Normal Run
 
@@ -206,6 +210,44 @@ Governance dashboard changes currently include:
 - LLM count panels respect `[$__range]`
 - average cost panel means average per-run cost by agent
 - ambiguous single-series tiles now force label rendering and clearer titles
+
+Additional dashboard cleanup:
+- token panels now exclude blank `llm_usage_model`, which removed phantom `0` rows
+- model-grouped cost panels also exclude blank `llm_usage_model`
+- agent/model label shortening is done at the display layer, not by hardcoding agent or model names in the Loki queries
+
+## Reset Observability Flow
+
+New UI capability:
+- topbar now includes `Reset Observability`
+
+Behavior:
+- UI calls `POST /orchestrator/observability/reset`
+- orchestrator runs:
+  - `docker-compose -p aa-demo -f docker-compose.yml rm -sf loki`
+  - `docker-compose -p aa-demo -f docker-compose.yml up -d loki`
+  - `docker-compose -p aa-demo -f docker-compose.yml restart grafana`
+
+Why this shape:
+- deleting Loki data via browser alone is not practical
+- recreating the local Loki container is simpler than wiring a true Loki delete API
+- Grafana is restarted so provisioned dashboards/datasource reconnect cleanly after Loki reset
+
+Important implementation details:
+- backend needed `docker-compose` available inside `orchestrator`
+- backend needed access to `/var/run/docker.sock`
+- backend needed the repo mounted at the host-absolute path, not `/workspace`, because Docker Desktop volume resolution on macOS needs real host paths for bind mounts like `observability/loki/loki-config.yaml`
+- backend subprocess environment needed `PWD` set explicitly so `docker-compose.yml` variable interpolation would resolve `${PWD}` correctly
+
+Verified behavior:
+- reset endpoint returns `200`
+- Loki is removed and recreated
+- Grafana is restarted
+- Loki comes back healthy after reset
+
+Operational caveat:
+- this is a demo-only control surface with host Docker access
+- after clicking the button, wait a few seconds and refresh Grafana
 
 ## Recommended Next Checks If Work Resumes
 

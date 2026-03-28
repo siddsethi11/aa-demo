@@ -655,7 +655,7 @@ If Grafana does not show those counts for a fresh normal run, the first thing to
 
 ## Implemented services
 
-- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, live flow states, and event log
+- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, live flow states, and event log
 - [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, calls MCP through Kong, invokes the support-agent first, then invokes the success-agent with support context
 - [orchestrator LLM helper](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/llm.py): shared OpenAI-compatible client used by the orchestrator and sub-agents, pointed at Kong's `/ai` route
 - [support-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py): LangGraph sub-agent for technical investigation using `get_incident_status` and `search_runbook`
@@ -818,6 +818,14 @@ The UI is hosted through Kong and uses the same gateway for:
 - `/ai/orchestrator/chat/completions`
 - `/ai/subagent/chat/completions`
 
+The top bar also includes `Reset Observability`, which triggers the orchestrator to:
+
+- remove the `loki` container
+- recreate `loki`
+- restart `grafana`
+
+This is intended as a demo-only reset path for clearing Loki log history between runs.
+
 ### Optional: direct UI container access for debugging
 
 If you want to verify only the static UI container, you can open:
@@ -935,6 +943,8 @@ The dashboard also includes a `Run ID` selector:
 
 The LLM cost panels and LLM call-count panels are intended to follow the active Grafana time range rather than a hardcoded lookback window.
 
+The UI-level `Reset Observability` button clears Loki history by recreating the Loki container and restarting Grafana. After using it, wait a few seconds and then refresh Grafana so the datasource reconnects and the dashboard reloads against the new empty Loki state.
+
 The `Average Cost Per Run By Agent` panel means:
 
 - first sum LLM cost per `(consumer, run_id)`
@@ -945,6 +955,24 @@ Important note about historical data:
 - older Loki entries created before the run-id propagation fix may show incorrect per-run sub-agent LLM counts
 - those older runs cannot be corrected retroactively in Grafana because the blank `run_id` was already written into Loki
 - fresh runs after restarting the updated services should show the expected counts listed above
+
+### Observability reset implementation
+
+The reset flow is implemented through the orchestrator API rather than directly in the browser.
+
+- UI calls `POST /orchestrator/observability/reset`
+- orchestrator runs:
+  - `docker-compose -p aa-demo -f docker-compose.yml rm -sf loki`
+  - `docker-compose -p aa-demo -f docker-compose.yml up -d loki`
+  - `docker-compose -p aa-demo -f docker-compose.yml restart grafana`
+
+To make that work, the `orchestrator` service has:
+
+- the Docker socket mounted
+- the repo mounted read-only at its host-absolute path
+- `docker-compose` installed in the service image
+
+This is intentionally demo-oriented and should not be treated as a production pattern.
 
 ## Notes
 

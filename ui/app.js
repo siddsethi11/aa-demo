@@ -6,6 +6,7 @@ const resetButton = document.getElementById("reset-button");
 const sceneButton = document.getElementById("scene-button");
 const graphButton = document.getElementById("graph-button");
 const outputButton = document.getElementById("output-button");
+const resetObservabilityButton = document.getElementById("reset-observability-button");
 const clearLogButton = document.getElementById("clear-log");
 const finalOutput = document.getElementById("final-output");
 const runState = document.getElementById("run-state");
@@ -2031,6 +2032,37 @@ async function clearSemanticCache() {
   }
 }
 
+async function resetObservability() {
+  try {
+    const response = await fetch(`${config.apiBaseUrl}/observability/reset`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.apiKey,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Observability reset failed (${response.status})`);
+    }
+    const result = await response.json();
+    setFlowStage("Observability reset", "Recreated Loki and restarted Grafana.");
+    showNotice({
+      kicker: "Observability",
+      title: "Observability reset complete",
+      message: "Loki was recreated and Grafana was restarted. Refresh Grafana after a few seconds if panels still show old data.",
+    });
+    return result;
+  } catch (error) {
+    setFlowStage("Observability reset failed", error.message);
+    showNotice({
+      kicker: "Observability",
+      title: "Observability reset failed",
+      message: error.message,
+    });
+    throw error;
+  }
+}
+
 playButton.addEventListener("click", (event) => {
   event.preventDefault();
   sceneModal.close();
@@ -2107,6 +2139,16 @@ resetButton.addEventListener("click", () => {
   setRunState("idle");
   setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");
   finalOutput.innerHTML = "<h3>Awaiting run</h3><p>Open View Scene and start the orchestrated demo flow from the scene popup.</p>";
+});
+
+resetObservabilityButton?.addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "This will delete all Loki log data and restart Grafana. Continue?"
+  );
+  if (!confirmed) {
+    return;
+  }
+  await resetObservability();
 });
 
 playForm.addEventListener("input", () => {

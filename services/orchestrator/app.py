@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -41,6 +42,9 @@ GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
 GEMINI_FALLBACK_MODEL = os.getenv("DECK_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 REDIS_HOST = os.getenv("DECK_REDIS_HOST") or os.getenv("REDIS_HOST") or "redis-stack"
 REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
+COMPOSE_PROJECT_DIR = os.getenv("OBSERVABILITY_COMPOSE_DIR", "/workspace")
+COMPOSE_PROJECT_NAME = os.getenv("OBSERVABILITY_COMPOSE_PROJECT_NAME", "aa-demo")
+COMPOSE_FILE_PATH = os.getenv("OBSERVABILITY_COMPOSE_FILE", "docker-compose.yml")
 
 
 class PlayRequest(BaseModel):
@@ -1075,6 +1079,76 @@ async def clear_semantic_cache_keys() -> dict[str, Any]:
         await client.aclose()
 
 
+async def run_shell_command(command: list[str], cwd: str) -> tuple[int, str, str]:
+    env = os.environ.copy()
+    env["PWD"] = cwd
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        cwd=cwd,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+    return process.returncode, stdout.decode().strip(), stderr.decode().strip()
+
+
+async def run_compose_command(*args: str) -> dict[str, Any]:
+    commands = [
+        ["docker-compose", "-p", COMPOSE_PROJECT_NAME, "-f", COMPOSE_FILE_PATH, *args],
+        ["docker", "compose", "-p", COMPOSE_PROJECT_NAME, "-f", COMPOSE_FILE_PATH, *args],
+    ]
+    failures: list[dict[str, Any]] = []
+    for command in commands:
+        try:
+            code, stdout, stderr = await run_shell_command(command, COMPOSE_PROJECT_DIR)
+        except FileNotFoundError:
+            failures.append(
+                {
+                    "command": " ".join(command),
+                    "stdout": "",
+                    "stderr": "command not found",
+                    "returncode": None,
+                }
+            )
+            continue
+        except TimeoutError:
+            failures.append(
+                {
+                    "command": " ".join(command),
+                    "stdout": "",
+                    "stderr": "command timed out",
+                    "returncode": None,
+                }
+            )
+            continue
+        if code == 0:
+            return {
+                "command": " ".join(command),
+                "stdout": stdout,
+                "stderr": stderr,
+                "returncode": code,
+            }
+        failures.append(
+            {
+                "command": " ".join(command),
+                "stdout": stdout,
+                "stderr": stderr,
+                "returncode": code,
+            }
+        )
+    raise RuntimeError(json.dumps(failures))
+
+
+async def reset_observability_stack() -> dict[str, Any]:
+    steps = [
+        await run_compose_command("rm", "-sf", "loki"),
+        await run_compose_command("up", "-d", "loki"),
+        await run_compose_command("restart", "grafana"),
+    ]
+    return {"steps": steps}
+
+
 @app.get("/health")
 @app.get("/orchestrator/health")
 async def health() -> dict[str, str]:
@@ -1104,6 +1178,16 @@ async def clear_semantic_cache() -> dict[str, Any]:
     result = await clear_semantic_cache_keys()
     return {
         "status": "cleared",
+        **result,
+    }
+
+
+@app.post("/observability/reset")
+@app.post("/orchestrator/observability/reset")
+async def reset_observability() -> dict[str, Any]:
+    result = await reset_observability_stack()
+    return {
+        "status": "reset",
         **result,
     }
 
