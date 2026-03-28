@@ -2544,11 +2544,11 @@ function handleTraceEvent(payload) {
           piiSanitizerHandoffTimer = null;
         }
         piiModelHandoffPending = false;
-        activatePiiPath("complete");
+        applyComponentState("pii-service", "active");
         markLine("kong-openai", "complete");
         setOpenAiNodeState("complete");
-        markNode("ui", "error");
-        markLine("ui-kong", "error");
+        markNode("ui", "active");
+        markLine("ui-kong", "active");
       }
       break;
     }
@@ -2666,11 +2666,12 @@ function handleTraceEvent(payload) {
           }
           piiModelHandoffPending = false;
           if (payload.output?.policy_outcome === "blocked") {
-            activatePiiPath("complete");
+            applyComponentState("pii-service", "complete");
             markLine("kong-openai", "complete");
             setOpenAiNodeState("complete");
-            markNode("ui", "error");
-            markLine("ui-kong", "error");
+            applyComponentState("orchestrator", "active");
+            applyComponentState("kong", "active");
+            applyComponentState("dashboard", "active");
           } else {
             activatePiiResponsePath("active");
             markLine("kong-openai", "complete");
@@ -2754,11 +2755,21 @@ function handleTraceEvent(payload) {
           }
           piiModelHandoffPending = false;
           if (payload.output?.policy_outcome === "blocked") {
-            activatePiiPath("complete");
+            applyComponentState("pii-service", "complete");
             markLine("kong-openai", "complete");
             setOpenAiNodeState("complete");
-            markNode("ui", "error");
-            markLine("ui-kong", "error");
+            applyComponentState("orchestrator", "active");
+            applyComponentState("kong", "active");
+            applyComponentState("dashboard", "active");
+            piiResponseCompleteTimer = window.setTimeout(() => {
+              if (traceState.scenario === "pii_sanitizer") {
+                applyComponentState("orchestrator", "complete");
+                applyComponentState("dashboard", "complete");
+                applyComponentState("kong", "complete");
+                applyComponentState("pii-service", "complete");
+              }
+              piiResponseCompleteTimer = null;
+            }, 1300);
           } else {
             activatePiiResponsePath("active");
             markLine("kong-openai", "complete");
