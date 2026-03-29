@@ -1215,7 +1215,7 @@ Example:
 
 ```bash
 python3 scripts/upload_konnect_dashboards.py \
-  --control-plane-id "$CPID" \
+  --control-plane-id "$KONNECT_CP_ID" \
   --pat "$KONNECT_TOKEN"
 ```
 
@@ -1223,7 +1223,7 @@ Dry run:
 
 ```bash
 python3 scripts/upload_konnect_dashboards.py \
-  --control-plane-id "$CPID" \
+  --control-plane-id "$KONNECT_CP_ID" \
   --pat "$KONNECT_TOKEN" \
   --dry-run
 ```
@@ -1249,7 +1249,7 @@ Example with custom names:
 
 ```bash
 python3 scripts/upload_konnect_dashboards.py \
-  --control-plane-id "$CPID" \
+  --control-plane-id "$KONNECT_CP_ID" \
   --pat "$KONNECT_TOKEN" \
   --api-dashboard-name "Customer API Analytics" \
   --ai-dashboard-name "Customer AI Analytics"
