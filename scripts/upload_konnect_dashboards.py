@@ -6,6 +6,7 @@ scope them to a specific control plane.
 What it does:
 - loads dashboard JSON files from observability/konnect/dashboards
 - rewrites preset_filters so they target the supplied control plane id
+- lets callers override the dashboard names instead of forcing the repo defaults
 - creates dashboards when absent
 - overwrites dashboards in place when a dashboard with the same name already exists
 
@@ -55,6 +56,9 @@ DASHBOARD_SPECS = [
     },
 ]
 
+DEFAULT_API_DASHBOARD_NAME = DASHBOARD_SPECS[0]["name"]
+DEFAULT_AI_DASHBOARD_NAME = DASHBOARD_SPECS[1]["name"]
+
 
 class KonnectApiError(RuntimeError):
     pass
@@ -64,6 +68,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Upload aa-demo Konnect dashboards and scope them to a control plane.")
     parser.add_argument("--control-plane-id", "--cpid", required=True, help="Konnect control plane id to scope dashboard data to.")
     parser.add_argument("--pat", required=True, help="Konnect personal access token.")
+    parser.add_argument(
+        "--api-dashboard-name",
+        default=DEFAULT_API_DASHBOARD_NAME,
+        help=f"Dashboard name to use for the API analytics definition. Default: {DEFAULT_API_DASHBOARD_NAME}",
+    )
+    parser.add_argument(
+        "--ai-dashboard-name",
+        default=DEFAULT_AI_DASHBOARD_NAME,
+        help=f"Dashboard name to use for the AI analytics definition. Default: {DEFAULT_AI_DASHBOARD_NAME}",
+    )
     parser.add_argument(
         "--server-url",
         default=DEFAULT_SERVER_URL,
@@ -211,6 +225,10 @@ def upsert_dashboard(
 def main() -> int:
     args = parse_args()
     dashboard_dir = Path(args.dashboard_dir).resolve()
+    dashboard_name_overrides = {
+        "aa-demo-api-analytics.json": args.api_dashboard_name,
+        "aa-demo-ai-dashboard.json": args.ai_dashboard_name,
+    }
     specs = []
     for spec in DASHBOARD_SPECS:
         file_path = dashboard_dir / spec["file"].name
@@ -220,7 +238,7 @@ def main() -> int:
         specs.append(
             {
                 "file": file_path,
-                "name": spec["name"],
+                "name": dashboard_name_overrides.get(spec["file"].name, spec["name"]),
                 "description": spec["description"],
             }
         )

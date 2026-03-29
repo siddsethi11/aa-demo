@@ -230,6 +230,7 @@ Konnect dashboard assets:
 - the stored exports already include a `control_plane` preset filter shape
 - the uploader validates that the supplied control plane id is a non-empty UUID
 - it preserves the exported dashboard definition and rewrites only the `control_plane` preset filter value at upload time
+- it also allows dashboard-name overrides via `--api-dashboard-name` and `--ai-dashboard-name`
 - it uses the Konnect Dashboards API to overwrite by name when the dashboard already exists or create it when absent
 
 ## UI Trace History

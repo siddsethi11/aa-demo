@@ -1235,12 +1235,25 @@ Script behavior:
 - preserves the exported dashboard definition and rewrites only the `control_plane` preset filter value
 - lists existing Konnect dashboards
 - updates matching dashboards by name, or creates them if they do not exist
+- lets you override the default dashboard names with:
+  - `--api-dashboard-name`
+  - `--ai-dashboard-name`
 - defaults to:
   - server: `https://us.api.konghq.com`
   - dashboards path: `/v2/dashboards`
 - API schema reference:
   - rendered docs: `https://developer.konghq.com/api/konnect/analytics-dashboards/v2/#/`
-  - raw OpenAPI: `https://raw.githubusercontent.com/Kong/developer.konghq.com/main/api-specs/konnect/analytics-dashboards/v2/openapi.yaml`
+- raw OpenAPI: `https://raw.githubusercontent.com/Kong/developer.konghq.com/main/api-specs/konnect/analytics-dashboards/v2/openapi.yaml`
+
+Example with custom names:
+
+```bash
+python3 scripts/upload_konnect_dashboards.py \
+  --control-plane-id "$CPID" \
+  --pat "$KONNECT_TOKEN" \
+  --api-dashboard-name "Customer API Analytics" \
+  --ai-dashboard-name "Customer AI Analytics"
+```
 
 The UI-level `Reset Observability` button clears Loki history by recreating the Loki container and restarting Grafana. After using it, wait a few seconds and then refresh Grafana so the datasource reconnects and the dashboard reloads against the new empty Loki state.
 
