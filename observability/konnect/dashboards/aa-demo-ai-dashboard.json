@@ -1,0 +1,460 @@
+{
+  "tiles": [
+    {
+      "id": "ea55c032-bc33-4137-b66a-a5d2cc36ac59",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 2
+        },
+        "position": {
+          "col": 0,
+          "row": 0
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "horizontal_bar",
+          "stacked": true,
+          "chart_title": "GenAI model usage count"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "ai_request_model",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_request_model",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "ai_request_count"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "ai_request_model"
+          ]
+        }
+      }
+    },
+    {
+      "id": "4a617249-d2cc-461f-8bdb-294cc6591f4c",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 2
+        },
+        "position": {
+          "col": 2,
+          "row": 0
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "vertical_bar",
+          "stacked": true,
+          "chart_title": "GenAI provider usage count"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "ai_request_count"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "ai_provider"
+          ]
+        }
+      }
+    },
+    {
+      "id": "e834f8b6-28ea-4fbf-9831-117556ae90a4",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 2,
+          "rows": 2
+        },
+        "position": {
+          "col": 4,
+          "row": 0
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "donut",
+          "chart_title": "AI status codes"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "gateway_service",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "ai_request_count"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "status_code_grouped"
+          ]
+        }
+      }
+    },
+    {
+      "id": "c47dd9cb-37ee-4fa9-b7b4-c915eff14f5a",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 0,
+          "row": 2
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "vertical_bar",
+          "stacked": true,
+          "chart_title": "AI security report"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "status_code_grouped",
+              "value": [
+                "4XX"
+              ],
+              "operator": "in"
+            },
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "ai_request_count"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "route",
+            "status_code"
+          ]
+        }
+      }
+    },
+    {
+      "id": "25ef3dfc-b116-45fb-ab89-6d91e4d2dc18",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 3,
+          "row": 2
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "timeseries_line",
+          "stacked": false,
+          "chart_title": "Token usage by provider"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "total_tokens"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "ai_provider",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "id": "249fa70a-0ea2-448a-bd16-0695bb187916",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 0,
+          "row": 4
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "horizontal_bar",
+          "stacked": true,
+          "chart_title": "Consumer token usage"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "consumer",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "total_tokens"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "consumer",
+            "ai_provider"
+          ]
+        }
+      }
+    },
+    {
+      "id": "965e0fa4-6b52-4c30-a49a-a7b3e08168c0",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 3,
+          "row": 4
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "horizontal_bar",
+          "stacked": true,
+          "chart_title": "Cost per consumer ($)"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "consumer",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "cost"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "consumer"
+          ]
+        }
+      }
+    },
+    {
+      "id": "63e98618-0e57-4d8b-ab89-80fe1b54fa5f",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 2
+        },
+        "position": {
+          "col": 0,
+          "row": 6
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "timeseries_bar",
+          "stacked": true,
+          "chart_title": "LLM latency (avg)"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "ai_request_model",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_request_model",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "llm_latency_average"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": [
+            "ai_request_model",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "id": "2baaad28-794d-4e3c-aad4-cc5eeff2cf0a",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 1
+        },
+        "position": {
+          "col": 3,
+          "row": 6
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "single_value",
+          "chart_title": "Total cost ($)"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "cost"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": []
+        }
+      }
+    },
+    {
+      "id": "b71a7da0-3da9-47f7-abd4-8c03e68d43e3",
+      "type": "chart",
+      "layout": {
+        "size": {
+          "cols": 3,
+          "rows": 1
+        },
+        "position": {
+          "col": 3,
+          "row": 7
+        }
+      },
+      "definition": {
+        "chart": {
+          "type": "single_value",
+          "chart_title": "Total AI gateway requests"
+        },
+        "query": {
+          "filters": [
+            {
+              "field": "ai_provider",
+              "operator": "not_empty"
+            },
+            {
+              "field": "ai_provider",
+              "value": [
+                "UNSPECIFIED"
+              ],
+              "operator": "not_in"
+            }
+          ],
+          "metrics": [
+            "ai_request_count"
+          ],
+          "datasource": "llm_usage",
+          "dimensions": []
+        }
+      }
+    }
+  ],
+  "template_id": "AI_GATEWAY",
+  "preset_filters": [
+    {
+      "field": "control_plane",
+      "value": [
+        "73d2189b-8711-47c2-a11e-7e122eabd1d7"
+      ],
+      "operator": "in"
+    }
+  ]
+}

@@ -20,6 +20,9 @@ Main code locations:
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/mcp_client.py`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml`
 - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/grafana/dashboards/kong-governance-overview.json`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/konnect/dashboards/aa-demo-api-analytics.json`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/konnect/dashboards/aa-demo-ai-dashboard.json`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/upload_konnect_dashboards.py`
 
 ## Runtime Shape
 
@@ -219,6 +222,15 @@ Additional dashboard cleanup:
   - `Semantic Guard Blocked Requests`
   - `Semantic Cache Hits`
   - `Semantic Cache Misses`
+
+Konnect dashboard assets:
+- two Konnect Analytics tile-definition JSONs were added under `observability/konnect/dashboards`
+- these should now be treated as the exact exported dashboard definitions to import
+- `scripts/upload_konnect_dashboards.py` is now the only intended provisioning path
+- the stored exports already include a `control_plane` preset filter shape
+- the uploader validates that the supplied control plane id is a non-empty UUID
+- it preserves the exported dashboard definition and rewrites only the `control_plane` preset filter value at upload time
+- it uses the Konnect Dashboards API to overwrite by name when the dashboard already exists or create it when absent
 
 ## UI Trace History
 

@@ -1188,6 +1188,60 @@ Important judge-panel note:
 - old Loki entries created before the recent Kong log-transform fixes may have blank `judge_input` or missing judge fields
 - only fresh judge runs after the latest Kong sync should be used when validating the table
 
+### Konnect dashboard imports
+
+This repo also includes two Konnect Analytics dashboard JSON assets based on the exact exported dashboard definitions provided for this demo:
+
+- [observability/konnect/dashboards/aa-demo-api-analytics.json](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/konnect/dashboards/aa-demo-api-analytics.json)
+- [observability/konnect/dashboards/aa-demo-ai-dashboard.json](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/konnect/dashboards/aa-demo-ai-dashboard.json)
+
+Notes:
+
+- these are Konnect Analytics tile definitions, not Grafana dashboards
+- these files should be treated as the authoritative exported dashboard definitions to import
+- they already include a `control_plane` preset filter shape, and the uploader rewrites that filter to the supplied control plane id at upload time
+- if a dashboard with the same name already exists in Konnect, the API uploader updates it in place
+- if it does not exist, the uploader creates it
+
+Uploader script:
+
+- [scripts/upload_konnect_dashboards.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/upload_konnect_dashboards.py)
+
+Recommended path:
+
+- use the API uploader directly
+
+Example:
+
+```bash
+python3 scripts/upload_konnect_dashboards.py \
+  --control-plane-id "$CPID" \
+  --pat "$KONNECT_TOKEN"
+```
+
+Dry run:
+
+```bash
+python3 scripts/upload_konnect_dashboards.py \
+  --control-plane-id "$CPID" \
+  --pat "$KONNECT_TOKEN" \
+  --dry-run
+```
+
+Script behavior:
+
+- loads the repo's two Konnect dashboard JSON files
+- validates that `--control-plane-id` is a non-empty UUID before uploading
+- preserves the exported dashboard definition and rewrites only the `control_plane` preset filter value
+- lists existing Konnect dashboards
+- updates matching dashboards by name, or creates them if they do not exist
+- defaults to:
+  - server: `https://us.api.konghq.com`
+  - dashboards path: `/v2/dashboards`
+- API schema reference:
+  - rendered docs: `https://developer.konghq.com/api/konnect/analytics-dashboards/v2/#/`
+  - raw OpenAPI: `https://raw.githubusercontent.com/Kong/developer.konghq.com/main/api-specs/konnect/analytics-dashboards/v2/openapi.yaml`
+
 The UI-level `Reset Observability` button clears Loki history by recreating the Loki container and restarting Grafana. After using it, wait a few seconds and then refresh Grafana so the datasource reconnects and the dashboard reloads against the new empty Loki state.
 
 The `Average Cost Per Run By Agent` panel means:
