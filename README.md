@@ -294,6 +294,10 @@ Behind the scenes:
   - `Semantic cache miss`
   - `Semantic cache hit`
 - the final output also includes a `Semantic Cache Probe` section with the cache headers from both calls
+- topology behavior is now staged:
+  - Redis activates first for both requests
+  - OpenAI activates only on a cache miss
+  - cache hits return from Redis through Kong back to the orchestrator/dashboard without activating the model path
 
 This mode is useful for showing that Kong can speed up repeated or semantically similar orchestrator prompts without changing application code.
 
@@ -364,6 +368,14 @@ The final output shows:
 - the original request prompt
 - the sanitized response returned through Kong
 
+Current topology behavior:
+
+- placeholder and synthetic modes visibly traverse the PII service twice:
+  - request-side sanitization before the model call
+  - response-side sanitization after the model returns
+- block mode now stays on the normal green lifecycle rather than turning red
+- on blocked PII returns, the `pii-service`, `orchestrator`, `kong`, and `dashboard` highlights are intentionally held a bit longer so the return leg is visible before settling
+
 Important setup note:
 
 - the AI PII service image is hosted in Kong's private Cloudsmith registry
@@ -423,6 +435,12 @@ Grafana support for this scenario now includes:
   - full-width raw Kong logs for the selected run
 
 The Kong log transform was also adjusted so the judge `Input` column reflects only the user message content from the request, not the hidden system prompt.
+
+Current topology behavior:
+
+- the OpenAI candidate leg completes before the judge leg is shown as settled
+- the judge leg now uses a longer visible dwell in the UI so it better matches the multi-second judge latency seen in Grafana rather than flashing through on short synthetic timers
+- the orchestrator/UI return begins only after that longer judge-visible window, so the topology is easier to correlate with observed Kong latency
 
 ## What happens when Play is pressed
 

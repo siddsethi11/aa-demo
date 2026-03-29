@@ -298,6 +298,11 @@ Judge route stability fix:
 - that caused intermittent failures when the candidate path selected Gemini
 - the route was corrected so the candidate model is OpenAI only and the judge model is Gemini only
 
+Judge topology timing refinement:
+- the UI originally used short synthetic judge timers, which made OpenAI appear to linger too long and the judge appear to complete too quickly compared with Grafana latency
+- `ui/app.js` was adjusted so the judge model gets a longer minimum visible dwell of about 4 seconds and the orchestrator/UI return starts later
+- this is still a visualization aid, but it now tracks the real multi-second judge latency much more closely
+
 ### Token-limit scenario
 
 Observed issue:
@@ -328,6 +333,10 @@ Fix applied:
 Additional UI fix:
 - the response-side PII box on the topology return path was not visibly highlighted because the return completed too quickly
 - a dedicated dwell timer was added so the response-side PII highlight is now visible before settling
+
+Later refinements:
+- the block mode topology was changed to stay green rather than turning red
+- the blocked return leg now deliberately holds `pii-service`, `orchestrator`, `kong`, and `dashboard` active a bit longer so the return path is visible before settling
 
 ## Failover Findings
 
