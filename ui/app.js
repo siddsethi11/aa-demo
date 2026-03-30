@@ -441,6 +441,9 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
       config: [
         ["Protocol", "MCP via Kong"],
         ["Governed by", "Per-agent auth and authorization"],
+        ["Orchestrator tools", "get_customer_account, get_renewal_risk, get_open_tickets"],
+        ["Support tools", "get_incident_status, search_runbook"],
+        ["Success tools", "draft_customer_reply, create_followup_task"],
       ],
     },
     "backend-api": {
