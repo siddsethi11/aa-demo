@@ -680,6 +680,21 @@ function updateRunHistoryOptions(runs, preferredRunId = selectedRunViewId) {
   return selectedRunId;
 }
 
+function clearRunHistoryOptions(message = "No saved runs") {
+  if (!runHistorySelect) {
+    selectedRunViewId = null;
+    return;
+  }
+
+  runHistorySelect.innerHTML = "";
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = message;
+  runHistorySelect.appendChild(option);
+  runHistorySelect.disabled = true;
+  selectedRunViewId = null;
+}
+
 async function refreshRunHistory(preferredRunId = selectedRunViewId, { autoLoad = false } = {}) {
   try {
     const response = await fetch(`${config.apiBaseUrl}/trace/runs`, {
@@ -3106,6 +3121,10 @@ async function resetObservability({ silent = false } = {}) {
       throw new Error(`Observability reset failed (${response.status})`);
     }
     const result = await response.json();
+    clearRunHistoryOptions();
+    resetTopology();
+    resetTraceState();
+    setRunState("idle");
     setFlowStage("Observability reset", "Recreated Loki and restarted Grafana.");
     if (!silent) {
       showNotice({
