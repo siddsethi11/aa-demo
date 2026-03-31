@@ -446,11 +446,52 @@
             </div>
             <p class="graph-copy">
               This sequence follows the standard happy path: the UI starts a run through Kong, the
-              orchestrator fetches MCP context, calls the support and success agents through Kong,
-              and finishes with the executive summary while live traces stream back to the UI.
+              orchestrator fetches MCP context, discovers each sub-agent through its A2A agent
+              card, invokes `agent.run` over JSON-RPC through Kong, and finishes with the executive
+              summary while live traces stream back to the UI.
             </p>
             <div class="sequence-diagram sequence-diagram-svg" aria-label="Normal scenario sequence diagram">
-              <svg class="sequence-svg" viewBox="0 0 1620 1400" role="img" aria-label="UML style sequence diagram for the normal scenario">
+              <div class="sequence-sticky-header" aria-hidden="true">
+                <div class="sequence-sticky-track">
+                  <div class="sequence-header-pill">
+                    <span>ui : Browser/UI</span>
+                    <small>HTTPS + WebSocket</small>
+                  </div>
+                  <div class="sequence-header-pill sequence-header-pill-kong">
+                    <span>gateway : Kong</span>
+                    <small>routing + policy</small>
+                  </div>
+                  <div class="sequence-header-pill">
+                    <span>orchestrator : App</span>
+                    <small>FastAPI + LangGraph</small>
+                  </div>
+                  <div class="sequence-header-pill">
+                    <span>support : Agent</span>
+                    <small>A2A JSON-RPC</small>
+                  </div>
+                  <div class="sequence-header-pill">
+                    <span>success : Agent</span>
+                    <small>A2A JSON-RPC</small>
+                  </div>
+                  <div class="sequence-header-pill">
+                    <span>mcp : ToolPlane</span>
+                    <small>JSON-RPC / SSE</small>
+                  </div>
+                  <div class="sequence-header-pill">
+                    <span>backend : APIs</span>
+                    <small>REST</small>
+                  </div>
+                  <div class="sequence-header-pill">
+                    <span>llm : AI Proxy</span>
+                    <small>OpenAI route</small>
+                  </div>
+                  <div class="sequence-header-pill sequence-header-pill-obs">
+                    <span>obs</span>
+                    <small>logs</small>
+                  </div>
+                </div>
+              </div>
+              <svg class="sequence-svg" viewBox="0 0 1620 1460" role="img" aria-label="UML style sequence diagram for the normal scenario">
                 <defs>
                   <marker id="seq-arrow" markerWidth="6" markerHeight="6" refX="4.5" refY="3" orient="auto">
                     <path d="M0,0 L6,3 L0,6 z" fill="#e8edf8"></path>
@@ -473,76 +514,76 @@
                   <rect x="24" y="24" width="168" height="58"></rect>
                   <text x="108" y="48">ui : Browser/UI</text>
                   <text x="108" y="67">HTTPS + WebSocket</text>
-                  <line x1="108" y1="82" x2="108" y2="1380"></line>
+                  <line x1="108" y1="82" x2="108" y2="1440"></line>
                 </g>
                 <g class="sequence-participant sequence-participant-kong">
                   <rect x="214" y="24" width="168" height="58"></rect>
                   <text x="298" y="48">gateway : Kong</text>
                   <text x="298" y="67">routing + policy</text>
-                  <line x1="298" y1="82" x2="298" y2="1380"></line>
+                  <line x1="298" y1="82" x2="298" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="404" y="24" width="168" height="58"></rect>
                   <text x="488" y="48">orchestrator : App</text>
                   <text x="488" y="67">FastAPI + LangGraph</text>
-                  <line x1="488" y1="82" x2="488" y2="1380"></line>
+                  <line x1="488" y1="82" x2="488" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="594" y="24" width="168" height="58"></rect>
                   <text x="678" y="48">support : Agent</text>
-                  <text x="678" y="67">JSON-RPC</text>
-                  <line x1="678" y1="82" x2="678" y2="1380"></line>
+                  <text x="678" y="67">A2A JSON-RPC</text>
+                  <line x1="678" y1="82" x2="678" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="784" y="24" width="168" height="58"></rect>
                   <text x="868" y="48">success : Agent</text>
-                  <text x="868" y="67">JSON-RPC</text>
-                  <line x1="868" y1="82" x2="868" y2="1380"></line>
+                  <text x="868" y="67">A2A JSON-RPC</text>
+                  <line x1="868" y1="82" x2="868" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="974" y="24" width="168" height="58"></rect>
                   <text x="1058" y="48">mcp : ToolPlane</text>
                   <text x="1058" y="67">JSON-RPC / SSE</text>
-                  <line x1="1058" y1="82" x2="1058" y2="1380"></line>
+                  <line x1="1058" y1="82" x2="1058" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="1164" y="24" width="168" height="58"></rect>
                   <text x="1248" y="48">backend : APIs</text>
                   <text x="1248" y="67">REST</text>
-                  <line x1="1248" y1="82" x2="1248" y2="1380"></line>
+                  <line x1="1248" y1="82" x2="1248" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="1354" y="24" width="168" height="58"></rect>
                   <text x="1438" y="48">llm : AI Proxy</text>
                   <text x="1438" y="67">OpenAI route</text>
-                  <line x1="1438" y1="82" x2="1438" y2="1380"></line>
+                  <line x1="1438" y1="82" x2="1438" y2="1440"></line>
                 </g>
                 <g class="sequence-participant">
                   <rect x="1544" y="24" width="52" height="58"></rect>
                   <text x="1570" y="48">obs</text>
                   <text x="1570" y="67">logs</text>
-                  <line x1="1570" y1="82" x2="1570" y2="1380"></line>
+                  <line x1="1570" y1="82" x2="1570" y2="1440"></line>
                 </g>
 
                 <g class="sequence-activation">
                   <rect x="291" y="118" rx="7" ry="7" width="14" height="1210"></rect>
-                  <rect x="481" y="168" rx="7" ry="7" width="14" height="1230"></rect>
+                  <rect x="481" y="168" rx="7" ry="7" width="14" height="1258"></rect>
                   <rect x="1051" y="288" rx="7" ry="7" width="14" height="52"></rect>
                   <rect x="1051" y="370" rx="7" ry="7" width="14" height="52"></rect>
                   <rect x="1051" y="452" rx="7" ry="7" width="14" height="52"></rect>
-                  <rect x="1205" y="452" rx="7" ry="7" width="14" height="52"></rect>
+                  <rect x="1241" y="452" rx="7" ry="7" width="14" height="52"></rect>
                   <rect x="1431" y="544" rx="7" ry="7" width="14" height="78"></rect>
                   <rect x="65" y="644" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="671" y="728" rx="7" ry="7" width="14" height="220"></rect>
-                  <rect x="1051" y="784" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="1241" y="830" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="861" y="998" rx="7" ry="7" width="14" height="236"></rect>
-                  <rect x="1051" y="1054" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="1241" y="1098" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="1431" y="1262" rx="7" ry="7" width="14" height="50"></rect>
-                  <rect x="65" y="1320" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="1563" y="1346" rx="7" ry="7" width="14" height="18"></rect>
-                  <rect x="65" y="1372" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="671" y="780" rx="7" ry="7" width="14" height="202"></rect>
+                  <rect x="1051" y="828" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="1241" y="874" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="861" y="1058" rx="7" ry="7" width="14" height="224"></rect>
+                  <rect x="1051" y="1114" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="1241" y="1158" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="1431" y="1306" rx="7" ry="7" width="14" height="50"></rect>
+                  <rect x="65" y="1364" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="1563" y="1390" rx="7" ry="7" width="14" height="18"></rect>
+                  <rect x="65" y="1416" rx="7" ry="7" width="14" height="18"></rect>
                 </g>
 
                 <g class="sequence-call sequence-call-http">
@@ -605,87 +646,98 @@
                 </g>
                 <g class="sequence-frame sequence-frame-label">
                   <text x="330" y="690">sub-agent phase</text>
-                  <text x="330" y="710">support agent</text>
+                  <text x="330" y="710">support agent via A2A</text>
                 </g>
                 <g class="sequence-frame sequence-frame-label">
                   <text x="330" y="968">sub-agent phase</text>
-                  <text x="330" y="988">success agent</text>
+                  <text x="330" y="988">success agent via A2A</text>
+                </g>
+
+                <g class="sequence-frame">
+                  <rect x="470" y="716" width="272" height="52" rx="10" ry="10"></rect>
+                  <text x="486" y="735">A2A discovery via Kong</text>
+                  <text x="486" y="752">GET agent card -> /v1/jsonrpc</text>
+                </g>
+                <g class="sequence-frame">
+                  <rect x="470" y="994" width="272" height="52" rx="10" ry="10"></rect>
+                  <text x="486" y="1013">A2A discovery via Kong</text>
+                  <text x="486" y="1030">GET agent card -> /v1/jsonrpc</text>
                 </g>
 
                 <g class="sequence-call sequence-call-green">
-                  <line x1="488" y1="736" x2="678" y2="736" marker-end="url(#seq-arrow-green)"></line>
-                  <text x="583" y="726">9. agent.run support</text>
-                  <text x="583" y="752">run_id, product_issue, incident_id, triage_brief</text>
+                  <line x1="488" y1="788" x2="678" y2="788" marker-end="url(#seq-arrow-green)"></line>
+                  <text x="583" y="776">9. support agent.run</text>
+                  <text x="583" y="806">POST /v1/jsonrpc with triage + incident context</text>
                 </g>
                 <g class="sequence-call sequence-call-gold">
-                  <line x1="678" y1="792" x2="1058" y2="792" marker-end="url(#seq-arrow-gold)"></line>
-                  <text x="868" y="782">10. list tools + incident/runbook calls</text>
+                  <line x1="678" y1="836" x2="1058" y2="836" marker-end="url(#seq-arrow-gold)"></line>
+                  <text x="868" y="826">10. list tools + incident/runbook calls</text>
                 </g>
                 <g class="sequence-call sequence-call-gold">
-                  <line x1="1058" y1="838" x2="1248" y2="838" marker-end="url(#seq-arrow-gold)"></line>
-                  <text x="1153" y="828">11. backend via Kong</text>
+                  <line x1="1058" y1="882" x2="1248" y2="882" marker-end="url(#seq-arrow-gold)"></line>
+                  <text x="1153" y="872">11. backend via Kong</text>
                 </g>
                 <g class="sequence-return">
-                  <line x1="1248" y1="874" x2="678" y2="874" marker-end="url(#seq-arrow)"></line>
-                  <text x="963" y="864">incident status + runbook + technical_response</text>
+                  <line x1="1248" y1="918" x2="678" y2="918" marker-end="url(#seq-arrow)"></line>
+                  <text x="963" y="908">incident status + runbook + technical_response</text>
                 </g>
                 <g class="sequence-call sequence-call-cyan">
-                  <line x1="678" y1="900" x2="488" y2="900" marker-end="url(#seq-arrow-cyan)"></line>
-                  <text x="583" y="890">12. POST /trace/event</text>
-                  <text x="583" y="916">tool_list_started, llm_started, tool_call_started, llm_completed</text>
+                  <line x1="678" y1="944" x2="488" y2="944" marker-end="url(#seq-arrow-cyan)"></line>
+                  <text x="583" y="934">12. POST /trace/event</text>
+                  <text x="583" y="960">tool_list_started, llm_started, tool_call_started, llm_completed</text>
                 </g>
                 <g class="sequence-return">
-                  <line x1="678" y1="942" x2="488" y2="942" marker-end="url(#seq-arrow)"></line>
-                  <text x="583" y="932">13. support_track</text>
+                  <line x1="678" y1="978" x2="488" y2="978" marker-end="url(#seq-arrow)"></line>
+                  <text x="583" y="968">13. support_track</text>
                 </g>
 
                 <g class="sequence-call sequence-call-green">
-                  <line x1="488" y1="1006" x2="868" y2="1006" marker-end="url(#seq-arrow-green)"></line>
-                  <text x="678" y="996">14. agent.run success</text>
-                  <text x="678" y="1022">technical_summary, renewal_risk, triage_brief, csm</text>
+                  <line x1="488" y1="1066" x2="868" y2="1066" marker-end="url(#seq-arrow-green)"></line>
+                  <text x="678" y="1054">14. success agent.run</text>
+                  <text x="678" y="1084">POST /v1/jsonrpc with technical + renewal context</text>
                 </g>
                 <g class="sequence-call sequence-call-gold">
-                  <line x1="868" y1="1062" x2="1058" y2="1062" marker-end="url(#seq-arrow-gold)"></line>
-                  <text x="963" y="1052">15. reply/task tool calls</text>
+                  <line x1="868" y1="1122" x2="1058" y2="1122" marker-end="url(#seq-arrow-gold)"></line>
+                  <text x="963" y="1112">15. reply/task tool calls</text>
                 </g>
                 <g class="sequence-call sequence-call-gold">
-                  <line x1="1058" y1="1106" x2="1248" y2="1106" marker-end="url(#seq-arrow-gold)"></line>
-                  <text x="1153" y="1096">16. backend via Kong</text>
+                  <line x1="1058" y1="1166" x2="1248" y2="1166" marker-end="url(#seq-arrow-gold)"></line>
+                  <text x="1153" y="1156">16. backend via Kong</text>
                 </g>
                 <g class="sequence-return">
-                  <line x1="1248" y1="1142" x2="868" y2="1142" marker-end="url(#seq-arrow)"></line>
-                  <text x="1058" y="1132">draft_customer_reply + create_followup_task</text>
+                  <line x1="1248" y1="1202" x2="868" y2="1202" marker-end="url(#seq-arrow)"></line>
+                  <text x="1058" y="1192">draft_customer_reply + create_followup_task</text>
                 </g>
                 <g class="sequence-call sequence-call-cyan">
-                  <line x1="868" y1="1176" x2="488" y2="1176" marker-end="url(#seq-arrow-cyan)"></line>
-                  <text x="678" y="1166">17. POST /trace/event</text>
-                  <text x="678" y="1192">tool_list_started, llm_started, tool_call_started, llm_completed</text>
+                  <line x1="868" y1="1236" x2="488" y2="1236" marker-end="url(#seq-arrow-cyan)"></line>
+                  <text x="678" y="1226">17. POST /trace/event</text>
+                  <text x="678" y="1252">tool_list_started, llm_started, tool_call_started, llm_completed</text>
                 </g>
                 <g class="sequence-return">
-                  <line x1="868" y1="1226" x2="488" y2="1226" marker-end="url(#seq-arrow)"></line>
-                  <text x="678" y="1216">18. success_track</text>
+                  <line x1="868" y1="1278" x2="488" y2="1278" marker-end="url(#seq-arrow)"></line>
+                  <text x="678" y="1268">18. success_track</text>
                 </g>
 
                 <g class="sequence-call sequence-call-magenta">
-                  <line x1="488" y1="1270" x2="1438" y2="1270" marker-end="url(#seq-arrow-magenta)"></line>
-                  <text x="963" y="1260">19. executive_summary prompt</text>
+                  <line x1="488" y1="1314" x2="1438" y2="1314" marker-end="url(#seq-arrow-magenta)"></line>
+                  <text x="963" y="1304">19. executive_summary prompt</text>
                 </g>
                 <g class="sequence-return">
-                  <line x1="1438" y1="1304" x2="488" y2="1304" marker-end="url(#seq-arrow)"></line>
-                  <text x="963" y="1294">executive_brief</text>
+                  <line x1="1438" y1="1348" x2="488" y2="1348" marker-end="url(#seq-arrow)"></line>
+                  <text x="963" y="1338">executive_brief</text>
                 </g>
                 <g class="sequence-call sequence-call-cyan">
-                  <line x1="488" y1="1328" x2="108" y2="1328" marker-end="url(#seq-arrow-cyan)"></line>
-                  <text x="298" y="1318">20. emit(final_response) -> TraceBroker.broadcast()</text>
-                  <text x="298" y="1344">final_response, run_completed, headline, output, duration_ms</text>
+                  <line x1="488" y1="1372" x2="108" y2="1372" marker-end="url(#seq-arrow-cyan)"></line>
+                  <text x="298" y="1362">20. emit(final_response) -> TraceBroker.broadcast()</text>
+                  <text x="298" y="1388">final_response, run_completed, headline, output, duration_ms</text>
                 </g>
                 <g class="sequence-call sequence-call-cyan">
-                  <line x1="298" y1="1354" x2="1570" y2="1354" marker-end="url(#seq-arrow-cyan)"></line>
-                  <text x="934" y="1344">21. gateway logs + metrics correlated by run_id</text>
+                  <line x1="298" y1="1398" x2="1570" y2="1398" marker-end="url(#seq-arrow-cyan)"></line>
+                  <text x="934" y="1388">21. gateway logs + metrics correlated by run_id</text>
                 </g>
                 <g class="sequence-return">
-                  <line x1="488" y1="1380" x2="108" y2="1380" marker-end="url(#seq-arrow)"></line>
-                  <text x="298" y="1370">22. HTTP final response to UI</text>
+                  <line x1="488" y1="1424" x2="108" y2="1424" marker-end="url(#seq-arrow)"></line>
+                  <text x="298" y="1414">22. HTTP final response to UI</text>
                 </g>
               </svg>
             </div>

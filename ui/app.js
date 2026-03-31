@@ -181,22 +181,30 @@ function fitSequenceModalDiagram() {
   if (!viewBox || !viewBox.width || !viewBox.height) {
     return;
   }
+  const stickyHeader = sequenceModalContent.querySelector(".sequence-sticky-header");
+  const stickyTrack = sequenceModalContent.querySelector(".sequence-sticky-track");
 
-  const bounds = sequenceModalContent.getBoundingClientRect();
-  const availableWidth = Math.max(bounds.width, 1);
-  const availableHeight = Math.max(bounds.height, 1);
-  const scale = Math.min(availableWidth / viewBox.width, availableHeight / viewBox.height);
-
-  svg.style.width = `${Math.floor(viewBox.width * scale)}px`;
-  svg.style.height = `${Math.floor(viewBox.height * scale)}px`;
+  svg.style.width = `${Math.floor(viewBox.width)}px`;
+  svg.style.height = "auto";
+  if (stickyHeader instanceof HTMLElement) {
+    stickyHeader.style.width = `${Math.floor(viewBox.width)}px`;
+    stickyHeader.style.minWidth = `${Math.floor(viewBox.width)}px`;
+  }
+  if (stickyTrack instanceof HTMLElement) {
+    stickyTrack.style.width = `${Math.floor(viewBox.width)}px`;
+  }
 }
 
 sequenceFullscreenButton?.addEventListener("click", () => {
   if (!sequenceDiagram || !sequenceModalContent || !sequenceModal) {
     return;
   }
+  const stickyHeader = sequenceDiagram.querySelector(".sequence-sticky-header");
   const svg = sequenceDiagram.querySelector("svg");
   sequenceModalContent.innerHTML = "";
+  if (stickyHeader) {
+    sequenceModalContent.appendChild(stickyHeader.cloneNode(true));
+  }
   if (svg) {
     sequenceModalContent.appendChild(svg.cloneNode(true));
   }
