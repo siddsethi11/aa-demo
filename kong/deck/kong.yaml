@@ -268,6 +268,9 @@ plugins:
           elseif component == 'llm' and header_task_id ~= '' then
             task_stage = 'working'
             task_stage_detail = 'llm'
+          elseif component == 'llm' then
+            task_stage = 'planning'
+            task_stage_detail = 'llm planning'
           end
           log_payload['task_stage'] = task_stage
           log_payload['task_stage_detail'] = task_stage_detail
@@ -283,7 +286,7 @@ plugins:
             log_payload['trace_latency_ms'] = log_payload['mcp_tool_latency']
           else
             log_payload['trace_event_type'] = component
-            log_payload['trace_operation'] = tostring(request['uri'] or '')
+            log_payload['trace_operation'] = tostring(component == 'llm' and 'chat/completions' or request['uri'] or '')
             log_payload['trace_subject'] = ''
             log_payload['trace_latency_ms'] = tonumber(meta['llm_latency'] or 0) or 0
           end

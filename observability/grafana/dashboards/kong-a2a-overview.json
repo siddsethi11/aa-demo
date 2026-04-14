@@ -203,7 +203,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service\"} | json | context_id != \"\" | run_id != \"\" | consumer_username != \"anonymous\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | trace_event_type =~ \"a2a|mcp|llm\"",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator-service\"} | json | context_id != \"\" | run_id != \"\" | consumer_username != \"anonymous\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | trace_event_type =~ \"a2a|mcp|llm\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -469,6 +469,6 @@
   "timezone": "",
   "title": "Kong A2A Overview",
   "uid": "kong-a2a-overview",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }
