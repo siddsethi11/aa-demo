@@ -30,6 +30,8 @@ class OrchestratorLLM:
         model: str | None = None,
         run_id: str | None = None,
         context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -44,6 +46,8 @@ class OrchestratorLLM:
                     "content-type": "application/json",
                     **({"x-demo-run-id": run_id} if run_id else {}),
                     **({"x-demo-context-id": context_id} if context_id else {}),
+                    **({"x-demo-task-id": task_id} if task_id else {}),
+                    **({"x-demo-message-id": message_id} if message_id else {}),
                 },
                 json={
                     "model": resolved_model,
@@ -72,6 +76,8 @@ class OrchestratorLLM:
         model: str | None = None,
         run_id: str | None = None,
         context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -86,6 +92,8 @@ class OrchestratorLLM:
                     "content-type": "application/json",
                     **({"x-demo-run-id": run_id} if run_id else {}),
                     **({"x-demo-context-id": context_id} if context_id else {}),
+                    **({"x-demo-task-id": task_id} if task_id else {}),
+                    **({"x-demo-message-id": message_id} if message_id else {}),
                 },
                 json={
                     "model": resolved_model,
@@ -265,6 +273,8 @@ class OrchestratorLLM:
         current_context: dict[str, Any],
         run_id: str | None = None,
         context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
     ) -> dict[str, Any]:
         if not remaining_tools:
             return {
@@ -301,7 +311,13 @@ class OrchestratorLLM:
             remaining_tools=remaining_tools,
             current_context=current_context,
         )
-        response = await self.generate(**prompts, run_id=run_id, context_id=context_id)
+        response = await self.generate(
+            **prompts,
+            run_id=run_id,
+            context_id=context_id,
+            task_id=task_id,
+            message_id=message_id,
+        )
         decision = {
             "llm_used": response["llm_used"],
             "model": response["model"],

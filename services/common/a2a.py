@@ -63,6 +63,83 @@ def build_message_send_request(
     return payload
 
 
+def build_tasks_get_request(*, task_id: str) -> dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": new_message_id(),
+        "method": "tasks/get",
+        "params": {"id": task_id},
+    }
+
+
+def build_completed_task_result(
+    *,
+    agent_id: str,
+    context_id: str,
+    task_id: str,
+    payload: dict[str, Any],
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    response_message = build_text_message(
+        role="agent",
+        content=json.dumps(payload, ensure_ascii=False),
+        agent_id=agent_id,
+        context_id=context_id,
+        task_id=task_id,
+        metadata={"run_id": run_id} if run_id else None,
+    )
+    return {
+        "id": task_id,
+        "contextId": context_id,
+        "status": {"state": "completed"},
+        "artifacts": [
+            {
+                "artifactId": f"{agent_id}-result",
+                "name": f"{agent_id} result",
+                "parts": [{"kind": "text", "text": json.dumps(payload, ensure_ascii=False)}],
+                "metadata": {"agent_id": agent_id},
+            }
+        ],
+        "messages": [response_message],
+        "metadata": {"agent_id": agent_id, **({"run_id": run_id} if run_id else {})},
+    }
+
+
+def extract_task_payload(result: Any) -> Any:
+    if not isinstance(result, dict):
+        return result
+
+    artifacts = result.get("artifacts")
+    if isinstance(artifacts, list):
+        for artifact in artifacts:
+            if not isinstance(artifact, dict):
+                continue
+            parts = artifact.get("parts")
+            if not isinstance(parts, list):
+                continue
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                text = part.get("text")
+                if isinstance(text, str) and text:
+                    try:
+                        return json.loads(text)
+                    except json.JSONDecodeError:
+                        return text
+
+    messages = result.get("messages")
+    if isinstance(messages, list):
+        for message in messages:
+            text = extract_message_text(message)
+            if text:
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError:
+                    return text
+
+    return result
+
+
 def extract_message_text(message: Any) -> str:
     if isinstance(message, str):
         try:
@@ -92,4 +169,3 @@ def extract_message_text(message: Any) -> str:
                 nested.append(str(item["text"]))
         return " ".join(nested)
     return ""
-

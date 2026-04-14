@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -12,7 +13,9 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from langgraph.graph import END, START, StateGraph
 
-from services.common.a2a import extract_message_text
+from services.common.a2a import build_completed_task_result, extract_message_text
+from services.common.a2a import new_task_id
+from services.common.a2a_tasks import A2ATaskStore
 from services.common.jsonrpc import error_response, success_response
 from services.common.llm import OrchestratorLLM
 from services.common.mcp_client import KongMCPClient
@@ -27,6 +30,9 @@ os.environ.setdefault("KONG_AI_PROXY_URL", "http://kong-dp:8000/ai/subagent")
 llm = OrchestratorLLM()
 CURRENT_CONTEXT_ID: ContextVar[str | None] = ContextVar("success_context_id", default=None)
 CURRENT_TASK_ID: ContextVar[str | None] = ContextVar("success_task_id", default=None)
+CURRENT_MESSAGE_ID: ContextVar[str | None] = ContextVar("success_message_id", default=None)
+TASK_STORE = A2ATaskStore("success-agent")
+RUNNING_TASKS: dict[str, asyncio.Task[Any]] = {}
 
 
 class SuccessRunParams(BaseModel):
@@ -55,6 +61,7 @@ class SuccessState(TypedDict, total=False):
 async def emit_trace(run_id: str, event_type: str, **payload: Any) -> None:
     payload.setdefault("context_id", CURRENT_CONTEXT_ID.get())
     payload.setdefault("task_id", CURRENT_TASK_ID.get())
+    payload.setdefault("message_id", CURRENT_MESSAGE_ID.get())
     async with httpx.AsyncClient(timeout=5.0) as client:
         await client.post(
             TRACE_COLLECTOR_URL,
@@ -70,6 +77,8 @@ async def fetch_tool_inventory(state: SuccessState) -> SuccessState:
         "success-agent",
         run_id=params["run_id"],
         context_id=params["context_id"],
+        task_id=params.get("task_id"),
+        message_id=params.get("message_id"),
     )
     started = time.perf_counter()
     await emit_trace(params["run_id"], "tool_list_started", actor="success-agent")
@@ -126,6 +135,8 @@ async def prepare_customer_actions(state: SuccessState) -> SuccessState:
         "success-agent",
         run_id=params["run_id"],
         context_id=params["context_id"],
+        task_id=params.get("task_id"),
+        message_id=params.get("message_id"),
     )
     available_tools = state.get("available_tools", [])
     remaining_tools = [tool for tool in available_tools if tool in {"draft_customer_reply", "create_followup_task"}]
@@ -163,6 +174,8 @@ async def prepare_customer_actions(state: SuccessState) -> SuccessState:
             current_context=current_context,
             run_id=params["run_id"],
             context_id=params["context_id"],
+            task_id=params.get("task_id"),
+            message_id=params.get("message_id"),
         )
         await emit_trace(
             params["run_id"],
@@ -261,6 +274,8 @@ async def generate_success_summary(state: SuccessState) -> SuccessState:
             user_prompt=user_prompt,
             run_id=params["run_id"],
             context_id=params["context_id"],
+            task_id=params.get("task_id"),
+            message_id=params.get("message_id"),
         )
     await emit_trace(
         params["run_id"],
@@ -318,6 +333,8 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/.well-known/agent-card.json")
+@app.get("/success-agent/.well-known/agent-card.json")
 @app.get("/.well-known/agent.json")
 @app.get("/success-agent/.well-known/agent.json")
 async def agent_card() -> dict[str, Any]:
@@ -325,6 +342,11 @@ async def agent_card() -> dict[str, Any]:
         "agent_id": "success-agent",
         "name": "Success Agent",
         "description": "Builds the customer communication and success-team follow-up plan.",
+        "url": "http://success-agent:8000/a2a",
+        "additionalInterfaces": [
+            {"kind": "a2a", "url": "http://success-agent:8000/a2a"},
+            {"kind": "jsonrpc", "url": "http://success-agent:8000/v1/jsonrpc"},
+        ],
         "endpoints": {"jsonrpc": "/v1/jsonrpc", "a2a": "/a2a"},
     }
 
@@ -337,8 +359,20 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
     body = await request.json()
     request_id = body.get("id")
     method = body.get("method")
-    if method not in {"agent.run", "message/send"}:
+    if method not in {"agent.run", "message/send", "tasks/get"}:
         return error_response(request_id, -32601, "Unsupported method")
+
+    if method == "tasks/get":
+        payload = body.get("params", {})
+        task_id = None
+        if isinstance(payload, dict):
+            task_id = payload.get("id") or payload.get("taskId") or payload.get("task_id")
+        if not task_id:
+            return error_response(request_id, -32602, "Invalid params", "Missing task id")
+        task = await TASK_STORE.get(str(task_id))
+        if not task:
+            return error_response(request_id, -32004, "Task not found")
+        return success_response(request_id, task)
 
     try:
         params = SuccessRunParams.model_validate(body.get("params", {}))
@@ -355,13 +389,67 @@ async def jsonrpc_endpoint(request: Request) -> dict[str, Any]:
         except Exception as inner_exc:
             return error_response(request_id, -32602, "Invalid params", str(inner_exc))
 
+    if method == "message/send":
+        payload = body.get("params", {})
+        message = payload.get("message") if isinstance(payload, dict) else {}
+        inbound_message_id = message.get("messageId") if isinstance(message, dict) else None
+        task_id = params.task_id or (payload.get("task_id") if isinstance(payload, dict) else None) or new_task_id()
+        task = await TASK_STORE.upsert_inbound_message(
+            task_id=task_id,
+            context_id=params.context_id,
+            run_id=params.run_id,
+            message=message if isinstance(message, dict) else {},
+            metadata={"run_id": params.run_id},
+        )
+        if task_id not in RUNNING_TASKS or RUNNING_TASKS[task_id].done():
+            RUNNING_TASKS[task_id] = asyncio.create_task(
+                execute_success_task(
+                    task_id=task_id,
+                    params={**params.model_dump(), "task_id": task_id, "message_id": inbound_message_id},
+                )
+            )
+        return success_response(request_id, task)
+
+    payload = body.get("params", {})
+    message = payload.get("message") if isinstance(payload, dict) else {}
+    inbound_message_id = message.get("messageId") if isinstance(message, dict) else None
     try:
         context_token = CURRENT_CONTEXT_ID.set(params.context_id)
         task_token = CURRENT_TASK_ID.set(params.task_id)
-        graph_result = await success_graph.ainvoke({"params": params.model_dump()})
+        message_token = CURRENT_MESSAGE_ID.set(inbound_message_id)
+        graph_result = await success_graph.ainvoke({"params": {**params.model_dump(), "message_id": inbound_message_id}})
     except Exception as exc:
         return error_response(request_id, -32000, "Success agent failed", str(exc))
     finally:
+        CURRENT_MESSAGE_ID.reset(message_token)
         CURRENT_TASK_ID.reset(task_token)
         CURRENT_CONTEXT_ID.reset(context_token)
-    return success_response(request_id, graph_result["result"])
+    result = graph_result["result"]
+    if method == "message/send":
+        return success_response(
+            request_id,
+            build_completed_task_result(
+                agent_id="success-agent",
+                context_id=params.context_id,
+                task_id=params.task_id or CURRENT_TASK_ID.get() or "task-missing",
+                payload=result,
+                run_id=params.run_id,
+            ),
+        )
+    return success_response(request_id, result)
+
+
+async def execute_success_task(*, task_id: str, params: dict[str, Any]) -> None:
+    context_token = CURRENT_CONTEXT_ID.set(params["context_id"])
+    task_token = CURRENT_TASK_ID.set(task_id)
+    message_token = CURRENT_MESSAGE_ID.set(params.get("message_id"))
+    try:
+        await TASK_STORE.mark_working(task_id, stage="agent execution started")
+        graph_result = await success_graph.ainvoke({"params": params})
+        await TASK_STORE.complete(task_id, payload=graph_result["result"], run_id=params.get("run_id"))
+    except Exception as exc:
+        await TASK_STORE.fail(task_id, str(exc))
+    finally:
+        CURRENT_MESSAGE_ID.reset(message_token)
+        CURRENT_TASK_ID.reset(task_token)
+        CURRENT_CONTEXT_ID.reset(context_token)

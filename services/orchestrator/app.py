@@ -9,6 +9,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 from typing import TypedDict
+from urllib.parse import urljoin
 
 import httpx
 import redis.asyncio as redis
@@ -20,7 +21,9 @@ from pydantic import BaseModel
 
 from services.common.jsonrpc import error_response, success_response
 from services.common.a2a import build_message_send_request
+from services.common.a2a import build_tasks_get_request
 from services.common.a2a import build_text_message
+from services.common.a2a import extract_task_payload
 from services.common.a2a import extract_message_text
 from services.common.a2a import new_context_id
 from services.common.a2a import new_task_id
@@ -53,6 +56,8 @@ COMPOSE_PROJECT_NAME = os.getenv("OBSERVABILITY_COMPOSE_PROJECT_NAME", "aa-demo"
 COMPOSE_FILE_PATH = os.getenv("OBSERVABILITY_COMPOSE_FILE", "docker-compose.yml")
 SUBAGENT_DISCOVERY_ATTEMPTS = 3
 SUBAGENT_DISCOVERY_BACKOFF_MS = 350
+SUBAGENT_TASK_POLL_INTERVAL_MS = 500
+SUBAGENT_TASK_POLL_ATTEMPTS = 120
 CURRENT_CONTEXT_ID: ContextVar[str | None] = ContextVar("orchestrator_context_id", default=None)
 
 
@@ -516,7 +521,7 @@ async def discover_agent(
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
-                    f"{KONG_PROXY_URL}{route_prefix}/.well-known/agent.json",
+                    f"{KONG_PROXY_URL}{route_prefix}/.well-known/agent-card.json",
                     headers=headers,
                 )
                 response.raise_for_status()
@@ -536,7 +541,22 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
     context_id = params.get("context_id")
     task_id = params.get("task_id") or new_task_id()
     card = await discover_agent(route_prefix, run_id=run_id, context_id=context_id)
-    endpoint = card.get("endpoints", {}).get("a2a") or card.get("endpoints", {}).get("jsonrpc") or "/a2a"
+    base_url = card.get("url") or f"{KONG_PROXY_URL}{route_prefix}"
+    interface_url = next(
+        (
+            interface.get("url")
+            for interface in card.get("additionalInterfaces", [])
+            if isinstance(interface, dict) and interface.get("kind") == "a2a"
+        ),
+        None,
+    )
+    endpoint_path = card.get("endpoints", {}).get("a2a") or card.get("endpoints", {}).get("jsonrpc") or "/a2a"
+    if isinstance(interface_url, str) and interface_url.startswith("http") and interface_url.rstrip("/") != str(base_url).rstrip("/"):
+        endpoint_url = interface_url
+    elif isinstance(base_url, str) and base_url.startswith("http"):
+        endpoint_url = urljoin(base_url.rstrip("/") + "/", endpoint_path.lstrip("/"))
+    else:
+        endpoint_url = f"{KONG_PROXY_URL}{route_prefix}{endpoint_path}"
     message = build_text_message(
         role="user",
         content=json.dumps(params, ensure_ascii=False),
@@ -562,11 +582,13 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
     )
     async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
-            f"{KONG_PROXY_URL}{route_prefix}{endpoint}",
+            endpoint_url,
             headers={
                 "apikey": AGENT_API_KEY,
                 **({"x-demo-run-id": run_id} if run_id else {}),
                 **({"x-demo-context-id": context_id} if context_id else {}),
+                **({"x-demo-task-id": task_id} if task_id else {}),
+                **({"x-demo-message-id": message.get("messageId")} if message.get("messageId") else {}),
             },
             json=payload,
         )
@@ -574,7 +596,59 @@ async def call_subagent(route_prefix: str, params: dict[str, Any]) -> dict[str, 
         data = response.json()
     if "error" in data:
         raise RuntimeError(data["error"]["message"])
-    return {"card": card, "result": data["result"], "task_id": task_id, "context_id": context_id}
+    initial_task = data["result"]
+    task_id = str(initial_task.get("id") or task_id)
+    final_task = await poll_subagent_task(
+        endpoint_url=endpoint_url,
+        task_id=task_id,
+        run_id=run_id,
+        context_id=context_id,
+        message_id=message.get("messageId"),
+    )
+    return {
+        "card": card,
+        "result": extract_task_payload(final_task),
+        "task_id": task_id,
+        "context_id": context_id,
+        "a2a_result": final_task,
+    }
+
+
+async def poll_subagent_task(
+    *,
+    endpoint_url: str,
+    task_id: str,
+    run_id: str | None,
+    context_id: str | None,
+    message_id: str | None,
+) -> dict[str, Any]:
+    payload = build_tasks_get_request(task_id=task_id)
+    terminal_states = {"completed", "failed", "canceled", "rejected", "auth-required"}
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        for _ in range(SUBAGENT_TASK_POLL_ATTEMPTS):
+            response = await client.post(
+                endpoint_url,
+                headers={
+                    "apikey": AGENT_API_KEY,
+                    **({"x-demo-run-id": run_id} if run_id else {}),
+                    **({"x-demo-context-id": context_id} if context_id else {}),
+                    **({"x-demo-task-id": task_id} if task_id else {}),
+                    **({"x-demo-message-id": message_id} if message_id else {}),
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                raise RuntimeError(data["error"]["message"])
+            task = data["result"]
+            state = str(task.get("status", {}).get("state") or "unknown")
+            if state in terminal_states:
+                if state != "completed":
+                    raise RuntimeError(f"Subagent task {task_id} ended in state {state}")
+                return task
+            await asyncio.sleep(SUBAGENT_TASK_POLL_INTERVAL_MS / 1000)
+    raise TimeoutError(f"Timed out waiting for subagent task {task_id}")
 
 
 def unwrap_mcp_result(result: Any) -> Any:
@@ -1541,6 +1615,8 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/.well-known/agent-card.json")
+@app.get("/orchestrator/.well-known/agent-card.json")
 @app.get("/.well-known/agent.json")
 @app.get("/orchestrator/.well-known/agent.json")
 async def agent_card() -> dict[str, Any]:
@@ -1548,6 +1624,10 @@ async def agent_card() -> dict[str, Any]:
         "agent_id": "orchestrator",
         "name": "Orchestrator",
         "description": "Coordinates the customer escalation triage workflow.",
+        "url": "http://orchestrator:8000/v1/jsonrpc",
+        "additionalInterfaces": [
+            {"kind": "jsonrpc", "url": "http://orchestrator:8000/v1/jsonrpc"},
+        ],
         "endpoints": {"jsonrpc": "/v1/jsonrpc", "a2a": "/v1/jsonrpc"},
     }
 

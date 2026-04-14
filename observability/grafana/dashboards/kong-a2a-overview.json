@@ -32,7 +32,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 0
       },
@@ -55,7 +55,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum by (service) (count_over_time({context_id=~\"$context_id\", run_id=~\"$run_id\", service=~\"orchestrator-service|support-agent-service|success-agent-service\"} | json | a2a_method=\"message/send\"[$__interval]))",
+          "expr": "sum by (service) (count_over_time({service=~\"orchestrator-service|support-agent-service|success-agent-service\"} | json | context_id != \"\" | run_id != \"\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | a2a_method=\"message/send\" [$__interval]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -68,11 +68,95 @@
         "type": "loki",
         "uid": "grafana-loki"
       },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 8,
         "y": 0
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({service=\"support-agent-service\"} | json | context_id != \"\" | run_id != \"\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | a2a_method=\"message/send\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Orchestrator to Support",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({service=\"success-agent-service\"} | json | context_id != \"\" | run_id != \"\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | a2a_method=\"message/send\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Orchestrator to Success",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
       },
       "id": 2,
       "options": {
@@ -92,7 +176,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{context_id=~\"$context_id\", run_id=~\"$run_id\", service=~\"support-agent-service|success-agent-service|orchestrator-service\"} | json | a2a_method=\"message/send\"",
+          "expr": "{service=~\"support-agent-service|success-agent-service|orchestrator-service\"} | json | context_id != \"\" | run_id != \"\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | a2a_method=\"message/send\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -106,10 +190,153 @@
         "uid": "grafana-loki"
       },
       "gridPos": {
-        "h": 9,
+        "h": 11,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 16
+      },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service\"} | json | context_id != \"\" | run_id != \"\" | consumer_username != \"anonymous\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\" | trace_event_type =~ \"a2a|mcp|llm\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Context Trace Table",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "context_id",
+                "run_id",
+                "task_id_extracted",
+                "task_stage",
+                "task_stage_detail",
+                "message_id_extracted",
+                "trace_event_type",
+                "trace_operation",
+                "trace_subject",
+                "trace_latency_ms",
+                "service_name_extracted",
+                "consumer_username",
+                "a2a_method",
+                "a2a_binding",
+                "a2a_task_id",
+                "a2a_task_state",
+                "a2a_latency",
+                "a2a_ttfb_latency",
+                "a2a_sse_events_count",
+                "mcp_method",
+                "mcp_tool_name",
+                "mcp_tool_latency",
+                "request_uri",
+                "response_status"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "context_id": 1,
+              "run_id": 2,
+              "task_id_extracted": 3,
+              "task_stage": 4,
+              "task_stage_detail": 5,
+              "message_id_extracted": 6,
+              "trace_event_type": 7,
+              "trace_operation": 8,
+              "trace_subject": 9,
+              "trace_latency_ms": 10,
+              "service_name_extracted": 11,
+              "consumer_username": 12,
+              "a2a_method": 13,
+              "a2a_binding": 14,
+              "a2a_task_id": 15,
+              "a2a_task_state": 16,
+              "a2a_latency": 17,
+              "a2a_ttfb_latency": 18,
+              "a2a_sse_events_count": 19,
+              "mcp_method": 20,
+              "mcp_tool_name": 21,
+              "mcp_tool_latency": 22,
+              "request_uri": 23,
+              "response_status": 24
+            },
+            "renameByName": {
+              "Time": "Time",
+              "context_id": "Context ID",
+              "run_id": "Run ID",
+              "task_id_extracted": "Task ID",
+              "task_stage": "Task Stage",
+              "task_stage_detail": "Stage Detail",
+              "message_id_extracted": "Message ID",
+              "trace_event_type": "Event Type",
+              "trace_operation": "Operation",
+              "trace_subject": "Subject",
+              "trace_latency_ms": "Latency (ms)",
+              "service_name_extracted": "Service",
+              "consumer_username": "Consumer",
+              "a2a_method": "A2A Method",
+              "a2a_binding": "Binding",
+              "a2a_task_id": "A2A Task ID",
+              "a2a_task_state": "Task State",
+              "a2a_latency": "A2A Latency (ms)",
+              "a2a_ttfb_latency": "TTFB (ms)",
+              "a2a_sse_events_count": "SSE Events",
+              "mcp_method": "MCP Method",
+              "mcp_tool_name": "MCP Tool",
+              "mcp_tool_latency": "MCP Latency (ms)",
+              "request_uri": "Request URI",
+              "response_status": "Status"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": false,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 27
       },
       "id": 3,
       "options": {
@@ -129,7 +356,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{context_id=~\"$context_id\", run_id=~\"$run_id\", mcp_tool_name!=\"\"} | json",
+          "expr": "{service=~\".+\"} | json | context_id != \"\" | run_id != \"\" | mcp_tool_name != \"\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -143,10 +370,10 @@
         "uid": "grafana-loki"
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 17
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 27
       },
       "id": 4,
       "options": {
@@ -166,12 +393,12 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{context_id=~\"$context_id\", run_id=~\"$run_id\"} | json | context_id!=\"\"",
+          "expr": "{service=~\".+\"} | json | context_id != \"\" | run_id != \"\" | context_id =~ \"$context_id\" | run_id =~ \"$run_id\"",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "A2A + MCP Event Stream",
+      "title": "End-to-End Event Stream",
       "type": "logs"
     }
   ],
@@ -189,20 +416,21 @@
         "current": {
           "selected": false,
           "text": "All",
-          "value": ".*"
+          "value": ".+"
         },
+        "allValue": ".+",
         "datasource": {
           "type": "loki",
           "uid": "grafana-loki"
         },
-        "definition": "label_values({run_id=~\".*\"}, context_id)",
+        "definition": "label_values({run_id=~\".+\", run_id!=\"\"}, context_id)",
         "hide": 0,
         "includeAll": true,
         "label": "Context ID",
         "multi": true,
         "name": "context_id",
         "options": [],
-        "query": "label_values({run_id=~\".*\"}, context_id)",
+        "query": "label_values({run_id=~\".+\", run_id!=\"\"}, context_id)",
         "refresh": 1,
         "regex": "",
         "sort": 1,
@@ -212,20 +440,21 @@
         "current": {
           "selected": false,
           "text": "All",
-          "value": ".*"
+          "value": ".+"
         },
+        "allValue": ".+",
         "datasource": {
           "type": "loki",
           "uid": "grafana-loki"
         },
-        "definition": "label_values({context_id=~\".*\"}, run_id)",
+        "definition": "label_values({context_id=~\".+\", context_id!=\"\"}, run_id)",
         "hide": 0,
         "includeAll": true,
         "label": "Run ID",
         "multi": true,
         "name": "run_id",
         "options": [],
-        "query": "label_values({context_id=~\".*\"}, run_id)",
+        "query": "label_values({context_id=~\".+\", context_id!=\"\"}, run_id)",
         "refresh": 1,
         "regex": "",
         "sort": 1,
@@ -240,6 +469,6 @@
   "timezone": "",
   "title": "Kong A2A Overview",
   "uid": "kong-a2a-overview",
-  "version": 1,
+  "version": 4,
   "weekStart": ""
 }

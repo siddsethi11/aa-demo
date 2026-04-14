@@ -34,6 +34,8 @@ plugins:
           local status_class = tostring(math.floor(status_code / 100)) .. 'xx'
           local run_id = tostring(request_headers['x-demo-run-id'] or request_headers['X-Demo-Run-Id'] or '')
           local context_id = tostring(request_headers['x-demo-context-id'] or request_headers['X-Demo-Context-Id'] or '')
+          local header_task_id = tostring(request_headers['x-demo-task-id'] or request_headers['X-Demo-Task-Id'] or '')
+          local header_message_id = tostring(request_headers['x-demo-message-id'] or request_headers['X-Demo-Message-Id'] or '')
           local component = 'gateway'
           if route['name'] == 'mock-mcp-route' then
             component = 'mcp'
@@ -54,6 +56,8 @@ plugins:
           local a2a_rpc = a2a['rpc'] or {}
           local a2a_entry = a2a_rpc[1] or {}
           local a2a_payload = a2a_entry['payload'] or {}
+          local decoded_a2a_request = nil
+          local decoded_a2a_response = nil
           local proxy = ai['proxy'] or {}
           local proxy_payload = proxy['payload'] or {}
           local meta = proxy['meta'] or {}
@@ -124,6 +128,25 @@ plugins:
             end
             return ''
           end
+          local function decode_json(value)
+            if type(value) == 'table' then
+              return value
+            end
+            if type(value) ~= 'string' or value == '' then
+              return nil
+            end
+            local ok, decoded = pcall(cjson.decode, value)
+            if ok and type(decoded) == 'table' then
+              return decoded
+            end
+            return nil
+          end
+          decoded_a2a_request = decode_json(a2a_payload['request'])
+          decoded_a2a_response = decode_json(a2a_payload['response'])
+          local a2a_request_params = type(decoded_a2a_request) == 'table' and decoded_a2a_request['params'] or {}
+          local a2a_request_message = type(a2a_request_params) == 'table' and a2a_request_params['message'] or {}
+          local a2a_response_result = type(decoded_a2a_response) == 'table' and decoded_a2a_response['result'] or {}
+          local a2a_response_status = type(a2a_response_result) == 'table' and a2a_response_result['status'] or {}
           local prompt_tokens = tonumber(usage['prompt_tokens'] or usage['input_tokens'] or 0) or 0
           local completion_tokens = tonumber(usage['completion_tokens'] or usage['output_tokens'] or 0) or 0
           local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
@@ -177,17 +200,93 @@ plugins:
           log_payload['judge_latency_ms'] = tonumber(judge_meta['llm_latency'] or 0) or 0
           log_payload['judge_accuracy'] = tonumber(usage['llm_accuracy'] or judge_usage['llm_accuracy'] or 0) or 0
           log_payload['run_id'] = run_id
+          log_payload['service_name_extracted'] = tostring(service['name'] or '')
+          log_payload['route_name_extracted'] = tostring(route['name'] or '')
+          log_payload['consumer_username'] = tostring(consumer['username'] or consumer['custom_id'] or consumer['id'] or 'anonymous')
+          log_payload['request_uri'] = tostring(request['uri'] or '')
+          log_payload['response_status'] = tonumber(response['status'] or 0) or 0
           log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
           log_payload['mcp_method'] = tostring(mcp_entry['method'] or '')
           log_payload['mcp_tool_name'] = tostring(mcp_entry['tool_name'] or '')
           log_payload['mcp_tool_latency'] = tonumber(mcp_entry['latency'] or 0) or 0
           log_payload['mcp_response_body_size'] = tonumber(mcp_entry['response_body_size'] or 0) or 0
+          log_payload['a2a_id'] = tostring(a2a_entry['id'] or (type(decoded_a2a_request) == 'table' and decoded_a2a_request['id']) or '')
+          log_payload['a2a_binding'] = tostring(a2a_entry['binding'] or '')
           log_payload['a2a_context_id'] = tostring(a2a_entry['context_id'] or a2a_payload['context_id'] or context_id or '')
-          log_payload['a2a_task_id'] = tostring(a2a_entry['task_id'] or a2a_payload['task_id'] or '')
-          log_payload['a2a_message_id'] = tostring(a2a_entry['message_id'] or a2a_payload['message_id'] or '')
+          log_payload['a2a_task_id'] = tostring(
+            a2a_entry['task_id']
+            or (type(a2a_request_params) == 'table' and (a2a_request_params['task_id'] or a2a_request_params['taskId']))
+            or (type(a2a_response_result) == 'table' and (a2a_response_result['id'] or a2a_response_result['taskId']))
+            or a2a_payload['task_id']
+            or ''
+          )
+          log_payload['a2a_task_state'] = tostring(
+            a2a_entry['task_state']
+            or (type(a2a_response_status) == 'table' and a2a_response_status['state'])
+            or ''
+          )
+          log_payload['a2a_message_id'] = tostring(
+            a2a_entry['message_id']
+            or (type(a2a_request_message) == 'table' and (a2a_request_message['messageId'] or a2a_request_message['message_id']))
+            or header_message_id
+            or a2a_payload['message_id']
+            or ''
+          )
           log_payload['a2a_method'] = tostring(a2a_entry['method'] or '')
+          log_payload['a2a_latency'] = tonumber(a2a_entry['latency'] or 0) or 0
+          log_payload['a2a_response_body_size'] = tonumber(a2a_entry['response_body_size'] or 0) or 0
+          log_payload['a2a_streaming'] = a2a_entry['streaming'] == true
+          log_payload['a2a_ttfb_latency'] = tonumber(a2a_entry['ttfb_latency'] or 0) or 0
+          log_payload['a2a_sse_events_count'] = tonumber(a2a_entry['sse_events_count'] or 0) or 0
           log_payload['a2a_request_body'] = a2a_payload['request'] or a2a_entry['request'] or log_payload['request']
           log_payload['a2a_response_body'] = a2a_payload['response'] or a2a_entry['response'] or log_payload['response']
+          log_payload['task_id_extracted'] = tostring(log_payload['a2a_task_id'] ~= '' and log_payload['a2a_task_id'] or header_task_id)
+          log_payload['message_id_extracted'] = tostring(log_payload['a2a_message_id'] ~= '' and log_payload['a2a_message_id'] or log_payload['a2a_id'] ~= '' and log_payload['a2a_id'] or header_message_id)
+          local task_stage = ''
+          local task_stage_detail = ''
+          if log_payload['a2a_method'] == 'agent/getCard' then
+            task_stage = 'discovered'
+            task_stage_detail = 'agent card discovery'
+          elseif log_payload['a2a_method'] == 'tasks/get' then
+            task_stage = tostring(log_payload['a2a_task_state'] ~= '' and log_payload['a2a_task_state'] or 'working')
+            task_stage_detail = 'tasks/get'
+          elseif log_payload['a2a_method'] == 'message/send' then
+            task_stage = tostring(log_payload['a2a_task_state'] ~= '' and log_payload['a2a_task_state'] or 'submitted')
+            task_stage_detail = 'message/send'
+          elseif log_payload['mcp_method'] == 'initialize' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp initialize'
+          elseif log_payload['mcp_method'] == 'notifications/initialized' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp initialized'
+          elseif log_payload['mcp_method'] == 'tools/list' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp tools/list'
+          elseif log_payload['mcp_method'] == 'tools/call' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp tools/call ' .. tostring(log_payload['mcp_tool_name'] or '')
+          elseif component == 'llm' and header_task_id ~= '' then
+            task_stage = 'working'
+            task_stage_detail = 'llm'
+          end
+          log_payload['task_stage'] = task_stage
+          log_payload['task_stage_detail'] = task_stage_detail
+          if log_payload['a2a_method'] ~= '' then
+            log_payload['trace_event_type'] = 'a2a'
+            log_payload['trace_operation'] = log_payload['a2a_method']
+            log_payload['trace_subject'] = tostring(log_payload['a2a_message_id'] ~= '' and log_payload['a2a_message_id'] or log_payload['a2a_id'])
+            log_payload['trace_latency_ms'] = log_payload['a2a_latency']
+          elseif log_payload['mcp_method'] ~= '' then
+            log_payload['trace_event_type'] = 'mcp'
+            log_payload['trace_operation'] = log_payload['mcp_method']
+            log_payload['trace_subject'] = tostring(log_payload['mcp_tool_name'] or '')
+            log_payload['trace_latency_ms'] = log_payload['mcp_tool_latency']
+          else
+            log_payload['trace_event_type'] = component
+            log_payload['trace_operation'] = tostring(request['uri'] or '')
+            log_payload['trace_subject'] = ''
+            log_payload['trace_latency_ms'] = tonumber(meta['llm_latency'] or 0) or 0
+          end
           local payload_string = cjson.encode(log_payload)
           return {
             {
@@ -202,6 +301,8 @@ plugins:
                 status_class = status_class,
                 run_id = run_id,
                 context_id = context_id,
+                task_id = header_task_id,
+                message_id = header_message_id,
                 mcp_method = tostring(mcp_entry['method'] or ''),
                 mcp_tool_name = tostring(mcp_entry['tool_name'] or ''),
               },
