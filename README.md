@@ -174,21 +174,30 @@ The trace pipeline now has three layers with distinct responsibilities:
     - `a2a.task_id` <- request header `x-demo-task-id`
     - `a2a.message_id` <- request header `x-demo-message-id`
 
-- Custom MCP trace enricher plugin
+- Custom trace enricher plugin
   - source files:
-    - [kong/plugins/mcp-trace-enricher/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/handler.lua)
-    - [kong/plugins/mcp-trace-enricher/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/schema.lua)
-  - attachment point:
+    - [kong/plugins/trace-enricher/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/handler.lua)
+    - [kong/plugins/trace-enricher/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/schema.lua)
+  - attachment points:
+    - `support-agent-service`
+    - `success-agent-service`
     - `mock-mcp-route`
   - behavior:
     - runs in `log` phase with priority `100`, ahead of `opentelemetry`
-    - reads serialized MCP request data from Kong
-    - writes MCP attributes onto the root span and active span before the OpenTelemetry plugin exports the trace
-  - exact fields added for MCP traffic:
+    - reads serialized A2A and MCP request data from Kong
+    - writes A2A/MCP attributes onto the root span and active span before the OpenTelemetry plugin exports the trace
+  - exact fields added for A2A and MCP traffic:
     - `demo.run_id`
     - `demo.context_id`
     - `a2a.task_id`
     - `a2a.message_id`
+    - `a2a.method`
+    - `a2a.request.id`
+    - `a2a.error`
+    - `a2a.latency_ms`
+    - `a2a.response_body_size`
+    - `a2a.request.payload`
+    - `a2a.response.payload`
     - `mcp.session_id`
     - `mcp.request.id`
     - `mcp.method`
@@ -203,6 +212,13 @@ The trace pipeline now has three layers with distinct responsibilities:
     - `demo.context_id` <- request header `x-demo-context-id`
     - `a2a.task_id` <- request header `x-demo-task-id`
     - `a2a.message_id` <- request header `x-demo-message-id`
+    - `a2a.method` <- `ai.a2a.rpc[0].method`
+    - `a2a.request.id` <- `ai.a2a.rpc[0].id`
+    - `a2a.error` <- `ai.a2a.rpc[0].error`
+    - `a2a.latency_ms` <- `ai.a2a.rpc[0].latency`
+    - `a2a.response_body_size` <- `ai.a2a.rpc[0].response_body_size`
+    - `a2a.request.payload` <- `ai.a2a.rpc[0].payload.request`
+    - `a2a.response.payload` <- `ai.a2a.rpc[0].payload.response`
     - `mcp.session_id` <- `ai.mcp.mcp_session_id`
     - `mcp.request.id` <- `ai.mcp.rpc[0].id`
     - `mcp.method` <- `ai.mcp.rpc[0].method`
@@ -267,6 +283,14 @@ The most relevant attributes visible in Jaeger for this demo are:
   - `rpc.method`
   - `a2a.task_id`
   - `a2a.message_id`
+  - span attributes added by the custom `trace-enricher` plugin:
+    - `a2a.method`
+    - `a2a.request.id`
+    - `a2a.error`
+    - `a2a.latency_ms`
+    - `a2a.response_body_size`
+    - `a2a.request.payload`
+    - `a2a.response.payload`
 
 - MCP
   - standard Kong request/span context is present in Jaeger:
@@ -274,7 +298,7 @@ The most relevant attributes visible in Jaeger for this demo are:
     - `kong.route.name`
     - `kong.auth.consumer.name`
     - request/response status and latency-related span data
-  - MCP-specific span attributes added by the custom `mcp-trace-enricher` plugin:
+  - MCP-specific span attributes added by the custom `trace-enricher` plugin:
     - `demo.run_id`
     - `demo.context_id`
     - `a2a.task_id`
@@ -326,7 +350,7 @@ Important note on MCP trace shape:
 
 - A2A requests currently appear inside the main end-to-end trace tree.
 - `/mock-mcp` requests currently show up as separate Jaeger traces even though the MCP payload carries `_meta.traceparent`.
-- The custom `mcp-trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they can still be found with the same Jaeger tag filters as the main run.
+- The custom `trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they can still be found with the same Jaeger tag filters as the main run.
 
 Latest validation after the A2A SDK migration:
 

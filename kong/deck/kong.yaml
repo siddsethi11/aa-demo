@@ -1007,6 +1007,10 @@ services:
         config:
           key_names:
             - apikey
+      - name: trace-enricher
+        config:
+          include_payloads: true
+          payload_max_len: 4000
       - name: ai-a2a-proxy
         config:
           max_request_body_size: 0
@@ -1026,6 +1030,10 @@ services:
         config:
           key_names:
             - apikey
+      - name: trace-enricher
+        config:
+          include_payloads: true
+          payload_max_len: 4000
       - name: ai-a2a-proxy
         config:
           max_request_body_size: 0
@@ -1049,7 +1057,7 @@ services:
             config:
               key_names:
                 - apikey
-          - name: mcp-trace-enricher
+          - name: trace-enricher
             config:
               include_payloads: true
               payload_max_len: 4000

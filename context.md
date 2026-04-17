@@ -392,21 +392,30 @@ Field ownership:
     - `demo.context_id` from request header `x-demo-context-id`
     - `a2a.task_id` from request header `x-demo-task-id`
     - `a2a.message_id` from request header `x-demo-message-id`
-- custom `mcp-trace-enricher` plugin adds:
+- custom `trace-enricher` plugin adds:
   - source:
-    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/handler.lua`
-    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/mcp-trace-enricher/schema.lua`
-  - route attachment:
+    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/handler.lua`
+    - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/schema.lua`
+  - attachment points:
+    - `support-agent-service`
+    - `success-agent-service`
     - `mock-mcp-route`
   - behavior:
     - runs in `log` phase with priority `100`
     - executes before the OpenTelemetry plugin exports the span
-    - reads serialized MCP request data from Kong and writes MCP attributes onto the root span and current active span
-  - exact fields for MCP traffic:
+    - reads serialized A2A and MCP request data from Kong and writes A2A/MCP attributes onto the root span and current active span
+  - exact fields for A2A and MCP traffic:
     - `demo.run_id` from request header `x-demo-run-id`
     - `demo.context_id` from request header `x-demo-context-id`
     - `a2a.task_id` from request header `x-demo-task-id`
     - `a2a.message_id` from request header `x-demo-message-id`
+    - `a2a.method` from `ai.a2a.rpc[0].method`
+    - `a2a.request.id` from `ai.a2a.rpc[0].id`
+    - `a2a.error` from `ai.a2a.rpc[0].error`
+    - `a2a.latency_ms` from `ai.a2a.rpc[0].latency`
+    - `a2a.response_body_size` from `ai.a2a.rpc[0].response_body_size`
+    - `a2a.request.payload` from `ai.a2a.rpc[0].payload.request`
+    - `a2a.response.payload` from `ai.a2a.rpc[0].payload.response`
     - `mcp.session_id` from `ai.mcp.mcp_session_id`
     - `mcp.request.id` from `ai.mcp.rpc[0].id`
     - `mcp.method` from `ai.mcp.rpc[0].method`
@@ -443,7 +452,7 @@ Important `/mock-mcp` ordering limitation:
 Important current trace-shape behavior:
 - A2A traffic currently appears inside the main end-to-end Jaeger trace.
 - `/mock-mcp` traffic currently appears as separate Jaeger traces even though the MCP payload now carries `_meta.traceparent`.
-- the custom `mcp-trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they remain searchable by the same run-level correlation tags.
+- the custom `trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they remain searchable by the same run-level correlation tags.
 
 Latest SDK validation run:
 - run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`

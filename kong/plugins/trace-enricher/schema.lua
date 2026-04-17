@@ -1,5 +1,5 @@
 return {
-  name = "mcp-trace-enricher",
+  name = "trace-enricher",
   fields = {
     {
       protocols = {
