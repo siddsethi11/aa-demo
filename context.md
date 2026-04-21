@@ -51,6 +51,7 @@ Important current UI behaviors:
   - `Reset Observability`
   - `View Run Output`
   - `?` help modal for the scenario and agent-role explainer
+- `Trace Explorer` button has been removed from the top bar
 - topology nodes all expose a `+` detail button
 - Kong is the primary highlighted node
 - `MCP Tools` is intentionally highlighted at lower intensity than Kong
@@ -155,6 +156,80 @@ It queries Loki and normalizes:
 - MCP `tools/list`
 - MCP `tools/call`
 - LLM planning and synthesis calls
+
+## Current Governance Scenario Additions
+
+The governance selector now includes:
+
+- `RAG`
+
+The current RAG implementation is a focused probe, similar in shape to semantic cache and PII sanitization:
+
+- one baseline route:
+  - `/ai/orchestrator-rag-before-demo/chat/completions`
+- one RAG route:
+  - `/ai/orchestrator-rag-after-demo/chat/completions`
+- both use the same model:
+  - OpenAI `gpt-4o-mini`
+- the RAG route adds:
+  - `ai-rag-injector`
+  - Redis vector storage
+  - OpenAI `text-embedding-3-large`
+
+The current UI behavior for `RAG`:
+
+- shows two explicit actions instead of a single `Play`
+  - `Run Baseline`
+  - `Run With RAG`
+- shows only the prompt text in the scene card, not a full JSON payload blob
+
+The current prompt is intentionally simple:
+
+- `When should we escalate to Success Engineering?`
+
+## Current RAG Knowledge Base
+
+The fictional support KB lives in:
+
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/vector-sync-runbook.md`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/escalation-policy.md`
+- `/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/ownership-matrix.md`
+
+## Current RAG Ingestion Path
+
+This repo is using a hybrid/Konnect-style Kong deployment.
+
+Important operational detail:
+
+- the local implementation is **not** using the traditional-mode Admin API ingestion path
+- instead, the KB is ingested through a Kong-side helper:
+  - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.py`
+  - `/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.lua`
+- the Python helper:
+  - chunks the KB files
+  - resolves the `ai-rag-injector` plugin id from `kong/deck/kong.yaml`
+  - copies chunk files into `kong-dp`
+  - runs the Lua helper with `kong runner`
+- the Lua helper:
+  - reads the plugin config from Kong
+  - generates embeddings through Kong internals
+  - inserts vectors into the configured Redis backend
+
+## Current RAG Grafana Tiles
+
+The governance dashboard now includes two RAG-specific tiles:
+
+- `RAG Injection Rate`
+- `RAG Fetch Latency p95`
+
+These are backed by flattened Loki fields from Kong http-log:
+
+- `ai_rag_injected`
+- `ai_rag_fetch_latency`
+- `ai_rag_vector_db`
+- `ai_rag_chunk_ids`
+- `ai_rag_embeddings_provider`
+- `ai_rag_embeddings_model`
 
 ## Expected LLM Call Counts Per Normal Run
 

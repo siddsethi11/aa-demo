@@ -27,7 +27,6 @@
         <div class="topbar-actions">
           <button id="scene-button" class="secondary scene-launch" type="button">Scenes</button>
           <button id="graph-button" class="secondary" type="button">View Diagrams</button>
-          <button id="trace-explorer-button" class="secondary" type="button">Trace Explorer</button>
           <button id="reset-button" class="secondary" type="button">Reset Scene</button>
           <button id="reset-observability-button" class="secondary" type="button">Reset Observability</button>
           <button id="output-button" class="secondary" type="button">View Run Output</button>
@@ -304,6 +303,10 @@
                 <input type="radio" name="scenario_choice" value="pii_sanitizer" />
                 <span>PII Sanitization</span>
               </label>
+              <label class="preset-option">
+                <input type="radio" name="scenario_choice" value="rag" />
+                <span>RAG</span>
+              </label>
             </div>
           </section>
           <form id="play-form" class="form-grid">
@@ -334,6 +337,7 @@
             <input type="hidden" name="governance_scenario" value="normal" />
             <input type="hidden" name="semantic_cache_step" value="single" />
             <input type="hidden" name="pii_sanitizer_mode" value="placeholder" />
+            <input type="hidden" name="rag_mode" value="before" />
           </form>
           <section id="semantic-cache-controls" class="semantic-cache-controls" hidden>
             <div class="semantic-cache-grid">
@@ -404,6 +408,22 @@
               <pre id="pii-mode-payload" class="probe-payload"></pre>
               <button id="pii-send-button" class="primary" type="button">Send PII Sanitization Request</button>
             </article>
+          </section>
+          <section id="rag-controls" class="semantic-cache-controls" hidden>
+            <div class="semantic-cache-grid">
+              <article class="semantic-cache-card">
+                <span class="semantic-cache-label">Before</span>
+                <p class="semantic-cache-copy">Sends the AtlasFlow support question through the baseline route without Kong RAG injection.</p>
+                <pre id="rag-before-payload" class="semantic-cache-payload"></pre>
+                <button id="rag-before-button" class="primary" type="button">Run Baseline</button>
+              </article>
+              <article class="semantic-cache-card">
+                <span class="semantic-cache-label">After</span>
+                <p class="semantic-cache-copy">Sends the same AtlasFlow support question through the Kong RAG route backed by Redis.</p>
+                <pre id="rag-after-payload" class="semantic-cache-payload"></pre>
+                <button id="rag-after-button" class="primary" type="button">Run With RAG</button>
+              </article>
+            </div>
           </section>
           <div class="modal-actions">
             <button id="scene-play-button" class="primary" type="button">Play</button>

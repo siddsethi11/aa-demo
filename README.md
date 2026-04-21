@@ -690,6 +690,7 @@ The route path is selected by the `governance_scenario` field sent in the `Play`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
 - `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
 - `semantic_cache` -> `/ai/orchestrator-semantic-cache-demo/chat/completions`
+- `rag` -> `/ai/orchestrator-rag-before-demo/chat/completions` or `/ai/orchestrator-rag-after-demo/chat/completions`
 - `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions` or `/ai/orchestrator-pii-synthetic-demo/chat/completions`
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
@@ -895,7 +896,52 @@ Important operational note:
 - because the cache is semantic, a later "first" request can still be a real cache hit if a sufficiently similar prompt already exists in Redis
 - if you want a deterministic miss-then-hit demo sequence, clear semantic cache first, then run the seed request, then run the reuse request
 
-### 7. PII Sanitization
+### 7. RAG
+
+This scenario demonstrates Kong improving a support answer by retrieving fictional AtlasFlow Cloud KB content through `ai-rag-injector`.
+
+Behind the scenes:
+
+- the UI exposes one top-level `RAG` scenario with two actions:
+  - `Run Baseline`
+  - `Run With RAG`
+- both actions send the same AtlasFlow support question through Kong
+- the baseline route is:
+  - `/ai/orchestrator-rag-before-demo/chat/completions`
+- the RAG route is:
+  - `/ai/orchestrator-rag-after-demo/chat/completions`
+- the RAG route applies:
+  - `ai-rag-injector`
+  - Redis as the vector store
+  - OpenAI `text-embedding-3-large` for embeddings
+- the answer model remains the same on both routes:
+  - OpenAI `gpt-4o-mini`
+
+The point of the scenario is controlled comparison:
+
+- `Before`
+  - same prompt
+  - same model
+  - no retrieval injection
+- `After`
+  - same prompt
+  - same model
+  - Kong injects retrieved KB context before the model call
+
+The fictional KB lives in:
+
+- [rag/atlasflow-support-kb/vector-sync-runbook.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/vector-sync-runbook.md)
+- [rag/atlasflow-support-kb/escalation-policy.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/escalation-policy.md)
+- [rag/atlasflow-support-kb/ownership-matrix.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/ownership-matrix.md)
+
+To ingest the KB for the local hybrid/Konnect demo stack, use:
+
+- [scripts/ingest_rag_kb.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.py)
+- [scripts/ingest_rag_kb.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.lua)
+
+The helper uses `kong runner` inside `kong-dp` because the standard `ingest_chunk` Admin API path is not the right operational path for this hybrid/Konnect-style setup.
+
+### 8. PII Sanitization
 
 This scenario demonstrates Kong anonymizing sensitive information in both the upstream request body and the downstream LLM response body.
 
@@ -1774,6 +1820,8 @@ The dashboard `Kong Governance Overview` includes:
 - semantic guard blocked requests
 - semantic cache hits
 - semantic cache misses
+- RAG injection rate
+- RAG fetch latency p95
 - LLM as Judge evaluations
 - a raw log stream panel for inspection
 
@@ -1812,6 +1860,15 @@ The judge table is backed by Kong judge-route logs and expects the flattened fie
 - `judge_model`
 - `judge_latency_ms`
 - `judge_accuracy`
+
+The RAG tiles are backed by Kong AI RAG Injector audit log fields that are flattened into the Loki payload:
+
+- `ai_rag_injected`
+- `ai_rag_fetch_latency`
+- `ai_rag_vector_db`
+- `ai_rag_chunk_ids`
+- `ai_rag_embeddings_provider`
+- `ai_rag_embeddings_model`
 
 Important judge-panel note:
 

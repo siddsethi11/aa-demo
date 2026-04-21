@@ -73,6 +73,7 @@ class PlayRequest(BaseModel):
     governance_scenario: str = "normal"
     semantic_cache_step: str = "single"
     pii_sanitizer_mode: str = "placeholder"
+    rag_mode: str = "before"
     llm_judge_prompt_choice: str = "escalation"
     llm_judge_user_prompt: str | None = None
 
@@ -90,6 +91,7 @@ class OrchestratorState(TypedDict, total=False):
     governance_scenario: str
     semantic_cache_step: str
     pii_sanitizer_mode: str
+    rag_mode: str
     ai_route_base_url: str
     available_tools: list[str]
     selected_tools: list[str]
@@ -129,7 +131,7 @@ def timed_ms(started_at: float) -> int:
     return round((time.perf_counter() - started_at) * 1000)
 
 
-def ai_route_for_scenario(scenario: str, pii_mode: str = "placeholder") -> str:
+def ai_route_for_scenario(scenario: str, pii_mode: str = "placeholder", rag_mode: str = "before") -> str:
     route_map = {
         "normal": f"{KONG_PROXY_URL}/ai/orchestrator",
         "llm_failover": f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo",
@@ -138,6 +140,11 @@ def ai_route_for_scenario(scenario: str, pii_mode: str = "placeholder") -> str:
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
         "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
         "llm_as_judge": f"{KONG_PROXY_URL}/ai/orchestrator-judge-demo",
+        "rag": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-rag-after-demo"
+            if rag_mode == "after"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-rag-before-demo"
+        ),
         "pii_sanitizer": (
             f"{KONG_PROXY_URL}/ai/orchestrator-pii-block-demo"
             if pii_mode == "block"
@@ -160,6 +167,7 @@ def scenario_summary(scenario: str) -> str:
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
         "semantic_cache": "Kong semantic cache is expected to serve a repeated orchestrator prompt from Redis after the first miss populates the cache.",
         "llm_as_judge": "Kong AI LLM as Judge is expected to score the candidate model response for accuracy using a separate judge model.",
+        "rag": "Kong AI RAG Injector is expected to ground the answer using retrieved fictional support KB content when the after route is selected.",
         "pii_sanitizer": "Kong AI PII Sanitizer is expected to anonymize sensitive fields in both the request sent upstream and the response returned to the client.",
     }
     return summaries.get(scenario, summaries["normal"])
@@ -192,40 +200,15 @@ def prompts_for_scenario(prompts: dict[str, str], scenario: str) -> dict[str, st
 
 def build_semantic_cache_user_prompt(request: PlayRequest, step: str) -> str:
     if step == "reuse":
-        return (
-            "Create an executive triage note for an enterprise customer escalation.\n"
-            f"Account: {request.account_name}\n"
-            "Context: The customer is disputing recent premium-add-on charges and is also reporting "
-            "lag in workflow-agent synchronization across production jobs.\n"
-            f"Business summary: {request.issue_summary}\n"
-            f"Product signal: {request.product_issue}\n"
-            f"Billing signal: {request.billing_issue}\n"
-            "Write two sections only:\n"
-            "1) Situation\n"
-            "2) Recommended action\n"
-            "Keep the wording executive-friendly, concise, and action-oriented."
-        )
+        return "At what point should support escalate workflow sync delays to Success Engineering?"
 
-    return (
-        "Create an executive triage note for an enterprise customer escalation.\n"
-        f"Account: {request.account_name}\n"
-        "Context: The customer has raised a billing dispute on enterprise add-ons and is also seeing "
-        "workflow-agent synchronization delays in production.\n"
-        f"Business summary: {request.issue_summary}\n"
-        f"Product signal: {request.product_issue}\n"
-        f"Billing signal: {request.billing_issue}\n"
-        "Write two sections only:\n"
-        "1) Situation\n"
-        "2) Recommended action\n"
-        "Keep the wording executive-friendly, concise, and action-oriented."
-    )
+    return "When should support escalate workflow sync delays to Success Engineering?"
 
 
 def build_semantic_cache_prompts(request: PlayRequest) -> dict[str, str]:
     return {
         "system_prompt": (
-            "You are an executive escalation triage assistant. "
-            "Return a concise response with two sections: Situation and Recommended action."
+            "You are a concise support operations assistant. Return a short direct answer."
         ),
         "user_prompt": build_semantic_cache_user_prompt(request, request.semantic_cache_step),
     }
@@ -275,6 +258,17 @@ def build_llm_judge_prompts(request: PlayRequest) -> dict[str, str]:
             "3) End with the next action the account team should take in the next 24 hours.\n"
             "Keep the response executive-friendly and under 220 words."
         ),
+    }
+
+
+def build_rag_prompts(request: PlayRequest) -> dict[str, str]:
+    return {
+        "system_prompt": (
+            "You are a Tier 2 support assistant for the fictional AtlasFlow Cloud product. "
+            "Answer concisely for a support engineer. If grounded product support guidance is available, "
+            "prefer it over generic advice."
+        ),
+        "user_prompt": "When should we escalate to Success Engineering?",
     }
 
 
@@ -1154,7 +1148,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     scenario = request.governance_scenario
     semantic_cache_step = request.semantic_cache_step
     pii_sanitizer_mode = request.pii_sanitizer_mode
-    ai_route_base_url = ai_route_for_scenario(scenario, pii_sanitizer_mode)
+    rag_mode = request.rag_mode
+    ai_route_base_url = ai_route_for_scenario(scenario, pii_sanitizer_mode, rag_mode)
     await emit(
         run_id,
         "run_started",
@@ -1451,6 +1446,97 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         await emit_component(run_id, "observability", "complete")
         await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
         return {"run_id": run_id, "context_id": context_id, "result": final_response}
+    if scenario == "rag":
+        prompts = build_rag_prompts(request)
+        stage = "rag_after_probe" if rag_mode == "after" else "rag_before_probe"
+        await emit(
+            run_id,
+            "planning",
+            message=(
+                "RAG after route selected. Kong should retrieve grounded AtlasFlow support KB content from Redis before calling the model."
+                if rag_mode == "after"
+                else "RAG before route selected. The model is answering without AtlasFlow support KB retrieval."
+            ),
+        )
+        if rag_mode == "after":
+            await emit_component(run_id, "redis", "active", actor="orchestrator", stage=stage)
+        await emit(run_id, "llm_started", actor="orchestrator", stage=stage, component="openai", input=prompts)
+        llm_started = time.perf_counter()
+        rag_result = await llm.generate_with_headers(
+            base_url=ai_route_base_url,
+            run_id=run_id,
+            context_id=context_id,
+            **prompts,
+        )
+        await emit(
+            run_id,
+            "policy_event",
+            actor="orchestrator",
+            stage="rag_injection" if rag_mode == "after" else "rag_baseline",
+            llm_stage=stage,
+            summary=(
+                "Kong AI RAG Injector retrieved support KB context and injected it into the prompt before the model call."
+                if rag_mode == "after"
+                else "Baseline route answered the same support KB question without retrieval injection."
+            ),
+            input={"original_prompt": prompts},
+            output={
+                "mode": rag_mode,
+                "vector_backend": "redis",
+                "expected_audit_fields": [
+                    "ai_rag_injected",
+                    "ai_rag_fetch_latency",
+                    "ai_rag_chunk_ids",
+                    "ai_rag_embeddings_provider",
+                    "ai_rag_embeddings_model",
+                ],
+            },
+        )
+        if rag_mode == "after":
+            await emit_component(run_id, "redis", "complete", actor="orchestrator", stage=stage)
+        await emit(
+            run_id,
+            "llm_completed",
+            actor="orchestrator",
+            stage=stage,
+            component=rag_result["model"] if rag_result.get("model") else "openai",
+            llm_used=rag_result["llm_used"],
+            model=rag_result["model"],
+            output=rag_result,
+            duration_ms=timed_ms(llm_started),
+        )
+        final_response = {
+            "headline": "RAG support KB probe completed",
+            "governance_scenario": scenario,
+            "rag_probe": {
+                "mode": rag_mode,
+                "request_payload": request.model_dump(),
+                "original_prompt": prompts,
+                "vector_backend": "redis",
+                "comparison_note": (
+                    "This run should look more grounded and specific because Kong injected AtlasFlow support KB context."
+                    if rag_mode == "after"
+                    else "This run is the baseline answer without Kong RAG injection."
+                ),
+            },
+            "executive_brief": rag_result,
+            "recommended_summary": rag_result["summary"],
+            "available_tools": [],
+            "called_mcp_tools": [],
+            "tool_plan_steps": [],
+            "mcp_tools_by_agent": {
+                "orchestrator": [],
+                "support-agent": [],
+                "success-agent": [],
+            },
+        }
+        await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+        await emit_component(run_id, "dashboard", "complete")
+        await emit_component(run_id, "kong", "complete")
+        await emit_component(run_id, "orchestrator", "complete")
+        await emit_component(run_id, "observability", "complete")
+        await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+        return {"run_id": run_id, "context_id": context_id, "result": final_response}
     if scenario == "semantic_cache":
         prompts = build_semantic_cache_prompts(request)
         stage = "semantic_cache_seed" if semantic_cache_step == "seed" else "semantic_cache_reuse"
@@ -1538,6 +1624,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 "governance_scenario": scenario,
                 "semantic_cache_step": semantic_cache_step,
                 "pii_sanitizer_mode": pii_sanitizer_mode,
+                "rag_mode": rag_mode,
                 "ai_route_base_url": ai_route_base_url,
             }
         )

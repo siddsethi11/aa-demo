@@ -5,7 +5,6 @@ const playButton = document.getElementById("scene-play-button");
 const resetButton = document.getElementById("reset-button");
 const sceneButton = document.getElementById("scene-button");
 const graphButton = document.getElementById("graph-button");
-const traceExplorerButton = document.getElementById("trace-explorer-button");
 const helpButton = document.getElementById("help-button");
 const outputButton = document.getElementById("output-button");
 const resetObservabilityButton = document.getElementById("reset-observability-button");
@@ -52,6 +51,11 @@ const piiSanitizerControls = document.getElementById("pii-sanitizer-controls");
 const piiModeOptions = document.getElementById("pii-mode-options");
 const piiModePayload = document.getElementById("pii-mode-payload");
 const piiSendButton = document.getElementById("pii-send-button");
+const ragControls = document.getElementById("rag-controls");
+const ragBeforePayload = document.getElementById("rag-before-payload");
+const ragAfterPayload = document.getElementById("rag-after-payload");
+const ragBeforeButton = document.getElementById("rag-before-button");
+const ragAfterButton = document.getElementById("rag-after-button");
 const noticeKicker = document.getElementById("notice-kicker");
 const noticeTitle = document.getElementById("notice-title");
 const noticeMessage = document.getElementById("notice-message");
@@ -467,6 +471,7 @@ function labelForScenario(scenario) {
     semantic_cache: "Semantic Cache",
     llm_as_judge: "LLM as Judge",
     pii_sanitizer: "PII Sanitization",
+    rag: "RAG",
   };
   return labels[scenario] || "Normal";
 }
@@ -608,11 +613,12 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
       plainEnglish: [
         "Kong uses it for semantic guard comparisons.",
         "Kong also uses it for semantic cache lookup and reuse.",
+        "Kong also uses it as the retrieval store for the RAG scenario.",
         "It only appears when the semantic scenarios are relevant.",
       ],
       why: "It shows the supporting infrastructure behind semantic policy behavior.",
       config: [
-        ["Used by", "Semantic Guard and Semantic Cache"],
+        ["Used by", "Semantic Guard, Semantic Cache, and RAG"],
         ["Role", "Embedding-backed similarity store"],
       ],
     },
@@ -824,6 +830,23 @@ function policyDetailsForScenario(scenario) {
         ["Protected categories", "all_and_credentials"],
         ["Backend service", "ai-pii-service:8080"],
         ["Mode", currentPiiMode()],
+      ],
+    },
+    rag: {
+      title: "RAG",
+      intro: "Kong uses AI RAG Injector to retrieve fictional AtlasFlow support KB content from Redis and inject it into the prompt before forwarding the request upstream.",
+      plainEnglish: [
+        "The baseline run sends the support question directly to the model with no retrieval.",
+        "The RAG run generates an embedding for the question, retrieves relevant support KB chunks from Redis, and injects them into the prompt.",
+        "The model then answers using that grounded support content instead of relying only on general model knowledge.",
+      ],
+      why: "This shows how Kong can improve answer relevance at the gateway layer without moving retrieval logic into the application.",
+      config: [
+        ["Policy", "AI RAG Injector"],
+        ["Vector store", "Redis"],
+        ["Embedding model", "text-embedding-3-large"],
+        ["Answer model", "OpenAI 4o mini"],
+        ["Expected outcome", "After route should produce more specific AtlasFlow support guidance"],
       ],
     },
   };
@@ -1090,10 +1113,15 @@ function applyScenarioChoice(scenario) {
   if (piiField) {
     piiField.value = "placeholder";
   }
+  const ragField = playForm.elements.namedItem("rag_mode");
+  if (ragField) {
+    ragField.value = "before";
+  }
   const isSemanticCache = activeScenario === "semantic_cache";
   const isSemanticGuard = activeScenario === "semantic_guard";
   const isLlmJudge = activeScenario === "llm_as_judge";
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
+  const isRag = activeScenario === "rag";
   if (semanticCacheControls) {
     semanticCacheControls.hidden = !isSemanticCache;
   }
@@ -1106,8 +1134,11 @@ function applyScenarioChoice(scenario) {
   if (piiSanitizerControls) {
     piiSanitizerControls.hidden = !isPiiSanitizer;
   }
+  if (ragControls) {
+    ragControls.hidden = !isRag;
+  }
   if (playButton) {
-    playButton.hidden = isSemanticCache || isPiiSanitizer;
+    playButton.hidden = isSemanticCache || isPiiSanitizer || isRag;
   }
   updateScenarioInfraVisibility(activeScenario);
   if (isSemanticCache) {
@@ -1122,6 +1153,9 @@ function applyScenarioChoice(scenario) {
   if (isPiiSanitizer) {
     renderPiiSanitizerPayloads();
   }
+  if (isRag) {
+    renderRagPayloads();
+  }
 }
 
 function currentFormPayload() {
@@ -1135,35 +1169,12 @@ function selectedLlmJudgePromptChoice() {
 }
 
 function semanticCachePayload(step) {
-  const base = currentFormPayload();
   const systemPrompt =
-    "You are an executive escalation triage assistant. Return a concise response with two sections: Situation and Recommended action.";
+    "You are a concise support operations assistant. Return a short direct answer.";
   const userPrompt =
     step === "reuse"
-      ? [
-          "Create an executive triage note for an enterprise customer escalation.",
-          `Account: ${base.account_name}`,
-          "Context: The customer is disputing recent premium-add-on charges and is also reporting lag in workflow-agent synchronization across production jobs.",
-          "Business summary: Customer leadership wants immediate clarity on the billing dispute and the workflow sync lag before renewal discussions continue.",
-          "Product signal: workflow-agent synchronization lag across production jobs",
-          "Billing signal: disputed premium add-on charges on the current enterprise invoice",
-          "Write two sections only:",
-          "1) Situation",
-          "2) Recommended action",
-          "Keep the wording executive-friendly, concise, and action-oriented.",
-        ].join("\n")
-      : [
-          "Create an executive triage note for an enterprise customer escalation.",
-          `Account: ${base.account_name}`,
-          "Context: The customer has raised a billing dispute on enterprise add-ons and is also seeing workflow-agent synchronization delays in production.",
-          `Business summary: ${base.issue_summary}`,
-          `Product signal: ${base.product_issue}`,
-          `Billing signal: ${base.billing_issue}`,
-          "Write two sections only:",
-          "1) Situation",
-          "2) Recommended action",
-          "Keep the wording executive-friendly, concise, and action-oriented.",
-        ].join("\n");
+      ? "At what point should support escalate workflow sync delays to Success Engineering?"
+      : "When should support escalate workflow sync delays to Success Engineering?";
   return {
     governance_scenario: "semantic_cache",
     semantic_cache_step: step,
@@ -1176,8 +1187,8 @@ function renderSemanticCachePayloads() {
   if (!semanticCacheSeedPayload || !semanticCacheHitPayload) {
     return;
   }
-  semanticCacheSeedPayload.textContent = pretty(semanticCachePayload("seed"));
-  semanticCacheHitPayload.textContent = pretty(semanticCachePayload("reuse"));
+  semanticCacheSeedPayload.textContent = semanticCachePayload("seed").user_prompt;
+  semanticCacheHitPayload.textContent = semanticCachePayload("reuse").user_prompt;
 }
 
 function semanticGuardPayload() {
@@ -1285,6 +1296,25 @@ function renderPiiSanitizerPayloads() {
     piiField.value = selectedMode;
   }
   piiModePayload.textContent = pretty(piiSanitizerPayload(selectedMode));
+}
+
+function ragPayload(mode) {
+  return {
+    governance_scenario: "rag",
+    rag_mode: mode,
+    system_prompt:
+      "You are a Tier 2 support assistant for the fictional AtlasFlow Cloud product. Answer concisely for a support engineer. If grounded product support guidance is available, prefer it over generic advice.",
+    user_prompt: "When should we escalate to Success Engineering?",
+  };
+}
+
+function renderRagPayloads() {
+  if (ragBeforePayload) {
+    ragBeforePayload.textContent = ragPayload("before").user_prompt;
+  }
+  if (ragAfterPayload) {
+    ragAfterPayload.textContent = ragPayload("after").user_prompt;
+  }
 }
 
 function showNotice({ kicker = "Status", title, message }) {
@@ -1893,7 +1923,7 @@ function setLineVisibility(name, visible) {
 }
 
 function updateScenarioInfraVisibility(scenario) {
-  const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache";
+  const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache" || scenario === "rag";
   const showJudge = scenario === "llm_as_judge";
   const showPii = scenario === "pii_sanitizer";
   const focusedScenario = showRedis || showJudge || showPii;
@@ -2262,14 +2292,20 @@ function renderFinalOutput(result) {
   const successTask = unwrapStructuredValue(result.success_track?.followup_task);
   const piiProbe = result.pii_sanitizer_probe;
   const judgeProbe = result.llm_judge_probe;
-  const isFocusedProbe = Boolean(result.semantic_cache_probe || piiProbe || judgeProbe);
+  const ragProbe = result.rag_probe;
+  const isFocusedProbe = Boolean(result.semantic_cache_probe || piiProbe || judgeProbe || ragProbe);
+  const summaryCopy = ragProbe
+    ? "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
+    : isFocusedProbe
+      ? "This output comes from a focused governance probe rather than the full multi-agent workflow."
+      : "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.";
 
   finalOutput.innerHTML = `
     <section class="output-hero">
       <p class="output-kicker">Final Output</p>
       <h3>${escapeHtml(result.headline)}</h3>
       <p class="output-section-copy">Governance scenario: <strong>${escapeHtml(labelForScenario(result.governance_scenario || activeScenario))}</strong></p>
-      <p class="output-section-copy">Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.</p>
+      <p class="output-section-copy">${escapeHtml(summaryCopy)}</p>
       <div class="output-summary">${escapeHtml(executiveSummary)}</div>
     </section>
     <div class="output-grid">
@@ -2291,6 +2327,29 @@ function renderFinalOutput(result) {
           </div>
         </div>
       </section>
+      ${
+        ragProbe
+          ? `
+      <section class="output-section output-section-wide">
+        <strong>RAG Probe</strong>
+        <p class="output-section-copy">Uses the same AtlasFlow support KB question in two modes so the answer quality difference comes only from Kong retrieval.</p>
+        <div class="output-subgrid">
+          <div class="output-subsection">
+            <span>Probe Mode</span>
+            ${renderDefinitionList([
+              ["Mode", ragProbe.mode === "after" ? "After (with RAG)" : "Before (baseline)"],
+              ["Vector Backend", ragProbe.vector_backend],
+            ])}
+            ${renderTextBlock(ragProbe.comparison_note)}
+          </div>
+          <div class="output-subsection output-subsection-wide">
+            <span>Original Request Prompt</span>
+            ${renderTextBlock(ragProbe.original_prompt?.user_prompt)}
+          </div>
+        </div>
+      </section>`
+          : ""
+      }
       ${
         result.semantic_cache_probe
           ? `
@@ -2659,6 +2718,13 @@ function handleTraceEvent(payload) {
         markLine("kong-pii", "complete");
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
+      } else if (traceState.scenario === "rag") {
+        setFlowStage("RAG probe", payload.message);
+        hideTopologyActivity();
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        markNode("openai", "complete");
+        markLine("kong-openai", "complete");
       } else {
         setFlowStage("Gathering account context", payload.message);
         setMcpPathState("active");
@@ -2879,6 +2945,8 @@ function handleTraceEvent(payload) {
         semantic_guard: "Kong semantic guard blocked request",
         semantic_cache_miss: "Semantic cache miss",
         semantic_cache_hit: "Semantic cache hit",
+        rag_baseline: "Baseline route answered without RAG",
+        rag_injection: "RAG context injected",
         pii_sanitizer: "PII sanitization policy applied",
         pii_sanitizer_request: "PII request sanitization applied",
         pii_sanitizer_response: "PII response sanitization applied",
@@ -3013,6 +3081,14 @@ function handleTraceEvent(payload) {
         setOpenAiNodeState("complete");
         markLine("kong-openai", "complete");
       }
+      if (payload.stage === "rag_injection") {
+        activateRedisPath("active");
+        setFlowStage("RAG context injected", payload.summary || "Kong retrieved support KB context from Redis before the model call.");
+      }
+      if (payload.stage === "rag_baseline") {
+        completeRedisPath();
+        setFlowStage("Baseline route", payload.summary || "The same prompt is being answered without retrieval injection.");
+      }
       if (payload.stage === "llm_as_judge") {
         activateActorPath("orchestrator", "active");
         markNode("kong", "active");
@@ -3141,6 +3217,7 @@ function handleTraceEvent(payload) {
       if (
         traceState.scenario === "llm_as_judge" ||
         traceState.scenario === "semantic_cache" ||
+        traceState.scenario === "rag" ||
         traceState.scenario === "pii_sanitizer" ||
         traceState.scenario === "semantic_guard"
       ) {
@@ -3159,6 +3236,11 @@ function handleTraceEvent(payload) {
           if (!semanticCacheMissReturnPending) {
             markNode("kong", "complete");
           }
+        } else if (traceState.scenario === "rag") {
+          activateRedisPath("complete");
+          setOpenAiNodeState("complete");
+          markLine("kong-openai", "complete");
+          markNode("kong", "complete");
         } else if (traceState.scenario === "semantic_guard") {
           // Let the semantic guard policy event own the visible block/reset sequence.
         } else {
@@ -3218,6 +3300,7 @@ function handleTraceEvent(payload) {
       if (
         traceState.scenario === "llm_as_judge" ||
         traceState.scenario === "semantic_cache" ||
+        traceState.scenario === "rag" ||
         traceState.scenario === "pii_sanitizer" ||
         traceState.scenario === "semantic_guard"
       ) {
@@ -3241,6 +3324,8 @@ function handleTraceEvent(payload) {
             }
             semanticCacheUiTimer = window.setTimeout(() => {
               if (traceState.scenario === "semantic_cache" && !semanticCacheMissReturnPending) {
+                markNode("orchestrator", "complete");
+                markLine("kong-orchestrator", "complete");
                 markNode("ui", "complete");
                 markLine("ui-kong", "complete");
                 markNode("kong", "complete");
@@ -3250,6 +3335,21 @@ function handleTraceEvent(payload) {
           }
         } else if (traceState.scenario === "semantic_guard") {
           // Let the semantic guard policy event own the visible block/reset sequence.
+        } else if (traceState.scenario === "rag") {
+          activateRedisPath("complete");
+          setOpenAiNodeState("complete");
+          markLine("kong-openai", "complete");
+          activateActorPath("orchestrator", "complete");
+          markNode("kong", "active");
+          markNode("ui", "active");
+          markLine("ui-kong", "active");
+          window.setTimeout(() => {
+            if (traceState.scenario === "rag") {
+              markNode("ui", "complete");
+              markLine("ui-kong", "complete");
+              markNode("kong", "complete");
+            }
+          }, 900);
         } else {
           if (piiSanitizerHandoffTimer) {
             clearTimeout(piiSanitizerHandoffTimer);
@@ -3455,6 +3555,18 @@ piiSendButton?.addEventListener("click", (event) => {
   play({ governance_scenario: "pii_sanitizer", pii_sanitizer_mode: selectedMode });
 });
 
+ragBeforeButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  sceneModal.close();
+  play({ governance_scenario: "rag", rag_mode: "before" });
+});
+
+ragAfterButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  sceneModal.close();
+  play({ governance_scenario: "rag", rag_mode: "after" });
+});
+
 semanticCacheClearButton?.addEventListener("click", async (event) => {
   event.preventDefault();
   await clearSemanticCache();
@@ -3471,6 +3583,9 @@ presetOptions?.addEventListener("change", (event) => {
   }
   if (activeScenario === "pii_sanitizer") {
     renderPiiSanitizerPayloads();
+  }
+  if (activeScenario === "rag") {
+    renderRagPayloads();
   }
 });
 
@@ -3535,6 +3650,9 @@ playForm.addEventListener("input", () => {
   if (activeScenario === "pii_sanitizer") {
     renderPiiSanitizerPayloads();
   }
+  if (activeScenario === "rag") {
+    renderRagPayloads();
+  }
 });
 
 clearLogButton.addEventListener("click", () => {
@@ -3561,7 +3679,6 @@ runHistorySelect?.addEventListener("change", async (event) => {
 sceneButton.addEventListener("click", () => sceneModal.showModal());
 graphButton.addEventListener("click", () => graphModal.showModal());
 outputButton.addEventListener("click", () => outputModal.showModal());
-traceExplorerButton?.addEventListener("click", () => openTraceExplorer());
 traceLoadButton?.addEventListener("click", () => {
   void loadTraceExplorer();
 });

@@ -113,6 +113,7 @@ plugins:
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
           local cache = proxy['cache'] or {}
+          local rag = proxy['rag-inject'] or proxy['rag_inject'] or ai['rag-inject'] or ai['rag_inject'] or {}
           local judge = ai['ai-llm-as-judge'] or {}
           local judge_meta = judge['meta'] or {}
           local judge_usage = judge['usage'] or {}
@@ -261,6 +262,14 @@ plugins:
           log_payload['ai_cache_embeddings_provider'] = tostring(cache['embeddings_provider'] or '')
           log_payload['ai_cache_embeddings_model'] = tostring(cache['embeddings_model'] or '')
           log_payload['ai_cache_embeddings_latency'] = tonumber(cache['embeddings_latency'] or 0) or 0
+          log_payload['ai_rag_vector_db'] = tostring(rag['vector_db'] or '')
+          log_payload['ai_rag_injected'] = tostring(rag['injected'] == true)
+          log_payload['ai_rag_fetch_latency'] = tonumber(rag['fetch_latency'] or 0) or 0
+          log_payload['ai_rag_chunk_ids'] = type(rag['chunk_ids']) == 'table' and cjson.encode(rag['chunk_ids']) or tostring(rag['chunk_ids'] or '')
+          log_payload['ai_rag_embeddings_latency'] = tonumber(rag['embeddings_latency'] or 0) or 0
+          log_payload['ai_rag_embeddings_tokens'] = tonumber(rag['embeddings_tokens'] or 0) or 0
+          log_payload['ai_rag_embeddings_provider'] = tostring(rag['embeddings_provider'] or '')
+          log_payload['ai_rag_embeddings_model'] = tostring(rag['embeddings_model'] or '')
           log_payload['judge_input'] = extract_request_text(proxy_payload['request'] or {})
           log_payload['judge_output'] = extract_response_text(proxy_payload['response'] or {})
           log_payload['judge_inference_model'] = tostring(meta['response_model'] or meta['request_model'] or '')
@@ -742,6 +751,95 @@ services:
             redis:
               host: ${{ env "DECK_REDIS_HOST" }}
               port: 6379
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-rag-before-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-rag-before-demo-chat-route
+        paths:
+          - /ai/orchestrator-rag-before-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-rag-after-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-rag-after-demo-chat-route
+        paths:
+          - /ai/orchestrator-rag-after-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-rag-injector
+        id: 2d9e8c54-8d3f-4f3a-9a43-5d3c0f1b8a71
+        config:
+          inject_template: |
+            You are a Tier 2 support assistant for the fictional AtlasFlow Cloud product.
+            Answer the user only with support guidance found between the <RAG></RAG> tags.
+            If the answer is not clearly supported by the RAG content, say:
+            "I cannot answer that from the available AtlasFlow support knowledge."
+            <RAG><CONTEXT></RAG>
+            Support question: <PROMPT>
+            Return exactly two sections:
+            1. Approved steps
+            2. Escalation trigger
+          embeddings:
+            auth:
+              header_name: Authorization
+              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+            model:
+              provider: openai
+              name: text-embedding-3-large
+          vectordb:
+            strategy: redis
+            redis:
+              host: ${{ env "DECK_REDIS_HOST" }}
+              port: 6379
+            distance_metric: cosine
+            dimensions: 3072
       - name: ai-proxy-advanced
         config:
           targets:
