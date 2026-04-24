@@ -536,13 +536,13 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
       intro: "The orchestrator is the main workflow coordinator for the escalation.",
       plainEnglish: [
         "It gathers account context through Kong-exposed tools.",
-        "It calls the support and success agents through Kong routes.",
+        "It discovers and calls the support and success agents through Kong's A2A routes.",
         "It performs the final synthesis before returning the result.",
       ],
       why: "It turns multiple governed tool and agent hops into one business outcome.",
       config: [
         ["Framework", "LangGraph"],
-        ["Calls through Kong", "MCP, sub-agents, and orchestrator AI routes"],
+        ["Calls through Kong", "MCP, A2A sub-agents, and orchestrator AI routes"],
       ],
     },
     "support-agent": {
@@ -716,15 +716,17 @@ function policyDetailsForScenario(scenario) {
   const common = {
     normal: {
       title: "Normal",
-      intro: "This is the baseline multi-agent flow: Kong fronts the full orchestration, tool access, and model routing path.",
+      intro: "This is the baseline multi-agent flow: Kong fronts the full orchestration path, including MCP tool access, A2A discovery and execution, and model routing.",
       plainEnglish: [
         "The UI sends one escalation request through Kong to the orchestrator.",
+        "Kong handles sub-agent discovery and handoff through A2A, so the orchestrator never talks to the agents directly.",
         "Kong exposes the mock REST API as MCP tools, so the orchestrator and sub-agents call governed tools instead of raw endpoints.",
         "Kong routes orchestrator LLM traffic to OpenAI and sub-agent LLM traffic to Gemini, then returns one final escalation brief.",
       ],
       why: "It is the reference path for the rest of the governance scenarios.",
       config: [
         ["UI access", "Key-auth using the UI consumer key"],
+        ["Agent-to-agent", "AI A2A Proxy handles discovery and message/stream execution"],
         ["Tool exposure", "AI MCP Proxy exposes only the allowed tools per consumer group"],
         ["Orchestrator LLM route", "AI Proxy Advanced to OpenAI 4o mini"],
         ["Sub-agent LLM route", "AI Proxy Advanced to Gemini 2.5 Flash"],
