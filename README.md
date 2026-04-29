@@ -2,6 +2,103 @@
 
 This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
 
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [How to start the demo](#how-to-start-the-demo)
+- [What the project does](#what-the-project-does)
+- [Current UI](#current-ui)
+  - [Top-level controls](#top-level-controls)
+  - [Main UI behaviors](#main-ui-behaviors)
+  - [Diagram views](#diagram-views)
+- [What it will show](#what-it-will-show)
+- [Runtime shape](#runtime-shape)
+- [Observability](#observability)
+  - [Konnect observability](#konnect-observability)
+  - [Loki and Grafana](#loki-and-grafana)
+  - [Jaeger](#jaeger)
+  - [Opik](#opik)
+
+## Prerequisites
+
+Before running the demo, make sure you have:
+
+- Docker Desktop or a working local Docker Engine with `docker compose`
+- `python3`
+- `curl`
+- `jq`
+- `deck`
+- a valid Konnect personal access token with access to the target control plane
+- a populated `.env` file based on [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example)
+
+Minimum environment values required for the main startup flow:
+
+- `KONNECT_TOKEN`
+- `KONNECT_CONTROL_PLANE_NAME`
+- `KONG_CLUSTER_CONTROL_PLANE`
+- `KONG_CLUSTER_SERVER_NAME`
+- `OPENAI_API_KEY`
+- `DECK_OPENAI_API_KEY`
+- `DECK_GEMINI_API_KEY`
+- `DECK_REDIS_HOST`
+
+Additional environment values required for optional/full governance scenarios:
+
+- `DECK_LAKERA_API_KEY`
+- `DECK_LAKERA_PROJECT`
+
+What the startup flow expects:
+
+- the startup script can create or reuse a Konnect control plane
+  - default name: `AA Demo`
+  - override with `KONNECT_CONTROL_PLANE_NAME`
+- Konnect custom plugin schemas can be created or updated
+- `deck gateway sync` can write the current Kong config to the target control plane
+- the local stack can start ports for:
+  - UI `8000`
+  - Grafana `3001`
+  - Opik `5173`
+  - Jaeger `16686`
+
+## How to start the demo
+
+1. Populate `.env` from [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example).
+2. Start the full demo stack:
+
+```bash
+./scripts/start_rag_demo.sh
+```
+
+The startup flow will:
+
+- create or reuse the Konnect control plane
+  - default name: `AA Demo`
+  - override with `KONNECT_CONTROL_PLANE_NAME`
+- sync custom plugin schemas
+- run `deck gateway sync`
+- upload Konnect dashboards
+- register the Konnect MCP registry entry
+- ingest the demo RAG knowledge base
+
+3. Open the main local surfaces:
+
+- UI: [http://localhost:8000](http://localhost:8000)
+- Grafana: [http://localhost:3001](http://localhost:3001)
+- Opik: [http://localhost:5173](http://localhost:5173)
+- Jaeger: [http://localhost:16686](http://localhost:16686)
+
+4. If you need to stop everything:
+
+```bash
+./scripts/stop_rag_demo.sh
+```
+
+Important links used in the demo:
+
+- Kong MCP remote: [http://localhost:8000/mock-mcp](http://localhost:8000/mock-mcp)
+- Support agent card through Kong: [http://localhost:8000/support-agent/.well-known/agent-card.json](http://localhost:8000/support-agent/.well-known/agent-card.json)
+- Success agent card through Kong: [http://localhost:8000/success-agent/.well-known/agent-card.json](http://localhost:8000/success-agent/.well-known/agent-card.json)
+
 ## What the project does
 
 This project demonstrates a small, visually clear agent system running behind Kong in Konnect hybrid mode.
@@ -56,8 +153,9 @@ This makes Kong's role easy to explain:
 
 - route control
 - authentication
+- A2A agent discovery and execution through Kong
 - tool exposure through MCP
-- MCP server publishing through Konnect MCP Registry
+- MCP server registration through Konnect MCP Registry
 - LLM routing through AI Proxy Advanced
 - per-agent tool restrictions
 - observability of agent traffic
@@ -65,11 +163,30 @@ This makes Kong's role easy to explain:
 MCP discovery shape:
 
 - the runtime MCP traffic still goes through Kong on `/mock-mcp`
-- the same server is also published in Konnect as:
+- the same server is also registered in Konnect as:
   - registry: `AA Demo MCP Registry`
   - server: `com.aa-demo/mock-mcp`
   - remote: `http://localhost:8000/mock-mcp`
 - this keeps discovery/governance metadata in Konnect while Kong remains the runtime control point for auth, routing, and observability
+
+## Core Governance Components
+
+- `AI A2A Proxy`
+  - Kong handles sub-agent discovery and A2A `message/stream` execution between the orchestrator and the support/success agents.
+- `AI MCP Proxy`
+  - Kong exposes the backing REST API as MCP tools and enforces per-agent access to those tools.
+- `AI Proxy Advanced`
+  - Kong routes orchestrator and sub-agent LLM traffic to the configured model providers and also supports failover behavior in the demo.
+- `AI Semantic Prompt Guard`
+  - Kong uses embeddings plus Redis to block prompts based on semantic similarity to denied themes.
+- `AI Semantic Cache`
+  - Kong checks Redis for semantically similar prompts and can return a cached response without calling the model again.
+- `AI Sanitizer / AI PII Service`
+  - Kong sends request and response content through the AI PII Service to anonymize or block sensitive data in the PII scenario.
+- `AI Lakera Guard`
+  - Kong sends prompts to Lakera for policy inspection before allowing the request to reach the model.
+- `Workflow Graph`
+  - Kong builds a synthetic workflow tree and exports it to Opik so the demo can show a workflow-oriented AI trace instead of only raw request traces.
 
 ## Current UI
 
@@ -131,9 +248,35 @@ Diagram views:
 - `redis-stack`: vector database backing the semantic guard scenario
 - `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
 
-## Jaeger OpenTelemetry
+## Observability
 
-The `3.14` branch includes Kong-side OpenTelemetry wiring, an in-compose OpenTelemetry Collector, and a local Jaeger deployment for inspecting traces.
+The demo exposes three main observability surfaces:
+
+- Konnect observability for managed analytics dashboards
+- Loki and Grafana for gateway logs, run-scoped tables, and governance dashboards
+- Jaeger for raw OpenTelemetry trace trees
+- Opik for the synthetic workflow-oriented AI trace exported by Kong
+
+### Konnect observability
+
+- Konnect is used for control-plane-managed observability dashboards
+- the repo startup flow uploads the demo dashboard definitions into Konnect
+- this is the managed analytics surface for the demo, separate from local Grafana
+
+### Loki and Grafana
+
+- Grafana UI: `http://localhost:3001`
+- Loki API: `http://localhost:3100`
+- Kong sends structured gateway logs to Loki through the global `http-log` path
+- Grafana is the main surface for:
+  - governance dashboards
+  - run trace tables
+  - policy events
+  - request/response exploration
+
+### Jaeger
+
+Jaeger is the local raw OTEL trace viewer for the demo.
 
 What is included:
 
@@ -155,17 +298,13 @@ Current signal split:
 - `MCP`: Kong Gateway request spans plus AI MCP log/metric fields from `ai-mcp-proxy`; dedicated MCP metric time series are not displayed in Jaeger
 - `Trace correlation`: the app propagates W3C `traceparent`, `tracestate`, and `baggage` headers across orchestrator, A2A, MCP, and LLM calls so one normal run appears as a single Jaeger trace tree
 
-Notes:
-
-- Jaeger is a trace UI, not the place to inspect Prometheus-style metric time series.
-- Existing Grafana/Loki dashboards remain unchanged.
 - Kong adds searchable trace attributes from the demo headers: `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id`.
-- Kong also derives generic workflow metadata for Opik export with:
-  - `workflow.kind`
-  - `workflow.actor`
-  - `workflow.run_id`
-  - `workflow.node_id`
-  - `workflow.parent_node_id`
+
+### Opik
+
+- Opik UI: `http://localhost:5173`
+- Opik receives a synthetic workflow trace written directly by the `workflow-graph` plugin
+- unlike Jaeger, Opik is not fed from the raw Kong OTEL traces in this setup
 
 Opik export behavior:
 
@@ -1529,7 +1668,7 @@ DECK_OPENAI_MODEL=gpt-4o-mini
 DECK_GEMINI_MODEL=gemini-2.5-flash
 DECK_REDIS_HOST=redis-stack
 KONNECT_TOKEN=YOUR_KONNECT_PAT
-KONNECT_CONTROL_PLANE_NAME=YOUR_KONNECT_CONTROL_PLANE_NAME
+KONNECT_CONTROL_PLANE_NAME=AA Demo
 ```
 
 ### 3. Place the hybrid certs
@@ -1544,6 +1683,12 @@ Put your Konnect data plane cert and key here:
 kong/certs/tls.crt
 kong/certs/tls.key
 ```
+
+Important:
+
+- the startup script can create or reuse the Konnect control plane entity automatically
+- but your hybrid data plane still depends on the correct Konnect endpoint and certificates
+- `KONG_CLUSTER_CONTROL_PLANE`, `KONG_CLUSTER_SERVER_NAME`, `kong/certs/tls.crt`, and `kong/certs/tls.key` must match the control plane your data plane should join
 
 ### 4. Export the env vars for decK
 

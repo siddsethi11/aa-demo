@@ -47,6 +47,10 @@ require_bin() {
   fi
 }
 
+urlencode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+
 konnect_api() {
   local method="$1"
   local url="$2"
@@ -72,31 +76,76 @@ konnect_api() {
   echo "$http_status $body_file"
 }
 
-resolve_control_plane_id() {
+resolve_control_plane_response() {
+  local cp_name="$1"
   local encoded_name
-  encoded_name="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$KONNECT_CONTROL_PLANE_NAME")"
+  encoded_name="$(urlencode "$cp_name")"
   local response cp_lookup_status body_file
   response="$(konnect_api GET "${KONNECT_API_URL}/v2/control-planes?filter%5Bname%5D%5Beq%5D=${encoded_name}")"
   cp_lookup_status="${response%% *}"
   body_file="${response#* }"
 
   if [[ "$cp_lookup_status" != "200" ]]; then
-    fail "Failed to resolve Konnect control plane id for '${KONNECT_CONTROL_PLANE_NAME}' (HTTP $cp_lookup_status)."
+    fail "Failed to resolve Konnect control plane id for '${cp_name}' (HTTP $cp_lookup_status)."
     cat "$body_file" >&2
     rm -f "$body_file"
     exit 1
   fi
 
-  local cp_id
-  cp_id="$(jq -r '.data[0].id // empty' "$body_file")"
-  rm -f "$body_file"
+  echo "$body_file"
+}
 
-  if [[ -z "$cp_id" ]]; then
-    fail "No Konnect control plane found for '${KONNECT_CONTROL_PLANE_NAME}'."
+create_control_plane() {
+  local cp_name="$1"
+  local body_file
+  body_file="$(mktemp)"
+  local http_status
+  local encoded_name encoded_type
+  encoded_name="$(urlencode "$cp_name")"
+  encoded_type="$(urlencode "${KONNECT_CONTROL_PLANE_CLUSTER_TYPE}")"
+
+  http_status="$(curl -sS -X POST "${KONNECT_API_URL}/v2/control-planes" \
+    -H "Authorization: Bearer $KONNECT_TOKEN" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data "name=${encoded_name}&cluster_type=${encoded_type}" \
+    -o "$body_file" \
+    -w "%{http_code}")"
+
+  if [[ "$http_status" != "200" && "$http_status" != "201" ]]; then
+    fail "Failed to create Konnect control plane '${cp_name}' (HTTP $http_status)."
+    cat "$body_file" >&2
+    rm -f "$body_file"
     exit 1
   fi
 
-  echo "$cp_id"
+  echo "$body_file"
+}
+
+ensure_control_plane() {
+  local cp_name="$1"
+  local body_file cp_id cp_display_name
+  body_file="$(resolve_control_plane_response "$cp_name")"
+  cp_id="$(jq -r '.data[0].id // empty' "$body_file")"
+  cp_display_name="$(jq -r '.data[0].name // empty' "$body_file")"
+  rm -f "$body_file"
+
+  if [[ -n "$cp_id" ]]; then
+    echo "$cp_display_name|$cp_id|existing"
+    return
+  fi
+
+  info "Creating Konnect control plane '${cp_name}'"
+  body_file="$(create_control_plane "$cp_name")"
+  cp_id="$(jq -r '.id // empty' "$body_file")"
+  cp_display_name="$(jq -r '.name // empty' "$body_file")"
+  rm -f "$body_file"
+
+  if [[ -z "$cp_id" || -z "$cp_display_name" ]]; then
+    fail "Konnect control plane creation did not return a usable id/name for '${cp_name}'."
+    exit 1
+  fi
+
+  echo "$cp_display_name|$cp_id|created"
 }
 
 sync_plugin_schema() {
@@ -167,12 +216,14 @@ set -a
 source .env
 set +a
 
-if [[ -z "${KONNECT_TOKEN:-}" || -z "${KONNECT_CONTROL_PLANE_NAME:-}" ]]; then
-  fail "KONNECT_TOKEN or KONNECT_CONTROL_PLANE_NAME is not set in .env"
+if [[ -z "${KONNECT_TOKEN:-}" ]]; then
+  fail "KONNECT_TOKEN is not set in .env"
   exit 1
 fi
 
 KONNECT_API_URL="${KONNECT_API_URL:-https://us.api.konghq.com}"
+KONNECT_CONTROL_PLANE_NAME="${KONNECT_CONTROL_PLANE_NAME:-AA Demo}"
+KONNECT_CONTROL_PLANE_CLUSTER_TYPE="${KONNECT_CONTROL_PLANE_CLUSTER_TYPE:-CLUSTER_TYPE_HYBRID}"
 
 echo
 echo "${CYAN}========================================${RESET}"
@@ -183,10 +234,20 @@ step "Starting local stack with Opik"
 docker compose --profile opik up -d --build 
 ok "Docker services are up"
 
-step "Resolving Konnect control plane"
-CONTROL_PLANE_ID="$(resolve_control_plane_id)"
+step "Ensuring Konnect control plane"
+CONTROL_PLANE_INFO="$(ensure_control_plane "${KONNECT_CONTROL_PLANE_NAME}")"
+CONTROL_PLANE_NAME_RESOLVED="${CONTROL_PLANE_INFO%%|*}"
+CONTROL_PLANE_INFO_REMAINDER="${CONTROL_PLANE_INFO#*|}"
+CONTROL_PLANE_ID="${CONTROL_PLANE_INFO_REMAINDER%%|*}"
+CONTROL_PLANE_STATUS="${CONTROL_PLANE_INFO_REMAINDER##*|}"
+KONNECT_CONTROL_PLANE_NAME="${CONTROL_PLANE_NAME_RESOLVED}"
 ok "Using control plane '${KONNECT_CONTROL_PLANE_NAME}'"
 info "Control plane id: ${CONTROL_PLANE_ID}"
+if [[ "${CONTROL_PLANE_STATUS}" == "created" ]]; then
+  ok "Konnect control plane created"
+else
+  info "Konnect control plane already existed"
+fi
 
 step "Syncing custom plugin schemas"
 sync_plugin_schema "$CONTROL_PLANE_ID" "prompt-capture" "kong/plugins/prompt-capture/schema.lua"
