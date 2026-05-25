@@ -634,6 +634,80 @@ services:
                   output_cost: 2.50
               weight: 50
 
+  - name: ai-orchestrator-semantic-load-balance-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-semantic-load-balance-demo-chat-route
+        paths:
+          - /ai/orchestrator-semantic-load-balance-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          embeddings:
+            auth:
+              header_name: Authorization
+              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+            model:
+              provider: openai
+              name: text-embedding-3-small
+          vectordb:
+            dimensions: 1024
+            distance_metric: cosine
+            strategy: redis
+            threshold: 0.55
+            redis:
+              host: ${{ env "DECK_REDIS_HOST" }}
+              port: 6379
+          balancer:
+            algorithm: semantic
+            connect_timeout: 60000
+            read_timeout: 60000
+            retries: 1
+            slots: 10000
+            write_timeout: 60000
+          genai_category: text/generation
+          llm_format: openai
+          max_request_body_size: 8192
+          model_name_header: true
+          response_streaming: allow
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+              description: Specialist in enterprise support operations, incident triage, billing disputes, customer escalations, operational risk updates, and concise action plans.
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
+              description: Specialist in creative marketing, launch messaging, campaign concepts, brand voice, event teasers, storytelling, and polished promotional copy.
+
   - name: ai-orchestrator-token-demo-service
     url: https://api.openai.com
     routes:
@@ -700,6 +774,37 @@ services:
                   2) State customer posture explicitly and keep the tone enterprise-safe.
                   3) Mention regulatory or data residency considerations when they are relevant.
                   4) End with a confidence score and a named owner.
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-prompt-enhance-plain-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-enhance-plain-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-enhance-plain-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
       - name: ai-proxy-advanced
         config:
           targets:

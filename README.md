@@ -676,8 +676,11 @@ The AI routes are split by caller type:
   - primary target: `gpt-4o-mini`
   - secondary failover target: `gemini-2.5-flash`
 - `/ai/orchestrator-failover-demo/chat/completions`
-  - used only for the orchestrator failover scenario
-  - used for current failover experimentation with Kong `ai-proxy-advanced`
+  - used by the `Load Balancing -> LLM Failover` subscene
+  - configured for Kong `ai-proxy-advanced` priority failover
+- `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
+  - used by the `Load Balancing -> Semantic Load Balancing` subscene
+  - configured for Kong `ai-proxy-advanced` semantic routing with Redis-backed embeddings
 - `/ai/orchestrator-token-demo/chat/completions`
   - used only for the AI token limit scenario
   - protected by Kong `ai-rate-limiting-advanced`
@@ -883,7 +886,7 @@ The UI includes a `Governance Scenario` selector. The customer escalation story 
 The route path is selected by the `governance_scenario` field sent in the `Play` request. In the orchestrator, `PlayRequest.governance_scenario` is mapped by `ai_route_for_scenario()` in [services/orchestrator/app.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py):
 
 - `normal` -> `/ai/orchestrator/chat/completions`
-- `llm_failover` -> `/ai/orchestrator-failover-demo/chat/completions`
+- `load_balancing` -> `/ai/orchestrator-failover-demo/chat/completions` or `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
 - `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
 - `prompt_compression` -> `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions` or `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
@@ -907,15 +910,21 @@ Behind the scenes:
 
 This mode is meant to show the standard happy-path behavior.
 
-### 2. LLM Failover
+### 2. Load Balancing
 
-This scenario demonstrates what happens when the orchestrator's primary model path fails.
+This parent scene has two focused subscenes:
+
+- `LLM Failover`
+- `Semantic Load Balancing`
+
+#### LLM Failover
+
+This subscene demonstrates what happens when the orchestrator's primary model path fails.
 
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-failover-demo/chat/completions`
 - the route is configured to experiment with Kong-managed failover behavior in `ai-proxy-advanced`
-- the support and success sub-agents still use their normal Gemini sub-agent route
 
 Important note:
 
@@ -928,7 +937,24 @@ Important note:
 - in this repo/runtime, the strongest finding is that target-specific `upstream_url` handling appears to interfere with failover target isolation
 - specifically, when the primary target uses `upstream_url`, Kong may still log and fail the fallback target against that same effective upstream
 - one experimental configuration only started working when the OpenAI target's `upstream_url` was pointed at a Gemini endpoint, which strongly suggests unexpected `upstream_url` behavior rather than correct target failover semantics
-- current conclusion: this is likely an `ai-proxy-advanced` bug or limitation in per-target `upstream_url` handling during failover, and the failover scene should be treated as experimental unless verified again against a working Kong-supported provider-native failure
+- current conclusion: this is likely an `ai-proxy-advanced` bug or limitation in per-target `upstream_url` handling during failover, and the failover subscene should be treated as experimental unless verified again against a working Kong-supported provider-native failure
+
+#### Semantic Load Balancing
+
+This subscene demonstrates prompt-aware model routing rather than failure recovery.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
+- Kong uses `ai-proxy-advanced` with `balancer.algorithm: semantic`
+- Kong embeds the request prompt with `text-embedding-3-small`
+- Kong compares the prompt meaning against target descriptions stored through the semantic balancer and Redis
+- the demo uses two editable prompt presets:
+  - `Support / Operational`
+  - `Creative / Marketing`
+- the route then selects the most relevant target:
+  - `OpenAI 4o mini` for support / operational prompts
+  - `Gemini 2.5 Flash` for creative / marketing prompts
 
 ### 3. AI Token Limit
 
@@ -959,19 +985,19 @@ Important note:
 
 ### 4. Prompt Decorator
 
-This scenario demonstrates how Kong prompt decoration can materially improve and govern the orchestrator output.
+This scenario demonstrates how Kong prompt decoration can materially improve and govern the output on a focused probe route.
 
 Behind the scenes:
 
-- the orchestrator switches to `/ai/orchestrator-prompt-enhance-demo/chat/completions`
-- the normal orchestrator route does not decorate prompts
-- this scenario route applies `ai-prompt-decorator`
+- the UI exposes one top-level `Prompt Decorator` scenario with two explicit sub-scenes:
+  - `Without Decorator`
+  - `With Decorator`
+- both sub-scenes use the same editable input prompt
+- the plain route uses `/ai/orchestrator-prompt-enhance-plain-demo/chat/completions`
+- the decorated route uses `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+- only the decorated route applies `ai-prompt-decorator`
 - the application prompt stays the same, but Kong injects extra enterprise-governance instructions before the model sees it
-- the trace shows policy events for:
-  - the original prompt
-  - the Kong-decorated prompt
-  - the resulting LLM output
-- the sub-agents still run through their normal sub-agent Gemini route
+- the focused probe does not run the full MCP/sub-agent orchestration flow
 
 This mode is useful for showing that prompt shaping and output governance can happen in the gateway layer rather than inside application code.
 
@@ -984,18 +1010,11 @@ The current prompt decorator policy configured in [kong/deck/kong.yaml](/Users/s
 - `Mention regulatory or data residency considerations when they are relevant.`
 - `End with a confidence score and a named owner.`
 
-In the trace tree, this appears as a `Decorator policy applied` step nested under the relevant orchestrator LLM call. Clicking that row shows:
+In the trace tree, the decorated run appears with a `Decorator policy applied` step nested under the probe LLM call. Clicking that row shows:
 
 - the original prompt sent by the application
 - the policy text Kong injected
 - the decorated system and user prompts that Kong forwarded upstream
-
-The prompt decorator scenario route uses this enhancement policy:
-
-- `Respond in an executive escalation format with sections for Situation, Risk, Actions, and Next Checkpoint.`
-- `State customer posture explicitly and keep the tone enterprise-safe.`
-- `Mention regulatory or data residency considerations when they are relevant.`
-- `End with a confidence score and a named owner.`
 
 ### 5. Prompt Compression
 

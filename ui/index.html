@@ -296,12 +296,12 @@
                 <span>Normal</span>
               </label>
               <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="llm_failover" />
-                <span>LLM Failover</span>
+                <input type="radio" name="scenario_choice" value="load_balancing" />
+                <span>Load Balancing</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="token_limit" />
-                <span>AI Token Limit</span>
+                <span>AI Token Rate Limit</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="prompt_enhancement" />
@@ -363,7 +363,11 @@
               <input name="incident_id" value="INC-1007" />
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
+            <input type="hidden" name="load_balancing_mode" value="failover" />
+            <input type="hidden" name="load_balancing_prompt_preset" value="support_operational" />
+            <input type="hidden" name="token_limit_mode" value="consumer" />
             <input type="hidden" name="semantic_cache_step" value="single" />
+            <input type="hidden" name="prompt_enhancement_mode" value="decorated" />
             <input type="hidden" name="prompt_compression_mode" value="rate" />
             <input type="hidden" name="prompt_compression_value" value="50" />
             <input type="hidden" name="semantic_guard_mode" value="credentials" />
@@ -371,6 +375,66 @@
             <input type="hidden" name="rag_mode" value="before" />
             <input type="hidden" name="lakera_mode" value="content_moderation" />
           </form>
+          <section id="load-balancing-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">Load Balancing Mode</span>
+              <p class="probe-copy">Use a focused probe for failover or semantic routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes to the most relevant model based on the prompt itself.</p>
+              <div class="preset-options" id="load-balancing-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="load_balancing_mode_choice" value="failover" checked />
+                  <span>LLM Failover</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="load_balancing_mode_choice" value="semantic" />
+                  <span>Semantic Load Balancing</span>
+                </label>
+              </div>
+              <div id="load-balancing-preset-options" class="preset-options" hidden>
+                <label class="preset-option">
+                  <input type="radio" name="load_balancing_prompt_preset_choice" value="support_operational" checked />
+                  <span>Support / Operational</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="load_balancing_prompt_preset_choice" value="creative_marketing" />
+                  <span>Creative / Marketing</span>
+                </label>
+              </div>
+              <textarea id="load-balancing-payload" class="probe-payload" rows="10"></textarea>
+              <button id="load-balancing-send-button" class="primary" type="button">Send Load Balancing Request</button>
+            </article>
+          </section>
+          <section id="token-limit-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">AI Token Rate Limit</span>
+              <p class="probe-copy">This focused probe sends the same editable prompt twice on the rate-limited route so the first call can pass and the second can be blocked by Kong at the consumer level.</p>
+              <div class="preset-options" id="token-limit-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="token_limit_mode_choice" value="consumer" checked />
+                  <span>Consumer Token Rate Limit</span>
+                </label>
+              </div>
+              <textarea id="token-limit-payload" class="probe-payload" rows="10"></textarea>
+              <button id="token-limit-send-button" class="primary" type="button">Send Token Rate Limit Request</button>
+            </article>
+          </section>
+          <section id="prompt-enhancement-controls" class="probe-controls" hidden>
+            <article class="probe-card">
+              <span class="probe-label">Decorator Mode</span>
+              <p class="probe-copy">Use the same editable prompt against a plain route or a Kong-decorated route to highlight the difference in output structure and tone.</p>
+              <div class="preset-options" id="prompt-enhancement-mode-options">
+                <label class="preset-option">
+                  <input type="radio" name="prompt_enhancement_mode_choice" value="plain" checked />
+                  <span>Without Decorator</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="prompt_enhancement_mode_choice" value="decorated" />
+                  <span>With Decorator</span>
+                </label>
+              </div>
+              <textarea id="prompt-enhancement-payload" class="probe-payload" rows="10"></textarea>
+              <button id="prompt-enhancement-send-button" class="primary" type="button">Send Prompt Decorator Request</button>
+            </article>
+          </section>
           <section id="prompt-compression-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label">Compression Mode</span>
