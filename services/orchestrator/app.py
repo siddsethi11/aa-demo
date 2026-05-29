@@ -1619,6 +1619,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         final_response = {
             "headline": "AI token limit probe completed",
             "governance_scenario": scenario,
+            "policy_outcome": "blocked" if blocked_error else "not_blocked",
             "token_limit_probe": {
                 "request_payload": request.model_dump(),
                 "original_prompt": prompts,
