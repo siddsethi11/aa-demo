@@ -13,28 +13,28 @@
         <div class="brand-hero">
           <img class="brand-mark" src="/assets/logo.png?v=20260512-brand-1" alt="Kong logo" />
           <div class="brand-copy">
-            <p class="eyebrow">Kong AI Gateway Demo</p>
-            <h1>Kong Unified Governance</h1>
-            <p class="hero-copy">
+            <p class="eyebrow" data-i18n="topbar.eyebrow">Kong AI Gateway Demo</p>
+            <h1 data-i18n="topbar.brand">Kong Unified Governance</h1>
+            <p class="hero-copy" data-i18n="topbar.heroCopy">
               Kong governs the full data path: API traffic, events, agent orchestration, LLM
               routing, and MCP tool access all pass through the gateway with live trace visibility.
             </p>
             <div class="hero-highlights" aria-label="Kong governance highlights">
-              <span class="hero-chip">AI routing and failover</span>
-              <span class="hero-chip">MCP tool exposure</span>
-              <span class="hero-chip">Agent AuthN/AuthZ</span>
-              <span class="hero-chip">Semantic and PII controls</span>
-              <span class="hero-chip">Live observability</span>
+              <span class="hero-chip" data-i18n="topbar.chip.routing">AI routing and failover</span>
+              <span class="hero-chip" data-i18n="topbar.chip.mcp">MCP tool exposure</span>
+              <span class="hero-chip" data-i18n="topbar.chip.authn">Agent AuthN/AuthZ</span>
+              <span class="hero-chip" data-i18n="topbar.chip.controls">Semantic and PII controls</span>
+              <span class="hero-chip" data-i18n="topbar.chip.observability">Live observability</span>
             </div>
           </div>
         </div>
         <div class="topbar-actions">
-          <button id="scene-button" class="secondary scene-launch" type="button">Scenes</button>
-          <button id="graph-button" class="secondary" type="button">View Diagrams</button>
-          <button id="reset-button" class="secondary" type="button">Reset Scene</button>
-          <button id="reset-observability-button" class="secondary" type="button">Reset Observability</button>
-          <button id="output-button" class="secondary" type="button">View Run Output</button>
-          <button id="help-button" class="help-button" type="button" aria-label="About this demo">?</button>
+          <button id="scene-button" class="secondary scene-launch" type="button" data-i18n="topbar.scenes">Scenes</button>
+          <button id="graph-button" class="secondary" type="button" data-i18n="topbar.viewDiagrams">View Diagrams</button>
+          <button id="reset-button" class="secondary" type="button" data-i18n="topbar.resetScene">Reset Scene</button>
+          <button id="reset-observability-button" class="secondary" type="button" data-i18n="topbar.resetObservability">Reset Observability</button>
+          <button id="output-button" class="secondary" type="button" data-i18n="topbar.viewRunOutput">View Run Output</button>
+          <button id="help-button" class="help-button" type="button" aria-label="About this demo" data-i18n-aria-label="topbar.helpAria">?</button>
         </div>
       </header>
 
@@ -42,39 +42,39 @@
         <aside class="trace-sidebar panel-dark">
           <div class="panel-head">
             <div>
-              <p class="panel-kicker">Execution Tree</p>
-              <h2>Run Trace</h2>
+              <p class="panel-kicker" data-i18n="sidebar.kicker">Execution Tree</p>
+              <h2 data-i18n="sidebar.title">Run Trace</h2>
             </div>
-            <span class="run-state" id="run-state">idle</span>
+            <span class="run-state" id="run-state" data-i18n="status.idle">idle</span>
           </div>
           <div class="trace-summary">
             <div>
-              <span class="label">Run ID</span>
+              <span class="label" data-i18n="sidebar.runId">Run ID</span>
               <strong id="run-id-label">not started</strong>
             </div>
             <div>
-              <span class="label">Context ID</span>
+              <span class="label" data-i18n="sidebar.contextId">Context ID</span>
               <strong id="context-id-label">not started</strong>
             </div>
             <div>
-              <span class="label">Last Activity</span>
+              <span class="label" data-i18n="sidebar.lastActivity">Last Activity</span>
               <strong id="last-run">not started</strong>
             </div>
             <label class="trace-run-select" for="run-history-select">
-              <span class="label">Recent Runs</span>
+              <span class="label" data-i18n="sidebar.recentRuns">Recent Runs</span>
               <select id="run-history-select">
-                <option value="">No saved runs</option>
+                <option value="" data-i18n="sidebar.noSavedRuns">No saved runs</option>
               </select>
             </label>
           </div>
           <div class="trace-tree" id="trace-tree">
             <div class="trace-empty">
-              <h3>No run yet</h3>
-              <p>Open Scenes to choose the demo input and start the run.</p>
+              <h3 data-i18n="sidebar.emptyTitle">No run yet</h3>
+              <p data-i18n="sidebar.emptyCopy">Open Scenes to choose the demo input and start the run.</p>
             </div>
           </div>
           <div class="tree-actions">
-            <button id="clear-log" class="ghost" type="button">Clear Trace</button>
+            <button id="clear-log" class="ghost" type="button" data-i18n="sidebar.clearTrace">Clear Trace</button>
           </div>
         </aside>
 
@@ -82,20 +82,20 @@
           <section class="gateway-stage panel-dark">
             <div class="panel-head">
               <div>
-                <p class="panel-kicker">Live Topology</p>
-                <h2>Traffic Through Kong</h2>
+                <p class="panel-kicker" data-i18n="stage.kicker">Live Topology</p>
+                <h2 data-i18n="stage.title">Traffic Through Kong</h2>
               </div>
               <span class="status-dot" id="scene-status"></span>
             </div>
             <div class="stage-banner">
-              <span class="label">Current Stage</span>
-              <strong id="flow-stage-title">Waiting for a run</strong>
-              <p id="flow-stage-detail">Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths.</p>
+              <span class="label" data-i18n="stage.currentStage">Current Stage</span>
+              <strong id="flow-stage-title" data-i18n="stage.flowTitle">Waiting for a run</strong>
+              <p id="flow-stage-detail" data-i18n="stage.flowDetail">Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths.</p>
             </div>
 
             <div class="topology">
               <div class="topology-activity" id="topology-activity" hidden>
-                <span class="topology-activity-label">Active MCP Tool</span>
+                <span class="topology-activity-label" data-i18n="stage.activeMcpTool">Active MCP Tool</span>
                 <strong id="topology-activity-name">-</strong>
               </div>
               <svg class="topology-lines" viewBox="0 0 1400 1120" preserveAspectRatio="none" aria-hidden="true">
@@ -117,115 +117,115 @@
               </svg>
 
               <article class="topology-node user-node" data-node="user">
-                <button class="node-info-button" data-info-target="user" type="button" aria-label="View User Request details">+</button>
-                <span class="node-label">Entry</span>
-                <h3>User Request</h3>
-                <p>Play starts one fixed escalation workflow.</p>
+                <button class="node-info-button" data-info-target="user" type="button" aria-label="View User Request details" data-i18n-aria-label="nodes.user.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.user.label">Entry</span>
+                <h3 data-i18n="nodes.user.title">User Request</h3>
+                <p data-i18n="nodes.user.desc">Play starts one fixed escalation workflow.</p>
               </article>
 
               <article class="topology-node ui-node" data-node="ui">
-                <button class="node-info-button" data-info-target="ui" type="button" aria-label="View Dashboard details">+</button>
-                <span class="node-label">Hosted UI</span>
-                <h3>Dashboard</h3>
-                <p>Served through Kong. Shows live path activation and trace state.</p>
+                <button class="node-info-button" data-info-target="ui" type="button" aria-label="View Dashboard details" data-i18n-aria-label="nodes.ui.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.ui.label">Hosted UI</span>
+                <h3 data-i18n="nodes.ui.title">Dashboard</h3>
+                <p data-i18n="nodes.ui.desc">Served through Kong. Shows live path activation and trace state.</p>
               </article>
 
               <article class="topology-node kong-node gateway-core" data-node="kong">
-                <button id="kong-policy-button" class="node-info-button kong-info-button" data-info-target="kong" type="button" aria-label="View Kong Gateway details">+</button>
-                <span class="node-label">Gateway Core</span>
-                <h3>Kong Gateway</h3>
-                <p>Agent routing (A2A), LLM routing, Auth, ACLs, and MCP tool exposure.</p>
+                <button id="kong-policy-button" class="node-info-button kong-info-button" data-info-target="kong" type="button" aria-label="View Kong Gateway details" data-i18n-aria-label="nodes.kong.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.kong.label">Gateway Core</span>
+                <h3 data-i18n="nodes.kong.title">Kong Gateway</h3>
+                <p data-i18n="nodes.kong.desc">Agent routing (A2A), LLM routing, Auth, ACLs, and MCP tool exposure.</p>
               </article>
 
               <article class="topology-node orchestrator-node" data-node="orchestrator">
-                <button class="node-info-button" data-info-target="orchestrator" type="button" aria-label="View Orchestrator details">+</button>
-                <span class="node-label">LangGraph</span>
-                <h3>Orchestrator</h3>
-                <p>Gets context, calls its LLM, invokes support then success, and assembles the final brief.</p>
+                <button class="node-info-button" data-info-target="orchestrator" type="button" aria-label="View Orchestrator details" data-i18n-aria-label="nodes.orchestrator.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.orchestrator.label">LangGraph</span>
+                <h3 data-i18n="nodes.orchestrator.title">Orchestrator</h3>
+                <p data-i18n="nodes.orchestrator.desc">Gets context, calls its LLM, invokes support then success, and assembles the final brief.</p>
               </article>
 
               <article class="topology-node support-node" data-node="support-agent">
-                <button class="node-info-button" data-info-target="support-agent" type="button" aria-label="View Support Agent details">+</button>
-                <span class="node-label">Sub-agent</span>
-                <h3>Support Agent</h3>
-                <p>Uses incident and runbook tools, then summarizes the technical posture.</p>
+                <button class="node-info-button" data-info-target="support-agent" type="button" aria-label="View Support Agent details" data-i18n-aria-label="nodes.support.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.support.label">Sub-agent</span>
+                <h3 data-i18n="nodes.support.title">Support Agent</h3>
+                <p data-i18n="nodes.support.desc">Uses incident and runbook tools, then summarizes the technical posture.</p>
               </article>
 
               <article class="topology-node success-node" data-node="success-agent">
-                <button class="node-info-button" data-info-target="success-agent" type="button" aria-label="View Success Agent details">+</button>
-                <span class="node-label">Sub-agent</span>
-                <h3>Success Agent</h3>
-                <p>Uses reply and task tools, then produces the customer action plan.</p>
+                <button class="node-info-button" data-info-target="success-agent" type="button" aria-label="View Success Agent details" data-i18n-aria-label="nodes.success.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.success.label">Sub-agent</span>
+                <h3 data-i18n="nodes.success.title">Success Agent</h3>
+                <p data-i18n="nodes.success.desc">Uses reply and task tools, then produces the customer action plan.</p>
               </article>
 
               <article class="topology-node openai-node" data-node="openai">
-                <button class="node-info-button" data-info-target="openai" type="button" aria-label="View OpenAI model details">+</button>
-                <span class="node-label">Primary</span>
-                <h3>OpenAI 4o mini</h3>
-                <p>Primary orchestrator model via AI Proxy Advanced.</p>
+                <button class="node-info-button" data-info-target="openai" type="button" aria-label="View OpenAI model details" data-i18n-aria-label="nodes.openai.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.openai.label">Primary</span>
+                <h3 data-i18n="nodes.openai.title">OpenAI 4o mini</h3>
+                <p data-i18n="nodes.openai.desc">Primary orchestrator model via AI Proxy Advanced.</p>
               </article>
 
               <article class="topology-node gemini-node" data-node="gemini">
-                <button class="node-info-button" data-info-target="gemini" type="button" aria-label="View Gemini model details">+</button>
-                <span class="node-label">Failover / Shared</span>
-                <h3>Gemini 2.5 Flash</h3>
-                <p>Orchestrator failover and the sub-agent LLM route.</p>
+                <button class="node-info-button" data-info-target="gemini" type="button" aria-label="View Gemini model details" data-i18n-aria-label="nodes.gemini.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.gemini.label">Failover / Shared</span>
+                <h3 data-i18n="nodes.gemini.title">Gemini 2.5 Flash</h3>
+                <p data-i18n="nodes.gemini.desc">Orchestrator failover and the sub-agent LLM route.</p>
               </article>
 
               <article class="topology-node judge-node scenario-optional" data-node="judge-model">
-                <button class="node-info-button" data-info-target="judge-model" type="button" aria-label="View Judge model details">+</button>
-                <span class="node-label">Judge</span>
-                <h3>Gemini 2.5 Flash</h3>
-                <p>Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.</p>
+                <button class="node-info-button" data-info-target="judge-model" type="button" aria-label="View Judge model details" data-i18n-aria-label="nodes.judge.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.judge.label">Judge</span>
+                <h3 data-i18n="nodes.judge.title">Gemini 2.5 Flash</h3>
+                <p data-i18n="nodes.judge.desc">Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.</p>
               </article>
 
               <article class="topology-node redis-node scenario-optional" data-node="redis">
-                <button class="node-info-button" data-info-target="redis" type="button" aria-label="View Redis details">+</button>
-                <span class="node-label">Vector Store</span>
-                <h3>Redis Vector DB</h3>
-                <p>Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.</p>
+                <button class="node-info-button" data-info-target="redis" type="button" aria-label="View Redis details" data-i18n-aria-label="nodes.redis.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.redis.label">Vector Store</span>
+                <h3 data-i18n="nodes.redis.title">Redis Vector DB</h3>
+                <p data-i18n="nodes.redis.desc">Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings.</p>
               </article>
 
               <article class="topology-node lakera-node scenario-optional" data-node="lakera">
-                <button class="node-info-button" data-info-target="lakera" type="button" aria-label="View Lakera details">+</button>
-                <span class="node-label">Policy Guard</span>
-                <h3>Lakera</h3>
-                <p>Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.</p>
+                <button class="node-info-button" data-info-target="lakera" type="button" aria-label="View Lakera details" data-i18n-aria-label="nodes.lakera.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.lakera.label">Policy Guard</span>
+                <h3 data-i18n="nodes.lakera.title">Lakera</h3>
+                <p data-i18n="nodes.lakera.desc">Used by Kong AI Lakera Guard to inspect prompts before they can reach the model.</p>
               </article>
 
               <article class="topology-node pii-node scenario-optional" data-node="pii-service">
-                <button class="node-info-button" data-info-target="pii-service" type="button" aria-label="View AI PII Service details">+</button>
-                <span class="node-label">Sanitization</span>
-                <h3>AI PII Service</h3>
-                <p>Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.</p>
+                <button class="node-info-button" data-info-target="pii-service" type="button" aria-label="View AI PII Service details" data-i18n-aria-label="nodes.pii.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.pii.label">Sanitization</span>
+                <h3 data-i18n="nodes.pii.title">AI PII Service</h3>
+                <p data-i18n="nodes.pii.desc">Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path.</p>
               </article>
 
               <article class="topology-node compress-node scenario-optional" data-node="compressor">
-                <button class="node-info-button" data-info-target="compressor" type="button" aria-label="View AI Prompt Compressor details">+</button>
-                <span class="node-label">Compression</span>
-                <h3>AI Compress Service</h3>
-                <p>Used by Kong AI Prompt Compressor to shrink verbose prompts before the model call.</p>
+                <button class="node-info-button" data-info-target="compressor" type="button" aria-label="View AI Prompt Compressor details" data-i18n-aria-label="nodes.compress.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.compress.label">Compression</span>
+                <h3 data-i18n="nodes.compress.title">AI Compress Service</h3>
+                <p data-i18n="nodes.compress.desc">Used by Kong AI Prompt Compressor to shrink verbose prompts before the model call.</p>
               </article>
 
               <article class="topology-node observability-node telemetry-node" data-node="observability">
-                <button class="node-info-button" data-info-target="observability" type="button" aria-label="View Observability details">+</button>
-                <span class="node-label">Observability</span>
-                <h3>Grafana / Loki</h3>
-                <p>Receives Kong gateway logs for live metrics, queries, and dashboard panels.</p>
+                <button class="node-info-button" data-info-target="observability" type="button" aria-label="View Observability details" data-i18n-aria-label="nodes.observability.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.observability.label">Observability</span>
+                <h3 data-i18n="nodes.observability.title">Grafana / Loki</h3>
+                <p data-i18n="nodes.observability.desc">Receives Kong gateway logs for live metrics, queries, and dashboard panels.</p>
               </article>
 
               <article class="topology-node mcp-node" data-node="mcp">
-                <button class="node-info-button" data-info-target="mcp" type="button" aria-label="View MCP Tools details">+</button>
-                <span class="node-label">Tool Plane</span>
-                <h3>MCP Tools</h3>
-                <p>Kong exposes the backing REST API as tools, publishes the server in Konnect MCP Registry, and filters access per consumer group.</p>
+                <button class="node-info-button" data-info-target="mcp" type="button" aria-label="View MCP Tools details" data-i18n-aria-label="nodes.mcp.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.mcp.label">Tool Plane</span>
+                <h3 data-i18n="nodes.mcp.title">MCP Tools</h3>
+                <p data-i18n="nodes.mcp.desc">Kong exposes the backing REST API as tools, publishes the server in Konnect MCP Registry, and filters access per consumer group.</p>
               </article>
 
               <article class="topology-node backend-node" data-node="backend-api">
-                <button class="node-info-button" data-info-target="backend-api" type="button" aria-label="View Backend APIs details">+</button>
-                <span class="node-label">Upstream</span>
-                <h3>Backend APIs</h3>
-                <p>Mock account, incident, runbook, draft, and task endpoints reached through Kong.</p>
+                <button class="node-info-button" data-info-target="backend-api" type="button" aria-label="View Backend APIs details" data-i18n-aria-label="nodes.backend.infoAria">+</button>
+                <span class="node-label" data-i18n="nodes.backend.label">Upstream</span>
+                <h3 data-i18n="nodes.backend.title">Backend APIs</h3>
+                <p data-i18n="nodes.backend.desc">Mock account, incident, runbook, draft, and task endpoints reached through Kong.</p>
               </article>
             </div>
           </section>
@@ -233,24 +233,24 @@
           <section class="detail-panel panel-dark">
             <div class="panel-head">
               <div>
-                <p class="panel-kicker">Selected Step</p>
-                <h2 id="detail-title">No step selected</h2>
+                <p class="panel-kicker" data-i18n="detail.kicker">Selected Step</p>
+                <h2 id="detail-title" data-i18n="detail.noStep">No step selected</h2>
               </div>
             </div>
             <div class="detail-meta" id="detail-meta">
-              <span class="meta-chip">Click a trace row</span>
+              <span class="meta-chip" data-i18n="detail.clickRow">Click a trace row</span>
             </div>
           <div class="detail-block">
-              <strong>Summary</strong>
-              <p id="detail-summary">The selected trace step will show timing, request input, and output payload here.</p>
+              <strong data-i18n="detail.summary">Summary</strong>
+              <p id="detail-summary" data-i18n="detail.summaryCopy">The selected trace step will show timing, request input, and output payload here.</p>
             </div>
             <div class="detail-io">
               <div class="detail-code">
-                <strong>Input</strong>
+                <strong data-i18n="detail.input">Input</strong>
                 <pre id="detail-input">-</pre>
               </div>
               <div class="detail-code">
-                <strong>Output</strong>
+                <strong data-i18n="detail.output">Output</strong>
                 <pre id="detail-output">-</pre>
               </div>
             </div>
@@ -262,104 +262,104 @@
         <div class="modal-shell">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">Scene</p>
-              <h2>Customer Escalation Triage</h2>
+              <p class="eyebrow" data-i18n="scene.eyebrow">Scene</p>
+              <h2 data-i18n="scene.title">Customer Escalation Triage</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="scene-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="scene-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy">
+          <p class="modal-copy" data-i18n="scene.copy">
             A renewal-risk account reports a billing issue and a workflow sync issue. The UI stays
             focused on the topology and trace, while the form lives here in the scene popup.
           </p>
           <section class="scene-presets" hidden>
-            <span class="scene-presets-label">Choose a preset</span>
+            <span class="scene-presets-label" data-i18n="scene.choosePreset">Choose a preset</span>
             <div class="preset-options" id="preset-options">
               <label class="preset-option">
                 <input type="radio" name="scene_preset" value="acme_default" checked />
-                <span>Acme Health</span>
+                <span data-i18n="scene.preset.acme">Acme Health</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scene_preset" value="northwind_exports" />
-                <span>Northwind Logistics</span>
+                <span data-i18n="scene.preset.northwind">Northwind Logistics</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scene_preset" value="contoso_peak" />
-                <span>Contoso Retail</span>
+                <span data-i18n="scene.preset.contoso">Contoso Retail</span>
               </label>
             </div>
           </section>
           <section class="scene-presets">
-            <span class="scene-presets-label scene-presets-label-highlight">Choose a governance scenario</span>
+            <span class="scene-presets-label scene-presets-label-highlight" data-i18n="scene.chooseScenario">Choose a governance scenario</span>
             <div class="preset-options" id="scenario-options">
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="normal" checked />
-                <span>Normal</span>
+                <span data-i18n="scenario.normal">Normal</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="load_balancing" />
-                <span>Load Balancing</span>
+                <span data-i18n="scenario.load_balancing">Load Balancing</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="token_limit" />
-                <span>AI Token Rate Limit</span>
+                <span data-i18n="scenario.token_limit">AI Token Rate Limit</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="prompt_enhancement" />
-                <span>Prompt Decorator</span>
+                <span data-i18n="scenario.prompt_enhancement">Prompt Decorator</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="prompt_compression" />
-                <span>Prompt Compression</span>
+                <span data-i18n="scenario.prompt_compression">Prompt Compression</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="semantic_guard" />
-                <span>Semantic Guard</span>
+                <span data-i18n="scenario.semantic_guard">Semantic Guard</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="semantic_cache" />
-                <span>Semantic Cache</span>
+                <span data-i18n="scenario.semantic_cache">Semantic Cache</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="llm_as_judge" />
-                <span>LLM as Judge</span>
+                <span data-i18n="scenario.llm_as_judge">LLM as Judge</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="pii_sanitizer" />
-                <span>PII Sanitization</span>
+                <span data-i18n="scenario.pii_sanitizer">PII Sanitization</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="rag" />
-                <span>RAG</span>
+                <span data-i18n="scenario.rag">RAG</span>
               </label>
               <label class="preset-option">
                 <input type="radio" name="scenario_choice" value="lakera_guard" />
-                <span>Lakera Policy Guard</span>
+                <span data-i18n="scenario.lakera_guard">Lakera Policy Guard</span>
               </label>
             </div>
           </section>
           <form id="play-form" class="form-grid">
             <label>
-              Customer ID
+              <span data-i18n="form.customerId">Customer ID</span>
               <input name="customer_id" value="cust_acme" />
             </label>
             <label>
-              Account Name
+              <span data-i18n="form.accountName">Account Name</span>
               <input name="account_name" value="Acme Health" />
             </label>
             <label>
-              Product Issue
+              <span data-i18n="form.productIssue">Product Issue</span>
               <input name="product_issue" value="workflow agent sync delays" />
             </label>
             <label>
-              Billing Issue
+              <span data-i18n="form.billingIssue">Billing Issue</span>
               <input name="billing_issue" value="billing overcharge on enterprise add-ons" />
             </label>
             <label class="full">
-              Issue Summary
+              <span data-i18n="form.issueSummary">Issue Summary</span>
               <textarea name="issue_summary">Customer reports a billing dispute and workflow-agent sync delays.</textarea>
             </label>
             <label>
-              Incident ID
+              <span data-i18n="form.incidentId">Incident ID</span>
               <input name="incident_id" value="INC-1007" />
             </label>
             <input type="hidden" name="governance_scenario" value="normal" />
@@ -377,122 +377,122 @@
           </form>
           <section id="load-balancing-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Load Balancing Mode</span>
-              <p class="probe-copy">Use a focused probe for failover or semantic routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes to the most relevant model based on the prompt itself.</p>
+              <span class="probe-label" data-i18n="probe.loadBalancing.label">Load Balancing Mode</span>
+              <p class="probe-copy" data-i18n="probe.loadBalancing.copy">Use a focused probe for failover or semantic routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes to the most relevant model based on the prompt itself.</p>
               <div class="preset-options" id="load-balancing-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_mode_choice" value="failover" checked />
-                  <span>LLM Failover</span>
+                  <span data-i18n="probe.loadBalancing.mode.failover">LLM Failover</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_mode_choice" value="semantic" />
-                  <span>Semantic Load Balancing</span>
+                  <span data-i18n="probe.loadBalancing.mode.semantic">Semantic Load Balancing</span>
                 </label>
               </div>
               <div id="load-balancing-preset-options" class="preset-options" hidden>
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_prompt_preset_choice" value="support_operational" checked />
-                  <span>Support / Operational</span>
+                  <span data-i18n="probe.loadBalancing.preset.support">Support / Operational</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_prompt_preset_choice" value="creative_marketing" />
-                  <span>Creative / Marketing</span>
+                  <span data-i18n="probe.loadBalancing.preset.creative">Creative / Marketing</span>
                 </label>
               </div>
               <textarea id="load-balancing-payload" class="probe-payload" rows="10"></textarea>
-              <button id="load-balancing-send-button" class="primary" type="button">Send Load Balancing Request</button>
+              <button id="load-balancing-send-button" class="primary" type="button" data-i18n="probe.loadBalancing.send">Send Load Balancing Request</button>
             </article>
           </section>
           <section id="token-limit-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">AI Token Rate Limit</span>
-              <p class="probe-copy">This focused probe sends the same editable prompt twice on the rate-limited route so the first call can pass and the second can be blocked by Kong at the consumer level.</p>
+              <span class="probe-label" data-i18n="probe.tokenLimit.label">AI Token Rate Limit</span>
+              <p class="probe-copy" data-i18n="probe.tokenLimit.copy">This focused probe sends the same editable prompt twice on the rate-limited route so the first call can pass and the second can be blocked by Kong at the consumer level.</p>
               <div class="preset-options" id="token-limit-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="token_limit_mode_choice" value="consumer" checked />
-                  <span>Consumer Token Rate Limit</span>
+                  <span data-i18n="probe.tokenLimit.mode.consumer">Consumer Token Rate Limit</span>
                 </label>
               </div>
               <textarea id="token-limit-payload" class="probe-payload" rows="10"></textarea>
-              <button id="token-limit-send-button" class="primary" type="button">Send Token Rate Limit Request</button>
+              <button id="token-limit-send-button" class="primary" type="button" data-i18n="probe.tokenLimit.send">Send Token Rate Limit Request</button>
             </article>
           </section>
           <section id="prompt-enhancement-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Decorator Mode</span>
-              <p class="probe-copy">Use the same editable prompt against a plain route or a Kong-decorated route to highlight the difference in output structure and tone.</p>
+              <span class="probe-label" data-i18n="probe.promptDecorator.label">Decorator Mode</span>
+              <p class="probe-copy" data-i18n="probe.promptDecorator.copy">Use the same editable prompt against a plain route or a Kong-decorated route to highlight the difference in output structure and tone.</p>
               <div class="preset-options" id="prompt-enhancement-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="prompt_enhancement_mode_choice" value="plain" checked />
-                  <span>Without Decorator</span>
+                  <span data-i18n="probe.promptDecorator.mode.plain">Without Decorator</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="prompt_enhancement_mode_choice" value="decorated" />
-                  <span>With Decorator</span>
+                  <span data-i18n="probe.promptDecorator.mode.decorated">With Decorator</span>
                 </label>
               </div>
               <textarea id="prompt-enhancement-payload" class="probe-payload" rows="10"></textarea>
-              <button id="prompt-enhancement-send-button" class="primary" type="button">Send Prompt Decorator Request</button>
+              <button id="prompt-enhancement-send-button" class="primary" type="button" data-i18n="probe.promptDecorator.send">Send Prompt Decorator Request</button>
             </article>
           </section>
           <section id="prompt-compression-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Compression Mode</span>
-              <p class="probe-copy">Choose how Kong AI Prompt Compressor should shrink the request before the model call. The payload below is the verbose prompt sent through Kong.</p>
+              <span class="probe-label" data-i18n="probe.promptCompression.label">Compression Mode</span>
+              <p class="probe-copy" data-i18n="probe.promptCompression.copy">Choose how Kong AI Prompt Compressor should shrink the request before the model call. The payload below is the verbose prompt sent through Kong.</p>
               <div class="preset-options" id="prompt-compression-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="prompt_compression_mode_choice" value="rate" checked />
-                  <span>By Ratio (50%)</span>
+                  <span data-i18n="probe.promptCompression.mode.rate">By Ratio (50%)</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="prompt_compression_mode_choice" value="token_count" />
-                  <span>By Token Count (100)</span>
+                  <span data-i18n="probe.promptCompression.mode.tokenCount">By Token Count (100)</span>
                 </label>
               </div>
               <textarea id="prompt-compression-payload" class="probe-payload" rows="10"></textarea>
-              <button id="prompt-compression-send-button" class="primary" type="button">Send Prompt Compression Request</button>
+              <button id="prompt-compression-send-button" class="primary" type="button" data-i18n="probe.promptCompression.send">Send Prompt Compression Request</button>
             </article>
           </section>
           <section id="semantic-cache-controls" class="semantic-cache-controls" hidden>
             <div class="semantic-cache-grid">
               <article class="semantic-cache-card">
-                <span class="semantic-cache-label">First Request</span>
-                <p class="semantic-cache-copy">Seeds Kong semantic cache for the orchestrator triage prompt.</p>
+                <span class="semantic-cache-label" data-i18n="probe.semanticCache.firstLabel">First Request</span>
+                <p class="semantic-cache-copy" data-i18n="probe.semanticCache.firstCopy">Seeds Kong semantic cache for the orchestrator triage prompt.</p>
                 <textarea id="semantic-cache-seed-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
-                <button id="semantic-cache-seed-button" class="primary" type="button">Send First Request</button>
+                <button id="semantic-cache-seed-button" class="primary" type="button" data-i18n="probe.semanticCache.firstSend">Send First Request</button>
               </article>
               <article class="semantic-cache-card">
-                <span class="semantic-cache-label">Second Request</span>
-                <p class="semantic-cache-copy">Replays the same triage payload so Kong can return a cache hit.</p>
+                <span class="semantic-cache-label" data-i18n="probe.semanticCache.secondLabel">Second Request</span>
+                <p class="semantic-cache-copy" data-i18n="probe.semanticCache.secondCopy">Replays the same triage payload so Kong can return a cache hit.</p>
                 <textarea id="semantic-cache-hit-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
-                <button id="semantic-cache-hit-button" class="primary" type="button">Send Second Request</button>
+                <button id="semantic-cache-hit-button" class="primary" type="button" data-i18n="probe.semanticCache.secondSend">Send Second Request</button>
               </article>
             </div>
             <div class="semantic-cache-utility">
-              <button id="semantic-cache-clear-button" class="secondary semantic-cache-clear" type="button">Clear Semantic Cache</button>
-              <p class="semantic-cache-copy">Clears all semantic cache entries so the next first request starts from a clean cache.</p>
+              <button id="semantic-cache-clear-button" class="secondary semantic-cache-clear" type="button" data-i18n="probe.semanticCache.clear">Clear Semantic Cache</button>
+              <p class="semantic-cache-copy" data-i18n="probe.semanticCache.clearCopy">Clears all semantic cache entries so the next first request starts from a clean cache.</p>
             </div>
           </section>
           <section id="semantic-guard-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Semantic Guard Request</span>
-              <p class="probe-copy">Edit the prompt and run one of the semantic-guard actions. Kong compares embeddings against denied topics before allowing any model call.</p>
+              <span class="probe-label" data-i18n="probe.semanticGuard.label">Semantic Guard Request</span>
+              <p class="probe-copy" data-i18n="probe.semanticGuard.copy">Edit the prompt and run one of the semantic-guard actions. Kong compares embeddings against denied topics before allowing any model call.</p>
               <div class="preset-options" id="semantic-guard-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="semantic_guard_mode_choice" value="safe" checked />
-                  <span>Safe Prompt</span>
+                  <span data-i18n="probe.semanticGuard.mode.safe">Safe Prompt</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="semantic_guard_mode_choice" value="violence_bomb" />
-                  <span>Violence / Bomb</span>
+                  <span data-i18n="probe.semanticGuard.mode.violence">Violence / Bomb</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="semantic_guard_mode_choice" value="employee_info" />
-                  <span>Employee / Confidential Info</span>
+                  <span data-i18n="probe.semanticGuard.mode.employee">Employee / Confidential Info</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="semantic_guard_mode_choice" value="policy_bypass" />
-                  <span>Policy / Access Bypass</span>
+                  <span data-i18n="probe.semanticGuard.mode.policy">Policy / Access Bypass</span>
                 </label>
               </div>
               <textarea id="semantic-guard-payload" class="probe-payload" rows="6"></textarea>
@@ -500,20 +500,20 @@
           </section>
           <section id="llm-judge-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">LLM as Judge Request</span>
-              <p class="probe-copy">Choose the prompt payload to send through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy.</p>
+              <span class="probe-label" data-i18n="probe.llmJudge.label">LLM as Judge Request</span>
+              <p class="probe-copy" data-i18n="probe.llmJudge.copy">Choose the prompt payload to send through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy.</p>
               <div class="preset-options" id="llm-judge-prompt-options">
                 <label class="preset-option">
                   <input type="radio" name="llm_judge_prompt_choice" value="escalation" checked />
-                  <span>Escalation Triage</span>
+                  <span data-i18n="probe.llmJudge.prompt.escalation">Escalation Triage</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="llm_judge_prompt_choice" value="konghq_overview" />
-                  <span>KongHQ Overview</span>
+                  <span data-i18n="probe.llmJudge.prompt.overview">KongHQ Overview</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="llm_judge_prompt_choice" value="konghq_precision" />
-                  <span>Low Score Probe</span>
+                  <span data-i18n="probe.llmJudge.prompt.lowScore">Low Score Probe</span>
                 </label>
               </div>
               <textarea id="llm-judge-payload" class="probe-payload" rows="10"></textarea>
@@ -521,69 +521,69 @@
           </section>
           <section id="pii-sanitizer-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Sanitization Mode</span>
-              <p class="probe-copy">Choose how Kong AI PII Sanitizer should anonymize the request and response. The payload below is the actual PII-rich prompt this scene sends through Kong.</p>
+              <span class="probe-label" data-i18n="probe.pii.label">Sanitization Mode</span>
+              <p class="probe-copy" data-i18n="probe.pii.copy">Choose how Kong AI PII Sanitizer should anonymize the request and response. The payload below is the actual PII-rich prompt this scene sends through Kong.</p>
               <div class="preset-options" id="pii-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="pii_mode_choice" value="placeholder" checked />
-                  <span>Placeholder</span>
+                  <span data-i18n="probe.pii.mode.placeholder">Placeholder</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="pii_mode_choice" value="synthetic" />
-                  <span>Synthetic</span>
+                  <span data-i18n="probe.pii.mode.synthetic">Synthetic</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="pii_mode_choice" value="block" />
-                  <span>Block</span>
+                  <span data-i18n="probe.pii.mode.block">Block</span>
                 </label>
               </div>
               <textarea id="pii-mode-payload" class="probe-payload" rows="10"></textarea>
-              <button id="pii-send-button" class="primary" type="button">Send PII Sanitization Request</button>
+              <button id="pii-send-button" class="primary" type="button" data-i18n="probe.pii.send">Send PII Sanitization Request</button>
             </article>
           </section>
           <section id="rag-controls" class="semantic-cache-controls" hidden>
             <div class="semantic-cache-grid">
               <article class="semantic-cache-card">
-                <span class="semantic-cache-label">Before</span>
-                <p class="semantic-cache-copy">Sends the AtlasFlow support question through the baseline route without Kong RAG injection.</p>
+                <span class="semantic-cache-label" data-i18n="probe.rag.beforeLabel">Before</span>
+                <p class="semantic-cache-copy" data-i18n="probe.rag.beforeCopy">Sends the AtlasFlow support question through the baseline route without Kong RAG injection.</p>
                 <textarea id="rag-before-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
-                <button id="rag-before-button" class="primary" type="button">Run Baseline</button>
+                <button id="rag-before-button" class="primary" type="button" data-i18n="probe.rag.beforeSend">Run Baseline</button>
               </article>
               <article class="semantic-cache-card">
-                <span class="semantic-cache-label">After</span>
-                <p class="semantic-cache-copy">Sends the same AtlasFlow support question through the Kong RAG route backed by Redis.</p>
+                <span class="semantic-cache-label" data-i18n="probe.rag.afterLabel">After</span>
+                <p class="semantic-cache-copy" data-i18n="probe.rag.afterCopy">Sends the same AtlasFlow support question through the Kong RAG route backed by Redis.</p>
                 <textarea id="rag-after-payload" class="semantic-cache-payload probe-payload" rows="4"></textarea>
-                <button id="rag-after-button" class="primary" type="button">Run With RAG</button>
+                <button id="rag-after-button" class="primary" type="button" data-i18n="probe.rag.afterSend">Run With RAG</button>
               </article>
             </div>
           </section>
           <section id="lakera-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Lakera Policy Guard Request</span>
-              <p class="probe-copy">Edit the prompt and run one of the Lakera safety modes. Kong should block the request and return the Lakera detector category when the policy triggers.</p>
+              <span class="probe-label" data-i18n="probe.lakera.label">Lakera Policy Guard Request</span>
+              <p class="probe-copy" data-i18n="probe.lakera.copy">Edit the prompt and run one of the Lakera safety modes. Kong should block the request and return the Lakera detector category when the policy triggers.</p>
               <div class="preset-options" id="lakera-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="lakera_mode_choice" value="safe" checked />
-                  <span>Safe Prompt</span>
+                  <span data-i18n="probe.lakera.mode.safe">Safe Prompt</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="lakera_mode_choice" value="content_moderation" />
-                  <span>Content Moderation</span>
+                  <span data-i18n="probe.lakera.mode.contentModeration">Content Moderation</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="lakera_mode_choice" value="prompt_defense" />
-                  <span>Prompt Defense</span>
+                  <span data-i18n="probe.lakera.mode.promptDefense">Prompt Defense</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="lakera_mode_choice" value="data_leak_prevention" />
-                  <span>Data Leak Prevention</span>
+                  <span data-i18n="probe.lakera.mode.dataLeak">Data Leak Prevention</span>
                 </label>
               </div>
               <textarea id="lakera-payload" class="probe-payload" rows="6"></textarea>
             </article>
           </section>
           <div class="modal-actions">
-            <button id="scene-play-button" class="primary" type="button">Play</button>
+            <button id="scene-play-button" class="primary" type="button" data-i18n="scene.play">Play</button>
           </div>
         </div>
       </dialog>
@@ -592,14 +592,14 @@
         <div class="modal-shell modal-wide">
             <div class="modal-head">
               <div>
-                <p class="eyebrow">Run Output</p>
-                <h2>Detailed Response</h2>
+                <p class="eyebrow" data-i18n="outputModal.eyebrow">Run Output</p>
+                <h2 data-i18n="outputModal.title">Detailed Response</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="output-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="output-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
           <div class="result-card" id="final-output">
-            <h3>Awaiting run</h3>
-            <p>Open View Scene and start the orchestrated demo flow from the scene popup.</p>
+            <h3 data-i18n="outputModal.awaitingTitle">Awaiting run</h3>
+            <p data-i18n="outputModal.awaitingCopy">Open View Scene and start the orchestrated demo flow from the scene popup.</p>
           </div>
         </div>
       </dialog>
@@ -608,73 +608,73 @@
         <div class="modal-shell modal-trace-explorer">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">Custom Trace View</p>
-              <h2>Context Trace Explorer</h2>
+              <p class="eyebrow" data-i18n="traceExplorer.eyebrow">Custom Trace View</p>
+              <h2 data-i18n="traceExplorer.title">Context Trace Explorer</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="trace-explorer-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="trace-explorer-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy">
+          <p class="modal-copy" data-i18n-html="traceExplorer.copy">
             This view reads normalized Loki-backed trace events by <code>context_id</code> and shows the A2A, MCP, and LLM sequence with payload details.
           </p>
           <div class="trace-explorer-toolbar">
             <label class="trace-explorer-field">
-              <span class="label">Context ID</span>
-              <input id="trace-context-input" type="text" placeholder="ctx-..." />
+              <span class="label" data-i18n="traceExplorer.contextId">Context ID</span>
+              <input id="trace-context-input" type="text" placeholder="ctx-..." data-i18n-placeholder="traceExplorer.contextPlaceholder" />
             </label>
             <label class="trace-explorer-field">
-              <span class="label">Run ID</span>
-              <input id="trace-run-input" type="text" placeholder="optional run id filter" />
+              <span class="label" data-i18n="traceExplorer.runId">Run ID</span>
+              <input id="trace-run-input" type="text" placeholder="optional run id filter" data-i18n-placeholder="traceExplorer.runPlaceholder" />
             </label>
-            <button id="trace-load-button" class="primary" type="button">Load Trace</button>
+            <button id="trace-load-button" class="primary" type="button" data-i18n="traceExplorer.loadTrace">Load Trace</button>
           </div>
           <div class="trace-explorer-summary" id="trace-explorer-summary">
             <div class="trace-explorer-stat">
-              <span class="label">Events</span>
+              <span class="label" data-i18n="traceExplorer.events">Events</span>
               <strong id="trace-event-count">0</strong>
             </div>
             <div class="trace-explorer-stat">
-              <span class="label">Tasks</span>
+              <span class="label" data-i18n="traceExplorer.tasks">Tasks</span>
               <strong id="trace-task-count">0</strong>
             </div>
             <div class="trace-explorer-stat">
-              <span class="label">Messages</span>
+              <span class="label" data-i18n="traceExplorer.messages">Messages</span>
               <strong id="trace-message-count">0</strong>
             </div>
             <div class="trace-explorer-stat">
-              <span class="label">Status</span>
-              <strong id="trace-explorer-status">Idle</strong>
+              <span class="label" data-i18n="traceExplorer.status">Status</span>
+              <strong id="trace-explorer-status" data-i18n="traceExplorer.statusIdle">Idle</strong>
             </div>
           </div>
           <div class="trace-explorer-layout">
             <section class="trace-explorer-list panel-dark">
               <div class="trace-explorer-list-head">
-                <strong>Timeline</strong>
+                <strong data-i18n="traceExplorer.timeline">Timeline</strong>
               </div>
               <div id="trace-explorer-events" class="trace-explorer-events">
                 <div class="trace-empty">
-                  <h3>No trace loaded</h3>
-                  <p>Open a recent run or enter a context id to load the custom trace explorer.</p>
+                  <h3 data-i18n="traceExplorer.emptyTitle">No trace loaded</h3>
+                  <p data-i18n="traceExplorer.emptyCopy">Open a recent run or enter a context id to load the custom trace explorer.</p>
                 </div>
               </div>
             </section>
             <section class="trace-explorer-detail panel-dark">
               <div class="trace-explorer-list-head">
-                <strong id="trace-detail-title">Event Details</strong>
+                <strong id="trace-detail-title" data-i18n="traceExplorer.detailTitle">Event Details</strong>
               </div>
               <div class="detail-meta" id="trace-detail-meta">
-                <span class="meta-chip">Select an event</span>
+                <span class="meta-chip" data-i18n="traceExplorer.selectEvent">Select an event</span>
               </div>
               <div class="detail-block">
-                <strong>Summary</strong>
-                <p id="trace-detail-summary">The selected event will show lifecycle fields and payload details here.</p>
+                <strong data-i18n="traceExplorer.summary">Summary</strong>
+                <p id="trace-detail-summary" data-i18n="traceExplorer.summaryCopy">The selected event will show lifecycle fields and payload details here.</p>
               </div>
               <div class="detail-io">
                 <div class="detail-code">
-                  <strong>Request</strong>
+                  <strong data-i18n="traceExplorer.request">Request</strong>
                   <pre id="trace-detail-request">-</pre>
                 </div>
                 <div class="detail-code">
-                  <strong>Response</strong>
+                  <strong data-i18n="traceExplorer.response">Response</strong>
                   <pre id="trace-detail-response">-</pre>
                 </div>
               </div>
@@ -687,12 +687,12 @@
         <div class="modal-shell modal-wide">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">Diagrams</p>
-              <h2>Workflow And Scenario Views</h2>
+              <p class="eyebrow" data-i18n="graph.eyebrow">Diagrams</p>
+              <h2 data-i18n="graph.title">Workflow And Scenario Views</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="graph-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="graph-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy">
+          <p class="modal-copy" data-i18n="graph.copy">
             These diagrams show both the LangGraph workflows and the scenario-specific Kong
             architecture paths used in the demo.
           </p>
@@ -700,12 +700,12 @@
           <section class="graph-section">
             <div class="graph-section-head">
               <div>
-                <p class="eyebrow">Normal Scenario</p>
-                <h3>End-to-End Sequence</h3>
+                <p class="eyebrow" data-i18n="graph.normalEyebrow">Normal Scenario</p>
+                <h3 data-i18n="graph.sequenceTitle">End-to-End Sequence</h3>
               </div>
-              <button id="sequence-fullscreen-button" class="ghost" type="button">Open Full Width</button>
+              <button id="sequence-fullscreen-button" class="ghost" type="button" data-i18n="graph.openFullWidth">Open Full Width</button>
             </div>
-            <p class="graph-copy">
+            <p class="graph-copy" data-i18n="graph.sequenceCopy">
               This sequence follows the standard happy path: the UI starts a run through Kong, the
               orchestrator fetches MCP context, discovers each sub-agent through its A2A agent
               card, invokes `agent.run` over JSON-RPC through Kong, and finishes with the executive
@@ -1006,14 +1006,14 @@
 
           <section class="graph-section">
             <div class="graph-section-head">
-              <p class="eyebrow">Workflow Graphs</p>
-              <h3>LangGraph State Diagrams</h3>
+              <p class="eyebrow" data-i18n="graph.workflowEyebrow">Workflow Graphs</p>
+              <h3 data-i18n="graph.workflowTitle">LangGraph State Diagrams</h3>
             </div>
           <section class="graph-diagrams">
             <article class="graph-card">
               <div class="graph-card-head">
-                <span class="node-label">Main Graph</span>
-                <h3>Orchestrator</h3>
+                <span class="node-label" data-i18n="graph.mainGraph">Main Graph</span>
+                <h3 data-i18n="graph.orchestrator">Orchestrator</h3>
               </div>
               <div class="graph-diagram graph-diagram-orchestrator">
                 <svg class="langgraph-svg" viewBox="0 0 920 1180" aria-label="Orchestrator LangGraph diagram">
@@ -1059,7 +1059,7 @@
                   </g>
                 </svg>
               </div>
-              <p class="graph-copy">
+              <p class="graph-copy" data-i18n-html="graph.orchestratorCopy">
                 This matches the compiled orchestrator graph in
                 <code>services/orchestrator/app.py</code>: fetch context, generate the triage
                 brief, run the support agent, run the success agent, then finalize the response.
@@ -1068,8 +1068,8 @@
 
             <article class="graph-card">
               <div class="graph-card-head">
-                <span class="node-label">Sub-agent Graph</span>
-                <h3>Support Agent</h3>
+                <span class="node-label" data-i18n="graph.subAgentGraph">Sub-agent Graph</span>
+                <h3 data-i18n="graph.supportAgent">Support Agent</h3>
               </div>
               <div class="graph-diagram graph-diagram-agent">
                 <svg class="langgraph-svg" viewBox="0 0 780 960" aria-label="Support Agent LangGraph diagram">
@@ -1110,7 +1110,7 @@
                   </g>
                 </svg>
               </div>
-              <p class="graph-copy">
+              <p class="graph-copy" data-i18n-html="graph.supportCopy">
                 This matches the compiled support graph in
                 <code>services/support_agent/app.py</code>: fetch the tool inventory, investigate
                 the issue, generate the technical summary, then build the response payload.
@@ -1119,8 +1119,8 @@
 
             <article class="graph-card">
               <div class="graph-card-head">
-                <span class="node-label">Sub-agent Graph</span>
-                <h3>Success Agent</h3>
+                <span class="node-label" data-i18n="graph.subAgentGraph">Sub-agent Graph</span>
+                <h3 data-i18n="graph.successAgent">Success Agent</h3>
               </div>
               <div class="graph-diagram graph-diagram-agent">
                 <svg class="langgraph-svg" viewBox="0 0 780 960" aria-label="Success Agent LangGraph diagram">
@@ -1161,7 +1161,7 @@
                   </g>
                 </svg>
               </div>
-              <p class="graph-copy">
+              <p class="graph-copy" data-i18n-html="graph.successCopy">
                 This matches the compiled success graph in
                 <code>services/success_agent/app.py</code>: fetch the tool inventory, prepare the
                 customer actions, generate the success summary, then build the response payload.
@@ -1177,10 +1177,10 @@
         <div class="modal-shell modal-sequence-full">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">Normal Scenario</p>
-              <h2>Sequence Diagram</h2>
+              <p class="eyebrow" data-i18n="sequenceModal.eyebrow">Normal Scenario</p>
+              <h2 data-i18n="sequenceModal.title">Sequence Diagram</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="sequence-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="sequence-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
           <div id="sequence-modal-content" class="sequence-diagram sequence-diagram-svg"></div>
         </div>
@@ -1190,44 +1190,44 @@
         <div class="modal-shell modal-wide">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">About The Demo</p>
-              <h2>Scenario And Agent Roles</h2>
+              <p class="eyebrow" data-i18n="help.eyebrow">About The Demo</p>
+              <h2 data-i18n="help.title">Scenario And Agent Roles</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="help-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="help-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy">
+          <p class="modal-copy" data-i18n="help.copy">
             The demo models a customer escalation for an enterprise account that reports a billing
             dispute and workflow-agent sync delays. Kong stays in the middle of the UI, MCP tools,
             sub-agents, LLM routes, and observability path so each hop is governed and traceable.
           </p>
           <div class="policy-sections">
             <section class="policy-card">
-              <span class="policy-card-label">Business Scenario</span>
-              <p class="policy-copy">
+              <span class="policy-card-label" data-i18n="help.businessLabel">Business Scenario</span>
+              <p class="policy-copy" data-i18n="help.businessCopy">
                 A customer escalation enters through the dashboard. The system needs to gather
                 account context, investigate the technical issue, prepare the customer-facing
                 follow-up, and produce an executive brief quickly.
               </p>
             </section>
             <section class="policy-card">
-              <span class="policy-card-label">Orchestrator</span>
-              <p class="policy-copy">
+              <span class="policy-card-label" data-i18n="help.orchestratorLabel">Orchestrator</span>
+              <p class="policy-copy" data-i18n="help.orchestratorCopy">
                 The orchestrator is the main LangGraph workflow. It discovers and calls MCP tools,
                 creates the triage brief, invokes the support and success sub-agents, and assembles
                 the final executive response.
               </p>
             </section>
             <section class="policy-card">
-              <span class="policy-card-label">Support Agent</span>
-              <p class="policy-copy">
+              <span class="policy-card-label" data-i18n="help.supportLabel">Support Agent</span>
+              <p class="policy-copy" data-i18n="help.supportCopy">
                 The support agent handles the technical investigation. It uses incident and runbook
                 tools, summarizes the current engineering posture, and recommends the immediate
                 remediation path.
               </p>
             </section>
             <section class="policy-card">
-              <span class="policy-card-label">Success Agent</span>
-              <p class="policy-copy">
+              <span class="policy-card-label" data-i18n="help.successLabel">Success Agent</span>
+              <p class="policy-copy" data-i18n="help.successCopy">
                 The success agent handles customer communication and follow-up. It uses tools to
                 draft the customer reply, create the next task, and shape the account-team action
                 plan.
@@ -1241,12 +1241,12 @@
         <div class="modal-shell modal-notice">
           <div class="modal-head">
             <div>
-              <p class="eyebrow" id="notice-kicker">Status</p>
-              <h2 id="notice-title">Operation complete</h2>
+              <p class="eyebrow" id="notice-kicker" data-i18n="status.label">Status</p>
+              <h2 id="notice-title" data-i18n="noticeModal.title">Operation complete</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="notice-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="notice-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy" id="notice-message">The action completed successfully.</p>
+          <p class="modal-copy" id="notice-message" data-i18n="noticeModal.message">The action completed successfully.</p>
         </div>
       </dialog>
 
@@ -1254,25 +1254,25 @@
         <div class="modal-shell modal-wide">
           <div class="modal-head">
             <div>
-              <p class="eyebrow">Kong Policy</p>
-              <h2 id="policy-title">Scene Policy Details</h2>
+              <p class="eyebrow" data-i18n="policyModal.eyebrow">Kong Policy</p>
+              <h2 id="policy-title" data-i18n="policyModal.title">Scene Policy Details</h2>
             </div>
-            <button class="ghost modal-close" data-close-modal="policy-modal" type="button">Close</button>
+            <button class="ghost modal-close" data-close-modal="policy-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy" id="policy-intro">
+          <p class="modal-copy" id="policy-intro" data-i18n="policyModal.intro">
             This explains what Kong is doing for the current scene in plain English.
           </p>
           <div class="policy-sections">
             <section class="policy-card">
-              <span class="policy-card-label">What Kong Is Doing</span>
+              <span class="policy-card-label" data-i18n="policyModal.whatLabel">What Kong Is Doing</span>
               <div id="policy-plain-english" class="policy-list"></div>
             </section>
             <section class="policy-card">
-              <span class="policy-card-label">Why It Matters</span>
+              <span class="policy-card-label" data-i18n="policyModal.whyLabel">Why It Matters</span>
               <p id="policy-why" class="policy-copy"></p>
             </section>
             <section class="policy-card">
-              <span class="policy-card-label">Config Applied</span>
+              <span class="policy-card-label" data-i18n="policyModal.configLabel">Config Applied</span>
               <div id="policy-config" class="policy-kv"></div>
             </section>
           </div>
@@ -1290,6 +1290,11 @@
         apiKey: "ui-demo-key"
       };
     </script>
+    <!-- i18n-active.js is generated at container start from the selected UI_LANG;
+         if absent (e.g. served statically without the container), the inline
+         English baked into the markup and app.js is used unchanged. -->
+    <script src="/i18n-active.js"></script>
+    <script src="/i18n.js?v=20260601-i18n-1"></script>
     <script src="/app.js?v=20260512-brand-1" defer></script>
   </body>
 </html>
