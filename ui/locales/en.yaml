@@ -1,0 +1,683 @@
+detail.clickRow: "Click a trace row"
+detail.input: "Input"
+detail.kicker: "Selected Step"
+detail.noStep: "No step selected"
+detail.output: "Output"
+detail.summary: "Summary"
+detail.summaryCopy: "The selected trace step will show timing, request input, and output payload here."
+form.accountName: "Account Name"
+form.billingIssue: "Billing Issue"
+form.customerId: "Customer ID"
+form.incidentId: "Incident ID"
+form.issueSummary: "Issue Summary"
+form.productIssue: "Product Issue"
+graph.copy: "These diagrams show both the LangGraph workflows and the scenario-specific Kong architecture paths used in the demo."
+graph.eyebrow: "Diagrams"
+graph.mainGraph: "Main Graph"
+graph.normalEyebrow: "Normal Scenario"
+graph.openFullWidth: "Open Full Width"
+graph.orchestrator: "Orchestrator"
+graph.orchestratorCopy: "This matches the compiled orchestrator graph in <code>services/orchestrator/app.py</code>: fetch context, generate the triage brief, run the support agent, run the success agent, then finalize the response."
+graph.sequenceCopy: "This sequence follows the standard happy path: the UI starts a run through Kong, the orchestrator fetches MCP context, discovers each sub-agent through its A2A agent card, invokes `agent.run` over JSON-RPC through Kong, and finishes with the executive summary while live traces stream back to the UI."
+graph.sequenceTitle: "End-to-End Sequence"
+graph.subAgentGraph: "Sub-agent Graph"
+graph.successAgent: "Success Agent"
+graph.successCopy: "This matches the compiled success graph in <code>services/success_agent/app.py</code>: fetch the tool inventory, prepare the customer actions, generate the success summary, then build the response payload."
+graph.supportAgent: "Support Agent"
+graph.supportCopy: "This matches the compiled support graph in <code>services/support_agent/app.py</code>: fetch the tool inventory, investigate the issue, generate the technical summary, then build the response payload."
+graph.title: "Workflow And Scenario Views"
+graph.workflowEyebrow: "Workflow Graphs"
+graph.workflowTitle: "LangGraph State Diagrams"
+help.businessCopy: "A customer escalation enters through the dashboard. The system needs to gather account context, investigate the technical issue, prepare the customer-facing follow-up, and produce an executive brief quickly."
+help.businessLabel: "Business Scenario"
+help.copy: "The demo models a customer escalation for an enterprise account that reports a billing dispute and workflow-agent sync delays. Kong stays in the middle of the UI, MCP tools, sub-agents, LLM routes, and observability path so each hop is governed and traceable."
+help.eyebrow: "About The Demo"
+help.orchestratorCopy: "The orchestrator is the main LangGraph workflow. It discovers and calls MCP tools, creates the triage brief, invokes the support and success sub-agents, and assembles the final executive response."
+help.orchestratorLabel: "Orchestrator"
+help.successCopy: "The success agent handles customer communication and follow-up. It uses tools to draft the customer reply, create the next task, and shape the account-team action plan."
+help.successLabel: "Success Agent"
+help.supportCopy: "The support agent handles the technical investigation. It uses incident and runbook tools, summarizes the current engineering posture, and recommends the immediate remediation path."
+help.supportLabel: "Support Agent"
+help.title: "Scenario And Agent Roles"
+js.detailPane.clickTraceRow: "Click a trace row"
+js.detailPane.noStepSelected: "No step selected"
+js.detailPane.noSummary: "No summary available."
+js.detailPane.summary: "The selected trace step will show timing, request input, and output payload here."
+js.eventDetails.selectEvent: "Select an event"
+js.eventDetails.summary: "The selected event will show lifecycle fields and payload details here."
+js.eventDetails.title: "Event Details"
+js.runHistory.noSavedRuns: "No saved runs"
+js.runHistory.unavailable: "Run history unavailable"
+modal.close: "Close"
+nodeDetails.backendApi.config:
+  - ["Provides", "Business and support data used by the demo"]
+  - ["Reached through", "Kong-governed routing"]
+nodeDetails.backendApi.intro: "These are the mock upstream systems that hold the data used by the tools and agents."
+nodeDetails.backendApi.plainEnglish:
+  - "They provide account, incident, runbook, reply, and task data."
+  - "The topology now shows them behind Kong rather than directly behind MCP."
+  - "They act as the raw upstream data plane in the demo."
+nodeDetails.backendApi.title: "Backend APIs"
+nodeDetails.backendApi.why: "They make the difference between direct backend access and Kong-governed access visible."
+nodeDetails.compressor.config:
+  - ["Scenario", "Prompt Compression"]
+  - ["Modes", "rate, target_token"]
+nodeDetails.compressor.intro: "This service appears when Kong compresses a verbose prompt before the upstream model call."
+nodeDetails.compressor.plainEnglish:
+  - "Kong sends the request prompt here before the model call when the scenario uses prompt compression."
+  - "The service returns a compressed prompt and token-savings metadata."
+  - "It only appears during the Prompt Compression scenario."
+nodeDetails.compressor.title: "AI Compress Service"
+nodeDetails.compressor.why: "It makes the external compression step visible as part of the governed LLM path."
+nodeDetails.gemini.config:
+  - ["Used by", "Sub-agents and selected scenario paths"]
+  - ["Governed through", "Kong AI routing"]
+nodeDetails.gemini.intro: "This model path is shared by sub-agents and selected orchestrator scenarios."
+nodeDetails.gemini.plainEnglish:
+  - "Kong routes the support and success agents here in the base flow."
+  - "It also appears for failover or judge-related scenario paths."
+  - "The node represents the governed route choice, not just a raw provider logo."
+nodeDetails.gemini.title: "Gemini 2.5 Flash"
+nodeDetails.gemini.why: "It shows that Kong can split or redirect model traffic by role and scenario."
+nodeDetails.judgeModel.config:
+  - ["Scenario", "LLM as Judge"]
+  - ["Purpose", "Quality scoring and judgment"]
+nodeDetails.judgeModel.intro: "This node appears in the LLM as Judge scenario when Kong scores a candidate response with a separate model."
+nodeDetails.judgeModel.plainEnglish:
+  - "Kong invokes the judge after the candidate response is produced."
+  - "The judge returns a score and evaluation context."
+  - "That output is then exposed in observability and the final result path."
+nodeDetails.judgeModel.title: "Judge Model"
+nodeDetails.judgeModel.why: "It makes evaluation at the gateway layer visible."
+nodeDetails.lakera.config:
+  - ["Used by", "Lakera Policy Guard"]
+  - ["Role", "Prompt inspection and allow-or-block decision"]
+nodeDetails.lakera.intro: "Lakera inspects the prompt on the Kong route before the upstream model call is allowed to happen."
+nodeDetails.lakera.plainEnglish:
+  - "Kong sends the prompt to Lakera for policy inspection before the model call."
+  - "Lakera can allow the request or block it with detector categories."
+  - "It only appears during the Lakera Policy Guard scenario."
+nodeDetails.lakera.title: "Lakera"
+nodeDetails.lakera.why: "It makes the external policy guard visible as part of the governed data path."
+nodeDetails.mcp.config:
+  - ["Protocol", "MCP via Kong"]
+  - ["Registry", "AA Demo MCP Registry"]
+  - ["Published server", "com.aa-demo/mock-mcp"]
+  - ["Registry remote", "http://localhost:8000/mock-mcp"]
+  - ["Governed by", "Per-agent auth and authorization"]
+  - ["Orchestrator tools", "get_customer_account, get_renewal_risk, get_open_tickets"]
+  - ["Support tools", "get_incident_status, search_runbook"]
+  - ["Success tools", "draft_customer_reply, create_followup_task"]
+nodeDetails.mcp.intro: "Kong exposes the backing APIs as MCP tools, publishes the server in Konnect MCP Registry, and filters the allowed tool set per agent."
+nodeDetails.mcp.plainEnglish:
+  - "Agents ask Kong for the tool list instead of discovering raw APIs directly."
+  - "The same MCP server is published in Konnect as AA Demo MCP Registry for internal discovery."
+  - "Kong applies auth and access control before returning tools."
+  - "Tool invocations still route back through Kong before reaching backend services."
+nodeDetails.mcp.title: "MCP Tools"
+nodeDetails.mcp.why: "It is where API governance becomes agent-tool governance, with Konnect Registry handling discovery metadata and Kong handling runtime control."
+nodeDetails.observability.config:
+  - ["Receives", "Structured Kong logs"]
+  - ["Correlates by", "run_id and gateway metadata"]
+nodeDetails.observability.intro: "Observability receives Kong gateway logs and makes them queryable by run and scenario."
+nodeDetails.observability.plainEnglish:
+  - "Kong sends structured logs into Loki."
+  - "Grafana reads those logs to show counts, failures, and policy events."
+  - "The same run_id ties the topology, trace, and metrics together."
+nodeDetails.observability.title: "Grafana / Loki"
+nodeDetails.observability.why: "It provides evidence for the governed path the topology is visualizing."
+nodeDetails.openai.config:
+  - ["Used by", "Orchestrator"]
+  - ["Role", "Planner, triage, and final executive summary"]
+nodeDetails.openai.intro: "This is the primary orchestrator model path in the standard run."
+nodeDetails.openai.plainEnglish:
+  - "Kong routes orchestrator planning and summary calls here in the normal flow."
+  - "Some scenarios change how Kong governs this route."
+  - "It is kept separate from the shared sub-agent route."
+nodeDetails.openai.title: "OpenAI 4o mini"
+nodeDetails.openai.why: "It shows caller-specific model routing at the gateway layer."
+nodeDetails.orchestrator.config:
+  - ["Framework", "LangGraph"]
+  - ["Calls through Kong", "MCP, A2A sub-agents, and orchestrator AI routes"]
+nodeDetails.orchestrator.intro: "The orchestrator is the main workflow coordinator for the escalation."
+nodeDetails.orchestrator.plainEnglish:
+  - "It gathers account context through Kong-exposed tools."
+  - "It discovers and calls the support and success agents through Kong's A2A routes."
+  - "It performs the final synthesis before returning the result."
+nodeDetails.orchestrator.title: "Orchestrator"
+nodeDetails.orchestrator.why: "It turns multiple governed tool and agent hops into one business outcome."
+nodeDetails.piiService.config:
+  - ["Scenario", "PII Sanitization"]
+  - ["Modes", "placeholder, synthetic, block"]
+nodeDetails.piiService.intro: "This service appears when Kong sanitizes or blocks sensitive content in request or response paths."
+nodeDetails.piiService.plainEnglish:
+  - "Kong sends request content here before the model call when the scenario uses sanitization."
+  - "It can also sanitize the response before Kong returns it."
+  - "The exact behavior depends on placeholder, synthetic, or block mode."
+nodeDetails.piiService.title: "AI PII Service"
+nodeDetails.piiService.why: "It shows that privacy enforcement can happen outside application code."
+nodeDetails.redis.config:
+  - ["Used by", "Semantic Guard, Semantic Cache, and RAG"]
+  - ["Role", "Embedding-backed similarity store"]
+nodeDetails.redis.intro: "Redis backs the semantic governance scenarios by storing or comparing embeddings."
+nodeDetails.redis.plainEnglish:
+  - "Kong uses it for semantic guard comparisons."
+  - "Kong also uses it for semantic cache lookup and reuse."
+  - "Kong also uses it as the retrieval store for the RAG scenario."
+  - "It only appears when the semantic scenarios are relevant."
+nodeDetails.redis.title: "Redis Vector DB"
+nodeDetails.redis.why: "It shows the supporting infrastructure behind semantic policy behavior."
+nodeDetails.successAgent.config:
+  - ["Allowed tools", "draft_customer_reply, create_followup_task"]
+  - ["LLM path", "Sub-agent Gemini route through Kong"]
+nodeDetails.successAgent.intro: "The success agent handles follow-up planning and customer communication."
+nodeDetails.successAgent.plainEnglish:
+  - "It resolves only its allowed tools through Kong."
+  - "It drafts the reply and creates the follow-up task."
+  - "It turns those outputs into a customer-ready plan."
+nodeDetails.successAgent.title: "Success Agent"
+nodeDetails.successAgent.why: "It makes the customer and account-team actions explicit in the governed flow."
+nodeDetails.supportAgent.config:
+  - ["Allowed tools", "get_incident_status, search_runbook"]
+  - ["LLM path", "Sub-agent Gemini route through Kong"]
+nodeDetails.supportAgent.intro: "The support agent handles the technical investigation side of the escalation."
+nodeDetails.supportAgent.plainEnglish:
+  - "It resolves its allowed tools through Kong."
+  - "It checks incident status and runbook guidance."
+  - "It summarizes the technical posture through the sub-agent AI route."
+nodeDetails.supportAgent.title: "Support Agent"
+nodeDetails.supportAgent.why: "It converts incident data into technical guidance for the orchestrator."
+nodeDetails.ui.config:
+  - ["Served through", "Kong"]
+  - ["Role", "Launch runs and visualize governed flow"]
+nodeDetails.ui.intro: "The dashboard starts runs, renders the live topology, and streams trace updates."
+nodeDetails.ui.plainEnglish:
+  - "The UI goes through Kong instead of calling services directly."
+  - "It shows the path activation, trace tree, and run output."
+  - "It also exposes the scene, diagrams, and detail modals used in the demo."
+nodeDetails.ui.title: "Dashboard"
+nodeDetails.ui.why: "It makes the governed traffic and the business workflow visible in one place."
+nodeDetails.user.config:
+  - ["Input", "Customer escalation request"]
+  - ["Carries", "Scene data, governance_scenario, run_id"]
+nodeDetails.user.intro: "The demo starts here with one guided request entering the hosted UI."
+nodeDetails.user.plainEnglish:
+  - "This is the business request that starts the workflow."
+  - "The request carries the selected governance scenario and the shared run_id."
+  - "Everything downstream is correlated back to this entry point."
+nodeDetails.user.title: "User Request"
+nodeDetails.user.why: "It establishes the business context Kong will govern."
+nodes.backend.desc: "Mock account, incident, runbook, draft, and task endpoints reached through Kong."
+nodes.backend.infoAria: "View Backend APIs details"
+nodes.backend.label: "Upstream"
+nodes.backend.title: "Backend APIs"
+nodes.compress.desc: "Used by Kong AI Prompt Compressor to shrink verbose prompts before the model call."
+nodes.compress.infoAria: "View AI Prompt Compressor details"
+nodes.compress.label: "Compression"
+nodes.compress.title: "AI Compress Service"
+nodes.gemini.desc: "Orchestrator failover and the sub-agent LLM route."
+nodes.gemini.infoAria: "View Gemini model details"
+nodes.gemini.label: "Failover / Shared"
+nodes.gemini.title: "Gemini 2.5 Flash"
+nodes.judge.desc: "Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator."
+nodes.judge.infoAria: "View Judge model details"
+nodes.judge.label: "Judge"
+nodes.judge.title: "Gemini 2.5 Flash"
+nodes.kong.desc: "Agent routing (A2A), LLM routing, Auth, ACLs, and MCP tool exposure."
+nodes.kong.infoAria: "View Kong Gateway details"
+nodes.kong.label: "Gateway Core"
+nodes.kong.title: "Kong Gateway"
+nodes.lakera.desc: "Used by Kong AI Lakera Guard to inspect prompts before they can reach the model."
+nodes.lakera.infoAria: "View Lakera details"
+nodes.lakera.label: "Policy Guard"
+nodes.lakera.title: "Lakera"
+nodes.mcp.desc: "Kong exposes the backing REST API as tools, publishes the server in Konnect MCP Registry, and filters access per consumer group."
+nodes.mcp.infoAria: "View MCP Tools details"
+nodes.mcp.label: "Tool Plane"
+nodes.mcp.title: "MCP Tools"
+nodes.observability.desc: "Receives Kong gateway logs for live metrics, queries, and dashboard panels."
+nodes.observability.infoAria: "View Observability details"
+nodes.observability.label: "Observability"
+nodes.observability.title: "Grafana / Loki"
+nodes.openai.desc: "Primary orchestrator model via AI Proxy Advanced."
+nodes.openai.infoAria: "View OpenAI model details"
+nodes.openai.label: "Primary"
+nodes.openai.title: "OpenAI 4o mini"
+nodes.orchestrator.desc: "Gets context, calls its LLM, invokes support then success, and assembles the final brief."
+nodes.orchestrator.infoAria: "View Orchestrator details"
+nodes.orchestrator.label: "LangGraph"
+nodes.orchestrator.title: "Orchestrator"
+nodes.pii.desc: "Used by Kong AI Sanitizer to anonymize sensitive data in the request and response path."
+nodes.pii.infoAria: "View AI PII Service details"
+nodes.pii.label: "Sanitization"
+nodes.pii.title: "AI PII Service"
+nodes.redis.desc: "Used by Kong Semantic Guard and Semantic Cache policies to compare embeddings."
+nodes.redis.infoAria: "View Redis details"
+nodes.redis.label: "Vector Store"
+nodes.redis.title: "Redis Vector DB"
+nodes.success.desc: "Uses reply and task tools, then produces the customer action plan."
+nodes.success.infoAria: "View Success Agent details"
+nodes.success.label: "Sub-agent"
+nodes.success.title: "Success Agent"
+nodes.support.desc: "Uses incident and runbook tools, then summarizes the technical posture."
+nodes.support.infoAria: "View Support Agent details"
+nodes.support.label: "Sub-agent"
+nodes.support.title: "Support Agent"
+nodes.ui.desc: "Served through Kong. Shows live path activation and trace state."
+nodes.ui.infoAria: "View Dashboard details"
+nodes.ui.label: "Hosted UI"
+nodes.ui.title: "Dashboard"
+nodes.user.desc: "Play starts one fixed escalation workflow."
+nodes.user.infoAria: "View User Request details"
+nodes.user.label: "Entry"
+nodes.user.title: "User Request"
+notice.observability.kicker: "Observability"
+notice.observability.resetCompleteMessage: "Loki was recreated and Grafana was restarted. Refresh Grafana after a few seconds if panels still show old data."
+notice.observability.resetCompleteTitle: "Observability reset complete"
+notice.observability.resetFailedTitle: "Observability reset failed"
+notice.runHistory.kicker: "Run History"
+notice.runHistory.loadFailedTitle: "Could not load run"
+notice.semanticCache.deleteFailedTitle: "Cache delete failed"
+notice.semanticCache.deletedTitle: "Cache deleted successfully"
+notice.semanticCache.kicker: "Semantic Cache"
+noticeModal.message: "The action completed successfully."
+noticeModal.title: "Operation complete"
+outputModal.awaitingCopy: "Open View Scene and start the orchestrated demo flow from the scene popup."
+outputModal.awaitingTitle: "Awaiting run"
+outputModal.eyebrow: "Run Output"
+outputModal.title: "Detailed Response"
+outputModal.finalOutputKicker: "Final Output"
+outputModal.governanceScenarioLabel: "Governance scenario:"
+outputModal.summary.lakera: "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call."
+outputModal.summary.rag: "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
+outputModal.summary.loadBalancingSemantic: "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt."
+outputModal.summary.loadBalancing: "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path."
+outputModal.summary.tokenLimit: "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request."
+outputModal.summary.promptEnhancement: "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious."
+outputModal.summary.promptCompression: "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call."
+outputModal.summary.focusedProbe: "This output comes from a focused governance probe rather than the full multi-agent workflow."
+outputModal.summary.default: "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output."
+outputModal.label.orchestrator: "Orchestrator"
+outputModal.label.supportAgent: "Support Agent"
+outputModal.label.successAgent: "Success Agent"
+outputModal.label.originalPrompt: "Original Request Prompt"
+outputModal.label.policyOutcome: "Policy Outcome"
+outputModal.mcpUsage.title: "MCP Tool Usage"
+outputModal.mcpUsage.copy: "These are the MCP tools that were actually called during this run, grouped by agent."
+outputModal.loadBalancing.title: "Load Balancing Probe"
+outputModal.loadBalancing.copySemantic: "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider."
+outputModal.loadBalancing.copy: "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route."
+outputModal.loadBalancing.semanticPolicyLabel: "Semantic Routing Policy"
+outputModal.loadBalancing.failoverPolicyLabel: "Failover Policy"
+outputModal.tokenLimit.title: "AI Token Rate Limit Probe"
+outputModal.tokenLimit.copy: "Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior."
+outputModal.tokenLimit.noBlock: "No block was returned. This usually means the route budget was not exhausted the way the probe expected."
+outputModal.promptDecorator.title: "Prompt Decorator Probe"
+outputModal.promptDecorator.copy: "Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route."
+outputModal.promptDecorator.policyLabel: "Decorator Policy"
+outputModal.promptDecorator.noDecorator: "No decorator was applied. Kong forwarded the prompt to the model unchanged."
+outputModal.promptCompression.title: "Prompt Compression Probe"
+outputModal.promptCompression.copy: "Created by the orchestrator in the AI Prompt Compressor scenario. Kong compresses the verbose upstream prompt before it reaches the model and emits compression metrics to the audit logs."
+outputModal.promptCompression.policyLabel: "Compression Policy"
+outputModal.promptCompression.note: "Kong compressed the prompt before the model call and logged the token savings for observability."
+outputModal.lakera.title: "Lakera Policy Guard Probe"
+outputModal.lakera.copy: "Created by the orchestrator in the Lakera scenario. Kong sends the prompt through AI Lakera Guard before any model response is allowed back to the UI."
+outputModal.lakera.allowed: "Lakera allowed the request to pass to the model."
+outputModal.rag.title: "RAG Probe"
+outputModal.rag.copy: "Uses the same AtlasFlow support KB question in two modes so the answer quality difference comes only from Kong retrieval."
+outputModal.rag.modeLabel: "Probe Mode"
+outputModal.semanticCache.title: "Semantic Cache Probe"
+outputModal.semanticCache.copy: "Created by the orchestrator in the semantic-cache scenario. This run sends either the first cache-seed request or the second cache-reuse request through Kong."
+outputModal.semanticCache.firstRequest: "First Request"
+outputModal.semanticCache.secondRequest: "Second Request"
+outputModal.judge.title: "LLM as Judge Probe"
+outputModal.judge.copy: "Created by the orchestrator in the LLM as Judge scenario. Kong evaluates the returned answer with a separate judge model and emits the score into the audit logs for Grafana."
+outputModal.judge.routeLabel: "Evaluation Route"
+outputModal.pii.title: "PII Sanitizer Probe"
+outputModal.pii.copy: "Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes or blocks the upstream request before the model call, and sanitizes the downstream response when the request is allowed."
+outputModal.pii.policyLabel: "Sanitization Policy"
+outputModal.pii.synthetic: "Synthetic mode replaces supported detected values with category-matched synthetic values. Some credential-like secrets may still appear masked rather than replaced with natural-looking values."
+outputModal.pii.placeholder: "Placeholder mode replaces supported detected values with placeholder tokens."
+outputModal.pii.block: "Block mode stops the request before it reaches the model when supported PII or credentials are detected."
+outputModal.pii.sanitizedResponseLabel: "Sanitized Response Returned Through Kong"
+outputModal.accountContext.title: "Account Context"
+outputModal.accountContext.copy: "Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts."
+outputModal.renewalRisk.title: "Renewal Risk"
+outputModal.renewalRisk.copy: "Created by the orchestrator using the MCP tool <code>get_renewal_risk</code> to show the current renewal score and its drivers."
+outputModal.supportTrack.title: "Support Track"
+outputModal.supportTrack.copy: "Created by the support agent using <code>get_incident_status</code>, <code>search_runbook</code>, and its Gemini summary step."
+outputModal.successPlan.title: "Success Plan"
+outputModal.successPlan.copy: "Created by the success agent using <code>draft_customer_reply</code>, <code>create_followup_task</code>, and its Gemini summary step."
+outputModal.fullSupport.title: "Full Support Payload"
+outputModal.fullSupport.copy: "Full support-agent output, built from <code>get_incident_status</code>, <code>search_runbook</code>, and the support-agent LLM summary."
+outputModal.fullSupport.incidentLabel: "Incident"
+outputModal.fullSupport.runbookLabel: "Runbook Matches"
+outputModal.fullSupport.summaryLabel: "Support LLM Summary"
+outputModal.fullSuccess.title: "Full Success Payload"
+outputModal.fullSuccess.copy: "Full success-agent output, built from <code>draft_customer_reply</code>, <code>create_followup_task</code>, and the success-agent LLM summary."
+outputModal.fullSuccess.draftLabel: "Draft Customer Reply"
+outputModal.fullSuccess.draftCopy: "Created by the success agent using the MCP tool <code>draft_customer_reply</code>. This is the customer-facing message draft."
+outputModal.fullSuccess.taskLabel: "Follow-up Task"
+outputModal.fullSuccess.taskCopy: "Created by the success agent using the MCP tool <code>create_followup_task</code>. This is the internal account-team follow-up record."
+outputModal.fullSuccess.summaryLabel: "Success LLM Summary"
+outputModal.fullSuccess.summaryCopy: "Created by the success-agent Gemini step after reviewing the reply draft and follow-up task. This is the concise business summary of customer posture and next actions."
+outputModal.fallback.title: "Renderer fallback"
+outputModal.fallback.copy: "The topology state was preserved because the run completed successfully."
+outputModal.fallback.rawResult: "Raw Result"
+policies.lakeraGuard.config:
+  - ["Policy", "AI Lakera Guard"]
+  - ["Reveal failure categories", "true"]
+  - ["Log blocked content", "true"]
+  - ["Demo shape", "Single prompt, allow or block"]
+policies.lakeraGuard.intro: "Kong treats this as a one-shot Lakera probe: one prompt goes in, and Lakera either blocks it or allows it before the model call."
+policies.lakeraGuard.plainEnglish:
+  - "Lakera inspects the request body before the model call happens."
+  - "This demo uses one Lakera route with safe and blocked prompt modes."
+  - "When Lakera blocks the request, Kong returns the detector category and logs the full blocked prompt for observability."
+policies.lakeraGuard.title: "Lakera Policy Guard"
+policies.lakeraGuard.why: "It demonstrates external policy enforcement at the gateway without app-side moderation code."
+policies.llmAsJudge.config:
+  - ["Policy", "AI LLM as Judge"]
+  - ["Candidate model", "OpenAI 4o mini"]
+  - ["Judge model", "Gemini 2.5 Flash"]
+  - ["Judge rubric", "Accurate, relevant to the request, and useful for the user's stated task"]
+  - ["Prompt presets", "Escalation Triage, KongHQ Overview, or Kong vs Apigee/AWS"]
+  - ["Expected outcome", "One response is returned and Kong logs judge latency plus an accuracy score"]
+policies.llmAsJudge.intro: "Kong sends the request to a candidate model, then invokes a separate judge model to score the response."
+policies.llmAsJudge.plainEnglish:
+  - "The user prompt goes to the candidate model first."
+  - "Kong then sends the candidate response to a separate judge model."
+  - "The judged result returns normally, while the scoring metadata is written to the logs for Grafana."
+policies.llmAsJudge.title: "LLM as Judge"
+policies.llmAsJudge.why: "It shows gateway-side evaluation without adding app-side scoring code."
+policies.llmFailover.config:
+  - ["Primary model", "OpenAI 4o mini"]
+  - ["Fallback model", "Gemini 2.5 Flash"]
+  - ["Plugin", "AI Proxy Advanced"]
+policies.llmFailover.intro: "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."
+policies.llmFailover.plainEnglish:
+  - "The orchestrator makes one focused probe request through Kong."
+  - "Kong sends that request to the primary OpenAI target first."
+  - "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result."
+policies.llmFailover.title: "LLM Failover"
+policies.llmFailover.why: "It shows model resilience at the gateway layer instead of in application code."
+policies.loadBalancing.config.failover:
+  - ["Mode", "LLM Failover"]
+  - ["Primary model", "OpenAI 4o mini"]
+  - ["Fallback model", "Gemini 2.5 Flash"]
+  - ["Plugin", "AI Proxy Advanced"]
+  - ["Balancer algorithm", "priority"]
+  - ["Retries", "3"]
+  - ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"]
+policies.loadBalancing.config.semantic:
+  - ["Mode", "Semantic Load Balancing"]
+  - ["Support target", "OpenAI 4o mini"]
+  - ["Creative target", "Gemini 2.5 Flash"]
+  - ["Plugin", "AI Proxy Advanced"]
+  - ["Balancer algorithm", "semantic"]
+  - ["Embedding model", "text-embedding-3-small"]
+  - ["Vector store", "Redis"]
+policies.loadBalancing.intro.failover: "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."
+policies.loadBalancing.intro.semantic: "Kong semantically routes the prompt to the most relevant model target before any provider call is made."
+policies.loadBalancing.plainEnglish.failover:
+  - "The orchestrator makes one focused probe request through Kong."
+  - "Kong sends that request to the primary OpenAI target first."
+  - "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result."
+policies.loadBalancing.plainEnglish.semantic:
+  - "The orchestrator makes one focused probe request through Kong."
+  - "Kong embeds the prompt and compares it with the target descriptions stored for the semantic balancer."
+  - "Kong then sends the request to the best-fit model target and returns that result directly."
+policies.loadBalancing.promptPreset.creative: "Creative / Marketing"
+policies.loadBalancing.promptPreset.support: "Support / Operational"
+policies.loadBalancing.title: "Load Balancing"
+policies.loadBalancing.why.failover: "It shows model resilience at the gateway layer instead of in application code."
+policies.loadBalancing.why.semantic: "It shows prompt-aware model routing at the gateway layer instead of hard-coding model choice in application logic."
+policies.normal.config:
+  - ["UI access", "Key-auth using the UI consumer key"]
+  - ["Agent-to-agent", "AI A2A Proxy handles discovery and message/stream execution"]
+  - ["Tool exposure", "AI MCP Proxy exposes only the allowed tools per consumer group"]
+  - ["Orchestrator LLM route", "AI Proxy Advanced to OpenAI 4o mini"]
+  - ["Sub-agent LLM route", "AI Proxy Advanced to Gemini 2.5 Flash"]
+policies.normal.intro: "This is the baseline multi-agent flow: Kong fronts the full orchestration path, including MCP tool access, A2A discovery and execution, and model routing."
+policies.normal.plainEnglish:
+  - "The UI sends one escalation request through Kong to the orchestrator."
+  - "Kong handles sub-agent discovery and handoff through A2A, so the orchestrator never talks to the agents directly."
+  - "Kong exposes the mock REST API as MCP tools, so the orchestrator and sub-agents call governed tools instead of raw endpoints."
+  - "Kong routes orchestrator LLM traffic to OpenAI and sub-agent LLM traffic to Gemini, then returns one final escalation brief."
+policies.normal.title: "Normal"
+policies.normal.why: "It is the reference path for the rest of the governance scenarios."
+policies.piiSanitizer.intro: "Kong sanitizes sensitive data before it leaves the gateway and sanitizes the model response before it returns to the UI."
+policies.piiSanitizer.plainEnglish:
+  - "Kong inspects the prompt before the model call and the response before it returns to the UI."
+  - "The route is configured in BOTH directions, so request and response are both protected."
+  - "The selected mode decides whether sensitive values are replaced, synthesized, or blocked entirely."
+policies.piiSanitizer.title: "PII Sanitization"
+policies.piiSanitizer.why: "It shows privacy controls at the gateway rather than in every application and prompt path."
+policies.promptCompression.appliedRoute.ratio: "Prompt-compress ratio orchestrator route"
+policies.promptCompression.appliedRoute.tokenCount: "Prompt-compress token-count orchestrator route"
+policies.promptCompression.intro: "Kong compresses the verbose user prompt before it reaches the model, reducing the number of input tokens sent upstream."
+policies.promptCompression.mode.ratio: "By Ratio (50%)"
+policies.promptCompression.mode.tokenCount: "By Token Count (100 tokens)"
+policies.promptCompression.plainEnglish:
+  - "The application sends the full verbose prompt to Kong."
+  - "Kong forwards the prompt to the AI Prompt Compressor service and replaces it with the compressed version before the model call."
+  - "The model still returns a normal answer, while Kong logs the original tokens, compressed tokens, and saved tokens for Grafana."
+policies.promptCompression.title: "Prompt Compression"
+policies.promptCompression.why: "It shows prompt-size governance, lower token cost, and context-window control at the gateway layer."
+policies.promptEnhancement.additionalRequirements: "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner"
+policies.promptEnhancement.intro: "Kong adds extra governance instructions to the orchestrator prompt before the model sees it."
+policies.promptEnhancement.mode.decorated: "With Decorator"
+policies.promptEnhancement.mode.plain: "Without Decorator"
+policies.promptEnhancement.plainEnglish:
+  - "The plain route forwards the prompt unchanged."
+  - "The decorated route prepends extra system instructions on the Kong route."
+  - "Those injected instructions force a more structured, executive-safe response without changing the application code."
+policies.promptEnhancement.prependedMessage1: "You are responding under AI governance enforced by Kong Gateway."
+policies.promptEnhancement.prependedMessage2: "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint"
+policies.promptEnhancement.title: "Prompt Decorator"
+policies.promptEnhancement.whereApplied.decorated: "Decorated prompt-enhancement probe route"
+policies.promptEnhancement.whereApplied.plain: "Plain prompt-enhancement probe route"
+policies.promptEnhancement.why: "It shows how response style and prompt standards can be enforced centrally."
+policies.rag.config:
+  - ["Policy", "AI RAG Injector"]
+  - ["Vector store", "Redis"]
+  - ["Embedding model", "text-embedding-3-large"]
+  - ["Answer model", "OpenAI 4o mini"]
+  - ["Demo shape", "Before and after comparison"]
+policies.rag.intro: "Kong uses AI RAG Injector to retrieve fictional AtlasFlow support KB content from Redis and inject it into the prompt before forwarding the request upstream."
+policies.rag.plainEnglish:
+  - "The baseline run sends the support question directly to the model."
+  - "The RAG run embeds the question, retrieves the closest AtlasFlow KB chunks from Redis, and injects them into the prompt."
+  - "The grounded route should answer with more specific support guidance than the baseline route."
+policies.rag.title: "RAG"
+policies.rag.why: "It shows retrieval and grounding at the gateway layer instead of in application code."
+policies.semanticCache.config:
+  - ["Policy", "AI Semantic Cache"]
+  - ["Embedding model", "text-embedding-3-small"]
+  - ["Vector store", "Redis"]
+  - ["Distance metric", "cosine"]
+  - ["Vector threshold", "0.1"]
+  - ["Demo shape", "First request misses, second similar request hits"]
+policies.semanticCache.intro: "Kong checks Redis for a semantically similar prior prompt before deciding whether it needs to call the model again."
+policies.semanticCache.plainEnglish:
+  - "The first request seeds the cache."
+  - "Kong embeds the prompt, checks Redis, misses, and forwards the request to the model."
+  - "The second similar request hits the cache and returns from Kong without invoking the model again."
+policies.semanticCache.title: "Semantic Cache"
+policies.semanticCache.why: "It demonstrates lower cost and faster reuse for semantically similar prompts."
+policies.semanticGuard.config:
+  - ["Policy", "AI Semantic Prompt Guard"]
+  - ["Embedding model", "text-embedding-3-small"]
+  - ["Vector store", "Redis"]
+  - ["Distance metric", "cosine"]
+  - ["Search threshold", "0.5"]
+  - ["Vector threshold", "0.2"]
+  - ["Demo shape", "Single prompt, allow or block"]
+  - ["Denied themes", "Violence, confidential info, and policy bypass prompts"]
+policies.semanticGuard.intro: "Kong treats this as a one-shot policy probe: one prompt goes in, and Kong either allows it or blocks it before the model call."
+policies.semanticGuard.plainEnglish:
+  - "Kong generates an embedding for the prompt before any model call is made."
+  - "It compares that embedding against denied topics stored in Redis using cosine similarity."
+  - "If the prompt is semantically close to a denied topic, Kong blocks it. If not, Kong allows the prompt to reach the model and returns the response directly."
+policies.semanticGuard.title: "Semantic Guard"
+policies.semanticGuard.why: "It shows semantic allow-or-deny behavior based on meaning, not simple keyword matching."
+policies.tokenLimit.config:
+  - ["Subscene", "Consumer Token Rate Limit"]
+  - ["Protected route", "Orchestrator AI route"]
+  - ["Policy", "AI Rate Limiting Advanced"]
+  - ["Provider key", "openai"]
+  - ["Configured limit", "1 request"]
+  - ["Window", "300 seconds"]
+  - ["Expected outcome", "A later orchestrator LLM call is blocked with HTTP 429"]
+policies.tokenLimit.intro: "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted."
+policies.tokenLimit.plainEnglish:
+  - "The route is protected by AI Rate Limiting Advanced."
+  - "This subscene demonstrates a consumer-scoped token rate limit."
+  - "The first probe request is expected to be allowed through."
+  - "The second probe request is expected to be rejected at Kong with HTTP 429 instead of reaching the provider."
+policies.tokenLimit.title: "AI Token Rate Limit"
+policies.tokenLimit.why: "It demonstrates usage control and budget enforcement at the gateway."
+policyModal.configLabel: "Config Applied"
+policyModal.eyebrow: "Kong Policy"
+policyModal.intro: "This explains what Kong is doing for the current scene in plain English."
+policyModal.title: "Scene Policy Details"
+policyModal.whatLabel: "What Kong Is Doing"
+policyModal.whyLabel: "Why It Matters"
+probe.lakera.copy: "Edit the prompt and run one of the Lakera safety modes. Kong should block the request and return the Lakera detector category when the policy triggers."
+probe.lakera.label: "Lakera Policy Guard Request"
+probe.lakera.mode.contentModeration: "Content Moderation"
+probe.lakera.mode.dataLeak: "Data Leak Prevention"
+probe.lakera.mode.promptDefense: "Prompt Defense"
+probe.lakera.mode.safe: "Safe Prompt"
+probe.llmJudge.copy: "Choose the prompt payload to send through Kong for the LLM as Judge scenario. Kong AI Proxy Advanced sends the request through candidate models, then the judge model scores the response for accuracy."
+probe.llmJudge.label: "LLM as Judge Request"
+probe.llmJudge.prompt.escalation: "Escalation Triage"
+probe.llmJudge.prompt.lowScore: "Low Score Probe"
+probe.llmJudge.prompt.overview: "KongHQ Overview"
+probe.loadBalancing.copy: "Use a focused probe for failover or semantic routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes to the most relevant model based on the prompt itself."
+probe.loadBalancing.label: "Load Balancing Mode"
+probe.loadBalancing.mode.failover: "LLM Failover"
+probe.loadBalancing.mode.semantic: "Semantic Load Balancing"
+probe.loadBalancing.preset.creative: "Creative / Marketing"
+probe.loadBalancing.preset.support: "Support / Operational"
+probe.loadBalancing.send: "Send Load Balancing Request"
+probe.pii.copy: "Choose how Kong AI PII Sanitizer should anonymize the request and response. The payload below is the actual PII-rich prompt this scene sends through Kong."
+probe.pii.label: "Sanitization Mode"
+probe.pii.mode.block: "Block"
+probe.pii.mode.placeholder: "Placeholder"
+probe.pii.mode.synthetic: "Synthetic"
+probe.pii.send: "Send PII Sanitization Request"
+probe.promptCompression.copy: "Choose how Kong AI Prompt Compressor should shrink the request before the model call. The payload below is the verbose prompt sent through Kong."
+probe.promptCompression.label: "Compression Mode"
+probe.promptCompression.mode.rate: "By Ratio (50%)"
+probe.promptCompression.mode.tokenCount: "By Token Count (100)"
+probe.promptCompression.send: "Send Prompt Compression Request"
+probe.promptDecorator.copy: "Use the same editable prompt against a plain route or a Kong-decorated route to highlight the difference in output structure and tone."
+probe.promptDecorator.label: "Decorator Mode"
+probe.promptDecorator.mode.decorated: "With Decorator"
+probe.promptDecorator.mode.plain: "Without Decorator"
+probe.promptDecorator.send: "Send Prompt Decorator Request"
+probe.rag.afterCopy: "Sends the same AtlasFlow support question through the Kong RAG route backed by Redis."
+probe.rag.afterLabel: "After"
+probe.rag.afterSend: "Run With RAG"
+probe.rag.beforeCopy: "Sends the AtlasFlow support question through the baseline route without Kong RAG injection."
+probe.rag.beforeLabel: "Before"
+probe.rag.beforeSend: "Run Baseline"
+probe.semanticCache.clear: "Clear Semantic Cache"
+probe.semanticCache.clearCopy: "Clears all semantic cache entries so the next first request starts from a clean cache."
+probe.semanticCache.firstCopy: "Seeds Kong semantic cache for the orchestrator triage prompt."
+probe.semanticCache.firstLabel: "First Request"
+probe.semanticCache.firstSend: "Send First Request"
+probe.semanticCache.secondCopy: "Replays the same triage payload so Kong can return a cache hit."
+probe.semanticCache.secondLabel: "Second Request"
+probe.semanticCache.secondSend: "Send Second Request"
+probe.semanticGuard.copy: "Edit the prompt and run one of the semantic-guard actions. Kong compares embeddings against denied topics before allowing any model call."
+probe.semanticGuard.label: "Semantic Guard Request"
+probe.semanticGuard.mode.employee: "Employee / Confidential Info"
+probe.semanticGuard.mode.policy: "Policy / Access Bypass"
+probe.semanticGuard.mode.safe: "Safe Prompt"
+probe.semanticGuard.mode.violence: "Violence / Bomb"
+probe.tokenLimit.copy: "This focused probe sends the same editable prompt twice on the rate-limited route so the first call can pass and the second can be blocked by Kong at the consumer level."
+probe.tokenLimit.label: "AI Token Rate Limit"
+probe.tokenLimit.mode.consumer: "Consumer Token Rate Limit"
+probe.tokenLimit.send: "Send Token Rate Limit Request"
+scenario.lakera_guard: "Lakera Policy Guard"
+scenario.llm_as_judge: "LLM as Judge"
+scenario.load_balancing: "Load Balancing"
+scenario.normal: "Normal"
+scenario.pii_sanitizer: "PII Sanitization"
+scenario.prompt_compression: "Prompt Compression"
+scenario.prompt_enhancement: "Prompt Decorator"
+scenario.rag: "RAG"
+scenario.semantic_cache: "Semantic Cache"
+scenario.semantic_guard: "Semantic Guard"
+scenario.token_limit: "AI Token Rate Limit"
+scene.choosePreset: "Choose a preset"
+scene.chooseScenario: "Choose a governance scenario"
+scene.copy: "A renewal-risk account reports a billing issue and a workflow sync issue. The UI stays focused on the topology and trace, while the form lives here in the scene popup."
+scene.eyebrow: "Scene"
+scene.play: "Play"
+scene.preset.acme: "Acme Health"
+scene.preset.contoso: "Contoso Retail"
+scene.preset.northwind: "Northwind Logistics"
+scene.title: "Customer Escalation Triage"
+sequenceModal.eyebrow: "Normal Scenario"
+sequenceModal.title: "Sequence Diagram"
+sidebar.clearTrace: "Clear Trace"
+sidebar.contextId: "Context ID"
+sidebar.emptyCopy: "Open Scenes to choose the demo input and start the run."
+sidebar.emptyTitle: "No run yet"
+sidebar.kicker: "Execution Tree"
+sidebar.lastActivity: "Last Activity"
+sidebar.noSavedRuns: "No saved runs"
+sidebar.recentRuns: "Recent Runs"
+sidebar.runId: "Run ID"
+sidebar.title: "Run Trace"
+stage.activeMcpTool: "Active MCP Tool"
+stage.currentStage: "Current Stage"
+stage.flowDetail: "Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths."
+stage.flowTitle: "Waiting for a run"
+stage.kicker: "Live Topology"
+stage.title: "Traffic Through Kong"
+status.error: "Error"
+status.idle: "idle"
+status.label: "Status"
+status.loaded: "Loaded"
+status.loading: "Loading"
+status.missingContext: "Missing context"
+topbar.brand: "Kong Unified Governance"
+topbar.chip.authn: "Agent AuthN/AuthZ"
+topbar.chip.controls: "Semantic and PII controls"
+topbar.chip.mcp: "MCP tool exposure"
+topbar.chip.observability: "Live observability"
+topbar.chip.routing: "AI routing and failover"
+topbar.eyebrow: "Kong AI Gateway Demo"
+topbar.helpAria: "About this demo"
+topbar.heroCopy: "Kong governs the full data path: API traffic, events, agent orchestration, LLM routing, and MCP tool access all pass through the gateway with live trace visibility."
+topbar.resetObservability: "Reset Observability"
+topbar.resetScene: "Reset Scene"
+topbar.scenes: "Scenes"
+topbar.viewDiagrams: "View Diagrams"
+topbar.viewRunOutput: "View Run Output"
+traceExplorer.contextId: "Context ID"
+traceExplorer.contextPlaceholder: "ctx-..."
+traceExplorer.copy: "This view reads normalized Loki-backed trace events by <code>context_id</code> and shows the A2A, MCP, and LLM sequence with payload details."
+traceExplorer.detailTitle: "Event Details"
+traceExplorer.emptyCopy: "Open a recent run or enter a context id to load the custom trace explorer."
+traceExplorer.emptyTitle: "No trace loaded"
+traceExplorer.events: "Events"
+traceExplorer.eyebrow: "Custom Trace View"
+traceExplorer.loadTrace: "Load Trace"
+traceExplorer.messages: "Messages"
+traceExplorer.request: "Request"
+traceExplorer.response: "Response"
+traceExplorer.runId: "Run ID"
+traceExplorer.runPlaceholder: "optional run id filter"
+traceExplorer.selectEvent: "Select an event"
+traceExplorer.status: "Status"
+traceExplorer.statusIdle: "Idle"
+traceExplorer.summary: "Summary"
+traceExplorer.summaryCopy: "The selected event will show lifecycle fields and payload details here."
+traceExplorer.tasks: "Tasks"
+traceExplorer.timeline: "Timeline"
+traceExplorer.title: "Context Trace Explorer"

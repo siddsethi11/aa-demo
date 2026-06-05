@@ -369,9 +369,9 @@ function updateTraceExplorerSummary() {
 function renderTraceExplorerDetail() {
   const event = traceExplorerState.events[traceExplorerState.selectedIndex];
   if (!event) {
-    traceDetailTitle.textContent = "Event Details";
-    traceDetailMeta.innerHTML = '<span class="meta-chip">Select an event</span>';
-    traceDetailSummary.textContent = "The selected event will show lifecycle fields and payload details here.";
+    traceDetailTitle.textContent = t("js.eventDetails.title", null, "Event Details");
+    traceDetailMeta.innerHTML = `<span class="meta-chip">${escapeHtml(t("js.eventDetails.selectEvent", null, "Select an event"))}</span>`;
+    traceDetailSummary.textContent = t("js.eventDetails.summary", null, "The selected event will show lifecycle fields and payload details here.");
     traceDetailRequest.textContent = "-";
     traceDetailResponse.textContent = "-";
     return;
@@ -473,10 +473,10 @@ async function loadTraceExplorer() {
   const contextId = traceContextInput.value.trim();
   const runId = traceRunInput.value.trim();
   if (!contextId) {
-    traceExplorerStatus.textContent = "Missing context";
+    traceExplorerStatus.textContent = t("status.missingContext", null, "Missing context");
     return;
   }
-  traceExplorerStatus.textContent = "Loading";
+  traceExplorerStatus.textContent = t("status.loading", null, "Loading");
   traceExplorerEvents.innerHTML = `
     <div class="trace-empty">
       <h3>Loading trace</h3>
@@ -505,12 +505,12 @@ async function loadTraceExplorer() {
       events: data.events || [],
       selectedIndex: (data.events || []).length ? 0 : -1,
     };
-    traceExplorerStatus.textContent = "Loaded";
+    traceExplorerStatus.textContent = t("status.loaded", null, "Loaded");
     updateTraceExplorerSummary();
     renderTraceExplorerEvents();
     renderTraceExplorerDetail();
   } catch (error) {
-    traceExplorerStatus.textContent = "Error";
+    traceExplorerStatus.textContent = t("status.error", null, "Error");
     traceExplorerEvents.innerHTML = `
       <div class="trace-empty">
         <h3>Trace load failed</h3>
@@ -585,199 +585,199 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
 
   const generic = {
     user: {
-      title: "User Request",
-      intro: "The demo starts here with one guided request entering the hosted UI.",
-      plainEnglish: [
+      title: t("nodeDetails.user.title", null, "User Request"),
+      intro: t("nodeDetails.user.intro", null, "The demo starts here with one guided request entering the hosted UI."),
+      plainEnglish: tList("nodeDetails.user.plainEnglish", null, [
         "This is the business request that starts the workflow.",
         "The request carries the selected governance scenario and the shared run_id.",
         "Everything downstream is correlated back to this entry point.",
-      ],
-      why: "It establishes the business context Kong will govern.",
-      config: [
+      ]),
+      why: t("nodeDetails.user.why", null, "It establishes the business context Kong will govern."),
+      config: tList("nodeDetails.user.config", null, [
         ["Input", "Customer escalation request"],
         ["Carries", "Scene data, governance_scenario, run_id"],
-      ],
+      ]),
     },
     ui: {
-      title: "Dashboard",
-      intro: "The dashboard starts runs, renders the live topology, and streams trace updates.",
-      plainEnglish: [
+      title: t("nodeDetails.ui.title", null, "Dashboard"),
+      intro: t("nodeDetails.ui.intro", null, "The dashboard starts runs, renders the live topology, and streams trace updates."),
+      plainEnglish: tList("nodeDetails.ui.plainEnglish", null, [
         "The UI goes through Kong instead of calling services directly.",
         "It shows the path activation, trace tree, and run output.",
         "It also exposes the scene, diagrams, and detail modals used in the demo.",
-      ],
-      why: "It makes the governed traffic and the business workflow visible in one place.",
-      config: [
+      ]),
+      why: t("nodeDetails.ui.why", null, "It makes the governed traffic and the business workflow visible in one place."),
+      config: tList("nodeDetails.ui.config", null, [
         ["Served through", "Kong"],
         ["Role", "Launch runs and visualize governed flow"],
-      ],
+      ]),
     },
     orchestrator: {
-      title: "Orchestrator",
-      intro: "The orchestrator is the main workflow coordinator for the escalation.",
-      plainEnglish: [
+      title: t("nodeDetails.orchestrator.title", null, "Orchestrator"),
+      intro: t("nodeDetails.orchestrator.intro", null, "The orchestrator is the main workflow coordinator for the escalation."),
+      plainEnglish: tList("nodeDetails.orchestrator.plainEnglish", null, [
         "It gathers account context through Kong-exposed tools.",
         "It discovers and calls the support and success agents through Kong's A2A routes.",
         "It performs the final synthesis before returning the result.",
-      ],
-      why: "It turns multiple governed tool and agent hops into one business outcome.",
-      config: [
+      ]),
+      why: t("nodeDetails.orchestrator.why", null, "It turns multiple governed tool and agent hops into one business outcome."),
+      config: tList("nodeDetails.orchestrator.config", null, [
         ["Framework", "LangGraph"],
         ["Calls through Kong", "MCP, A2A sub-agents, and orchestrator AI routes"],
-      ],
+      ]),
     },
     "support-agent": {
-      title: "Support Agent",
-      intro: "The support agent handles the technical investigation side of the escalation.",
-      plainEnglish: [
+      title: t("nodeDetails.supportAgent.title", null, "Support Agent"),
+      intro: t("nodeDetails.supportAgent.intro", null, "The support agent handles the technical investigation side of the escalation."),
+      plainEnglish: tList("nodeDetails.supportAgent.plainEnglish", null, [
         "It resolves its allowed tools through Kong.",
         "It checks incident status and runbook guidance.",
         "It summarizes the technical posture through the sub-agent AI route.",
-      ],
-      why: "It converts incident data into technical guidance for the orchestrator.",
-      config: [
+      ]),
+      why: t("nodeDetails.supportAgent.why", null, "It converts incident data into technical guidance for the orchestrator."),
+      config: tList("nodeDetails.supportAgent.config", null, [
         ["Allowed tools", "get_incident_status, search_runbook"],
         ["LLM path", "Sub-agent Gemini route through Kong"],
-      ],
+      ]),
     },
     "success-agent": {
-      title: "Success Agent",
-      intro: "The success agent handles follow-up planning and customer communication.",
-      plainEnglish: [
+      title: t("nodeDetails.successAgent.title", null, "Success Agent"),
+      intro: t("nodeDetails.successAgent.intro", null, "The success agent handles follow-up planning and customer communication."),
+      plainEnglish: tList("nodeDetails.successAgent.plainEnglish", null, [
         "It resolves only its allowed tools through Kong.",
         "It drafts the reply and creates the follow-up task.",
         "It turns those outputs into a customer-ready plan.",
-      ],
-      why: "It makes the customer and account-team actions explicit in the governed flow.",
-      config: [
+      ]),
+      why: t("nodeDetails.successAgent.why", null, "It makes the customer and account-team actions explicit in the governed flow."),
+      config: tList("nodeDetails.successAgent.config", null, [
         ["Allowed tools", "draft_customer_reply, create_followup_task"],
         ["LLM path", "Sub-agent Gemini route through Kong"],
-      ],
+      ]),
     },
     openai: {
-      title: "OpenAI 4o mini",
-      intro: "This is the primary orchestrator model path in the standard run.",
-      plainEnglish: [
+      title: t("nodeDetails.openai.title", null, "OpenAI 4o mini"),
+      intro: t("nodeDetails.openai.intro", null, "This is the primary orchestrator model path in the standard run."),
+      plainEnglish: tList("nodeDetails.openai.plainEnglish", null, [
         "Kong routes orchestrator planning and summary calls here in the normal flow.",
         "Some scenarios change how Kong governs this route.",
         "It is kept separate from the shared sub-agent route.",
-      ],
-      why: "It shows caller-specific model routing at the gateway layer.",
-      config: [
+      ]),
+      why: t("nodeDetails.openai.why", null, "It shows caller-specific model routing at the gateway layer."),
+      config: tList("nodeDetails.openai.config", null, [
         ["Used by", "Orchestrator"],
         ["Role", "Planner, triage, and final executive summary"],
-      ],
+      ]),
     },
     gemini: {
-      title: "Gemini 2.5 Flash",
-      intro: "This model path is shared by sub-agents and selected orchestrator scenarios.",
-      plainEnglish: [
+      title: t("nodeDetails.gemini.title", null, "Gemini 2.5 Flash"),
+      intro: t("nodeDetails.gemini.intro", null, "This model path is shared by sub-agents and selected orchestrator scenarios."),
+      plainEnglish: tList("nodeDetails.gemini.plainEnglish", null, [
         "Kong routes the support and success agents here in the base flow.",
         "It also appears for failover or judge-related scenario paths.",
         "The node represents the governed route choice, not just a raw provider logo.",
-      ],
-      why: "It shows that Kong can split or redirect model traffic by role and scenario.",
-      config: [
+      ]),
+      why: t("nodeDetails.gemini.why", null, "It shows that Kong can split or redirect model traffic by role and scenario."),
+      config: tList("nodeDetails.gemini.config", null, [
         ["Used by", "Sub-agents and selected scenario paths"],
         ["Governed through", "Kong AI routing"],
-      ],
+      ]),
     },
     "judge-model": {
-      title: "Judge Model",
-      intro: "This node appears in the LLM as Judge scenario when Kong scores a candidate response with a separate model.",
-      plainEnglish: [
+      title: t("nodeDetails.judgeModel.title", null, "Judge Model"),
+      intro: t("nodeDetails.judgeModel.intro", null, "This node appears in the LLM as Judge scenario when Kong scores a candidate response with a separate model."),
+      plainEnglish: tList("nodeDetails.judgeModel.plainEnglish", null, [
         "Kong invokes the judge after the candidate response is produced.",
         "The judge returns a score and evaluation context.",
         "That output is then exposed in observability and the final result path.",
-      ],
-      why: "It makes evaluation at the gateway layer visible.",
-      config: [
+      ]),
+      why: t("nodeDetails.judgeModel.why", null, "It makes evaluation at the gateway layer visible."),
+      config: tList("nodeDetails.judgeModel.config", null, [
         ["Scenario", "LLM as Judge"],
         ["Purpose", "Quality scoring and judgment"],
-      ],
+      ]),
     },
     redis: {
-      title: "Redis Vector DB",
-      intro: "Redis backs the semantic governance scenarios by storing or comparing embeddings.",
-      plainEnglish: [
+      title: t("nodeDetails.redis.title", null, "Redis Vector DB"),
+      intro: t("nodeDetails.redis.intro", null, "Redis backs the semantic governance scenarios by storing or comparing embeddings."),
+      plainEnglish: tList("nodeDetails.redis.plainEnglish", null, [
         "Kong uses it for semantic guard comparisons.",
         "Kong also uses it for semantic cache lookup and reuse.",
         "Kong also uses it as the retrieval store for the RAG scenario.",
         "It only appears when the semantic scenarios are relevant.",
-      ],
-      why: "It shows the supporting infrastructure behind semantic policy behavior.",
-      config: [
+      ]),
+      why: t("nodeDetails.redis.why", null, "It shows the supporting infrastructure behind semantic policy behavior."),
+      config: tList("nodeDetails.redis.config", null, [
         ["Used by", "Semantic Guard, Semantic Cache, and RAG"],
         ["Role", "Embedding-backed similarity store"],
-      ],
+      ]),
     },
     lakera: {
-      title: "Lakera",
-      intro: "Lakera inspects the prompt on the Kong route before the upstream model call is allowed to happen.",
-      plainEnglish: [
+      title: t("nodeDetails.lakera.title", null, "Lakera"),
+      intro: t("nodeDetails.lakera.intro", null, "Lakera inspects the prompt on the Kong route before the upstream model call is allowed to happen."),
+      plainEnglish: tList("nodeDetails.lakera.plainEnglish", null, [
         "Kong sends the prompt to Lakera for policy inspection before the model call.",
         "Lakera can allow the request or block it with detector categories.",
         "It only appears during the Lakera Policy Guard scenario.",
-      ],
-      why: "It makes the external policy guard visible as part of the governed data path.",
-      config: [
+      ]),
+      why: t("nodeDetails.lakera.why", null, "It makes the external policy guard visible as part of the governed data path."),
+      config: tList("nodeDetails.lakera.config", null, [
         ["Used by", "Lakera Policy Guard"],
         ["Role", "Prompt inspection and allow-or-block decision"],
-      ],
+      ]),
     },
     compressor: {
-      title: "AI Compress Service",
-      intro: "This service appears when Kong compresses a verbose prompt before the upstream model call.",
-      plainEnglish: [
+      title: t("nodeDetails.compressor.title", null, "AI Compress Service"),
+      intro: t("nodeDetails.compressor.intro", null, "This service appears when Kong compresses a verbose prompt before the upstream model call."),
+      plainEnglish: tList("nodeDetails.compressor.plainEnglish", null, [
         "Kong sends the request prompt here before the model call when the scenario uses prompt compression.",
         "The service returns a compressed prompt and token-savings metadata.",
         "It only appears during the Prompt Compression scenario.",
-      ],
-      why: "It makes the external compression step visible as part of the governed LLM path.",
-      config: [
+      ]),
+      why: t("nodeDetails.compressor.why", null, "It makes the external compression step visible as part of the governed LLM path."),
+      config: tList("nodeDetails.compressor.config", null, [
         ["Scenario", "Prompt Compression"],
         ["Modes", "rate, target_token"],
-      ],
+      ]),
     },
     "pii-service": {
-      title: "AI PII Service",
-      intro: "This service appears when Kong sanitizes or blocks sensitive content in request or response paths.",
-      plainEnglish: [
+      title: t("nodeDetails.piiService.title", null, "AI PII Service"),
+      intro: t("nodeDetails.piiService.intro", null, "This service appears when Kong sanitizes or blocks sensitive content in request or response paths."),
+      plainEnglish: tList("nodeDetails.piiService.plainEnglish", null, [
         "Kong sends request content here before the model call when the scenario uses sanitization.",
         "It can also sanitize the response before Kong returns it.",
         "The exact behavior depends on placeholder, synthetic, or block mode.",
-      ],
-      why: "It shows that privacy enforcement can happen outside application code.",
-      config: [
+      ]),
+      why: t("nodeDetails.piiService.why", null, "It shows that privacy enforcement can happen outside application code."),
+      config: tList("nodeDetails.piiService.config", null, [
         ["Scenario", "PII Sanitization"],
         ["Modes", "placeholder, synthetic, block"],
-      ],
+      ]),
     },
     observability: {
-      title: "Grafana / Loki",
-      intro: "Observability receives Kong gateway logs and makes them queryable by run and scenario.",
-      plainEnglish: [
+      title: t("nodeDetails.observability.title", null, "Grafana / Loki"),
+      intro: t("nodeDetails.observability.intro", null, "Observability receives Kong gateway logs and makes them queryable by run and scenario."),
+      plainEnglish: tList("nodeDetails.observability.plainEnglish", null, [
         "Kong sends structured logs into Loki.",
         "Grafana reads those logs to show counts, failures, and policy events.",
         "The same run_id ties the topology, trace, and metrics together.",
-      ],
-      why: "It provides evidence for the governed path the topology is visualizing.",
-      config: [
+      ]),
+      why: t("nodeDetails.observability.why", null, "It provides evidence for the governed path the topology is visualizing."),
+      config: tList("nodeDetails.observability.config", null, [
         ["Receives", "Structured Kong logs"],
         ["Correlates by", "run_id and gateway metadata"],
-      ],
+      ]),
     },
     mcp: {
-      title: "MCP Tools",
-      intro: "Kong exposes the backing APIs as MCP tools, publishes the server in Konnect MCP Registry, and filters the allowed tool set per agent.",
-      plainEnglish: [
+      title: t("nodeDetails.mcp.title", null, "MCP Tools"),
+      intro: t("nodeDetails.mcp.intro", null, "Kong exposes the backing APIs as MCP tools, publishes the server in Konnect MCP Registry, and filters the allowed tool set per agent."),
+      plainEnglish: tList("nodeDetails.mcp.plainEnglish", null, [
         "Agents ask Kong for the tool list instead of discovering raw APIs directly.",
         "The same MCP server is published in Konnect as AA Demo MCP Registry for internal discovery.",
         "Kong applies auth and access control before returning tools.",
         "Tool invocations still route back through Kong before reaching backend services.",
-      ],
-      why: "It is where API governance becomes agent-tool governance, with Konnect Registry handling discovery metadata and Kong handling runtime control.",
-      config: [
+      ]),
+      why: t("nodeDetails.mcp.why", null, "It is where API governance becomes agent-tool governance, with Konnect Registry handling discovery metadata and Kong handling runtime control."),
+      config: tList("nodeDetails.mcp.config", null, [
         ["Protocol", "MCP via Kong"],
         ["Registry", "AA Demo MCP Registry"],
         ["Published server", "com.aa-demo/mock-mcp"],
@@ -786,21 +786,21 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
         ["Orchestrator tools", "get_customer_account, get_renewal_risk, get_open_tickets"],
         ["Support tools", "get_incident_status, search_runbook"],
         ["Success tools", "draft_customer_reply, create_followup_task"],
-      ],
+      ]),
     },
     "backend-api": {
-      title: "Backend APIs",
-      intro: "These are the mock upstream systems that hold the data used by the tools and agents.",
-      plainEnglish: [
+      title: t("nodeDetails.backendApi.title", null, "Backend APIs"),
+      intro: t("nodeDetails.backendApi.intro", null, "These are the mock upstream systems that hold the data used by the tools and agents."),
+      plainEnglish: tList("nodeDetails.backendApi.plainEnglish", null, [
         "They provide account, incident, runbook, reply, and task data.",
         "The topology now shows them behind Kong rather than directly behind MCP.",
         "They act as the raw upstream data plane in the demo.",
-      ],
-      why: "They make the difference between direct backend access and Kong-governed access visible.",
-      config: [
+      ]),
+      why: t("nodeDetails.backendApi.why", null, "They make the difference between direct backend access and Kong-governed access visible."),
+      config: tList("nodeDetails.backendApi.config", null, [
         ["Provides", "Business and support data used by the demo"],
         ["Reached through", "Kong-governed routing"],
-      ],
+      ]),
     },
   };
 
@@ -810,54 +810,54 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
 function policyDetailsForScenario(scenario) {
   const common = {
     normal: {
-      title: "Normal",
-      intro: "This is the baseline multi-agent flow: Kong fronts the full orchestration path, including MCP tool access, A2A discovery and execution, and model routing.",
-      plainEnglish: [
+      title: t("policies.normal.title", null, "Normal"),
+      intro: t("policies.normal.intro", null, "This is the baseline multi-agent flow: Kong fronts the full orchestration path, including MCP tool access, A2A discovery and execution, and model routing."),
+      plainEnglish: tList("policies.normal.plainEnglish", null, [
         "The UI sends one escalation request through Kong to the orchestrator.",
         "Kong handles sub-agent discovery and handoff through A2A, so the orchestrator never talks to the agents directly.",
         "Kong exposes the mock REST API as MCP tools, so the orchestrator and sub-agents call governed tools instead of raw endpoints.",
         "Kong routes orchestrator LLM traffic to OpenAI and sub-agent LLM traffic to Gemini, then returns one final escalation brief.",
-      ],
-      why: "It is the reference path for the rest of the governance scenarios.",
-      config: [
+      ]),
+      why: t("policies.normal.why", null, "It is the reference path for the rest of the governance scenarios."),
+      config: tList("policies.normal.config", null, [
         ["UI access", "Key-auth using the UI consumer key"],
         ["Agent-to-agent", "AI A2A Proxy handles discovery and message/stream execution"],
         ["Tool exposure", "AI MCP Proxy exposes only the allowed tools per consumer group"],
         ["Orchestrator LLM route", "AI Proxy Advanced to OpenAI 4o mini"],
         ["Sub-agent LLM route", "AI Proxy Advanced to Gemini 2.5 Flash"],
-      ],
+      ]),
     },
     load_balancing: {
-      title: "Load Balancing",
+      title: t("policies.loadBalancing.title", null, "Load Balancing"),
       intro: currentLoadBalancingMode() === "semantic"
-        ? "Kong semantically routes the prompt to the most relevant model target before any provider call is made."
-        : "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail.",
+        ? t("policies.loadBalancing.intro.semantic", null, "Kong semantically routes the prompt to the most relevant model target before any provider call is made.")
+        : t("policies.loadBalancing.intro.failover", null, "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."),
       plainEnglish: currentLoadBalancingMode() === "semantic"
-        ? [
+        ? tList("policies.loadBalancing.plainEnglish.semantic", null, [
             "The orchestrator makes one focused probe request through Kong.",
             "Kong embeds the prompt and compares it with the target descriptions stored for the semantic balancer.",
             "Kong then sends the request to the best-fit model target and returns that result directly.",
-          ]
-        : [
+          ])
+        : tList("policies.loadBalancing.plainEnglish.failover", null, [
             "The orchestrator makes one focused probe request through Kong.",
             "Kong sends that request to the primary OpenAI target first.",
             "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result.",
-          ],
+          ]),
       why: currentLoadBalancingMode() === "semantic"
-        ? "It shows prompt-aware model routing at the gateway layer instead of hard-coding model choice in application logic."
-        : "It shows model resilience at the gateway layer instead of in application code.",
+        ? t("policies.loadBalancing.why.semantic", null, "It shows prompt-aware model routing at the gateway layer instead of hard-coding model choice in application logic.")
+        : t("policies.loadBalancing.why.failover", null, "It shows model resilience at the gateway layer instead of in application code."),
       config: currentLoadBalancingMode() === "semantic"
-        ? [
+        ? tList("policies.loadBalancing.config.semantic", null, [
             ["Mode", "Semantic Load Balancing"],
-            ["Prompt Preset", currentLoadBalancingPromptPreset() === "creative_marketing" ? "Creative / Marketing" : "Support / Operational"],
+            ["Prompt Preset", currentLoadBalancingPromptPreset() === "creative_marketing" ? t("policies.loadBalancing.promptPreset.creative", null, "Creative / Marketing") : t("policies.loadBalancing.promptPreset.support", null, "Support / Operational")],
             ["Support target", "OpenAI 4o mini"],
             ["Creative target", "Gemini 2.5 Flash"],
             ["Plugin", "AI Proxy Advanced"],
             ["Balancer algorithm", "semantic"],
             ["Embedding model", "text-embedding-3-small"],
             ["Vector store", "Redis"],
-          ]
-        : [
+          ])
+        : tList("policies.loadBalancing.config.failover", null, [
             ["Mode", "LLM Failover"],
             ["Primary model", "OpenAI 4o mini"],
             ["Fallback model", "Gemini 2.5 Flash"],
@@ -865,34 +865,34 @@ function policyDetailsForScenario(scenario) {
             ["Balancer algorithm", "priority"],
             ["Retries", "3"],
             ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
-          ],
+          ]),
     },
     llm_failover: {
-      title: "LLM Failover",
-      intro: "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail.",
-      plainEnglish: [
+      title: t("policies.llmFailover.title", null, "LLM Failover"),
+      intro: t("policies.llmFailover.intro", null, "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."),
+      plainEnglish: tList("policies.llmFailover.plainEnglish", null, [
         "The orchestrator makes one focused probe request through Kong.",
         "Kong sends that request to the primary OpenAI target first.",
         "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result.",
-      ],
-      why: "It shows model resilience at the gateway layer instead of in application code.",
-      config: [
+      ]),
+      why: t("policies.llmFailover.why", null, "It shows model resilience at the gateway layer instead of in application code."),
+      config: tList("policies.llmFailover.config", null, [
         ["Primary model", "OpenAI 4o mini"],
         ["Fallback model", "Gemini 2.5 Flash"],
         ["Plugin", "AI Proxy Advanced"],
-      ],
+      ]),
     },
     token_limit: {
-      title: "AI Token Rate Limit",
-      intro: "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted.",
-      plainEnglish: [
+      title: t("policies.tokenLimit.title", null, "AI Token Rate Limit"),
+      intro: t("policies.tokenLimit.intro", null, "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted."),
+      plainEnglish: tList("policies.tokenLimit.plainEnglish", null, [
         "The route is protected by AI Rate Limiting Advanced.",
         "This subscene demonstrates a consumer-scoped token rate limit.",
         "The first probe request is expected to be allowed through.",
         "The second probe request is expected to be rejected at Kong with HTTP 429 instead of reaching the provider.",
-      ],
-      why: "It demonstrates usage control and budget enforcement at the gateway.",
-      config: [
+      ]),
+      why: t("policies.tokenLimit.why", null, "It demonstrates usage control and budget enforcement at the gateway."),
+      config: tList("policies.tokenLimit.config", null, [
         ["Subscene", "Consumer Token Rate Limit"],
         ["Protected route", "Orchestrator AI route"],
         ["Policy", "AI Rate Limiting Advanced"],
@@ -900,52 +900,52 @@ function policyDetailsForScenario(scenario) {
         ["Configured limit", "1 request"],
         ["Window", "300 seconds"],
         ["Expected outcome", "A later orchestrator LLM call is blocked with HTTP 429"],
-      ],
+      ]),
     },
     prompt_enhancement: {
-      title: "Prompt Decorator",
-      intro: "Kong adds extra governance instructions to the orchestrator prompt before the model sees it.",
-      plainEnglish: [
+      title: t("policies.promptEnhancement.title", null, "Prompt Decorator"),
+      intro: t("policies.promptEnhancement.intro", null, "Kong adds extra governance instructions to the orchestrator prompt before the model sees it."),
+      plainEnglish: tList("policies.promptEnhancement.plainEnglish", null, [
         "The plain route forwards the prompt unchanged.",
         "The decorated route prepends extra system instructions on the Kong route.",
         "Those injected instructions force a more structured, executive-safe response without changing the application code.",
-      ],
-      why: "It shows how response style and prompt standards can be enforced centrally.",
+      ]),
+      why: t("policies.promptEnhancement.why", null, "It shows how response style and prompt standards can be enforced centrally."),
       config: [
-        ["Mode", currentPromptEnhancementMode() === "plain" ? "Without Decorator" : "With Decorator"],
+        ["Mode", currentPromptEnhancementMode() === "plain" ? t("policies.promptEnhancement.mode.plain", null, "Without Decorator") : t("policies.promptEnhancement.mode.decorated", null, "With Decorator")],
         ["Policy", "AI Prompt Decorator"],
-        ["Prepended message 1", "You are responding under AI governance enforced by Kong Gateway."],
-        ["Prepended message 2", "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint"],
-        ["Additional requirements", "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner"],
-        ["Where applied", currentPromptEnhancementMode() === "plain" ? "Plain prompt-enhancement probe route" : "Decorated prompt-enhancement probe route"],
+        ["Prepended message 1", t("policies.promptEnhancement.prependedMessage1", null, "You are responding under AI governance enforced by Kong Gateway.")],
+        ["Prepended message 2", t("policies.promptEnhancement.prependedMessage2", null, "Executive escalation policy with sections: Situation, Risk, Actions, Next Checkpoint")],
+        ["Additional requirements", t("policies.promptEnhancement.additionalRequirements", null, "Enterprise-safe tone, regulatory mention when relevant, end with confidence score and owner")],
+        ["Where applied", currentPromptEnhancementMode() === "plain" ? t("policies.promptEnhancement.whereApplied.plain", null, "Plain prompt-enhancement probe route") : t("policies.promptEnhancement.whereApplied.decorated", null, "Decorated prompt-enhancement probe route")],
       ],
     },
     prompt_compression: {
-      title: "Prompt Compression",
-      intro: "Kong compresses the verbose user prompt before it reaches the model, reducing the number of input tokens sent upstream.",
-      plainEnglish: [
+      title: t("policies.promptCompression.title", null, "Prompt Compression"),
+      intro: t("policies.promptCompression.intro", null, "Kong compresses the verbose user prompt before it reaches the model, reducing the number of input tokens sent upstream."),
+      plainEnglish: tList("policies.promptCompression.plainEnglish", null, [
         "The application sends the full verbose prompt to Kong.",
         "Kong forwards the prompt to the AI Prompt Compressor service and replaces it with the compressed version before the model call.",
         "The model still returns a normal answer, while Kong logs the original tokens, compressed tokens, and saved tokens for Grafana.",
-      ],
-      why: "It shows prompt-size governance, lower token cost, and context-window control at the gateway layer.",
+      ]),
+      why: t("policies.promptCompression.why", null, "It shows prompt-size governance, lower token cost, and context-window control at the gateway layer."),
       config: [
         ["Policy", "AI Prompt Compressor"],
         ["Compression service", "ai-compress-service:8080"],
-        ["Mode", currentPromptCompressionMode() === "token_count" ? "By Token Count (100 tokens)" : "By Ratio (50%)"],
-        ["Applied route", currentPromptCompressionMode() === "token_count" ? "Prompt-compress token-count orchestrator route" : "Prompt-compress ratio orchestrator route"],
+        ["Mode", currentPromptCompressionMode() === "token_count" ? t("policies.promptCompression.mode.tokenCount", null, "By Token Count (100 tokens)") : t("policies.promptCompression.mode.ratio", null, "By Ratio (50%)")],
+        ["Applied route", currentPromptCompressionMode() === "token_count" ? t("policies.promptCompression.appliedRoute.tokenCount", null, "Prompt-compress token-count orchestrator route") : t("policies.promptCompression.appliedRoute.ratio", null, "Prompt-compress ratio orchestrator route")],
       ],
     },
     semantic_guard: {
-      title: "Semantic Guard",
-      intro: "Kong treats this as a one-shot policy probe: one prompt goes in, and Kong either allows it or blocks it before the model call.",
-      plainEnglish: [
+      title: t("policies.semanticGuard.title", null, "Semantic Guard"),
+      intro: t("policies.semanticGuard.intro", null, "Kong treats this as a one-shot policy probe: one prompt goes in, and Kong either allows it or blocks it before the model call."),
+      plainEnglish: tList("policies.semanticGuard.plainEnglish", null, [
         "Kong generates an embedding for the prompt before any model call is made.",
         "It compares that embedding against denied topics stored in Redis using cosine similarity.",
         "If the prompt is semantically close to a denied topic, Kong blocks it. If not, Kong allows the prompt to reach the model and returns the response directly.",
-      ],
-      why: "It shows semantic allow-or-deny behavior based on meaning, not simple keyword matching.",
-      config: [
+      ]),
+      why: t("policies.semanticGuard.why", null, "It shows semantic allow-or-deny behavior based on meaning, not simple keyword matching."),
+      config: tList("policies.semanticGuard.config", null, [
         ["Policy", "AI Semantic Prompt Guard"],
         ["Embedding model", "text-embedding-3-small"],
         ["Vector store", "Redis"],
@@ -954,53 +954,53 @@ function policyDetailsForScenario(scenario) {
         ["Vector threshold", "0.2"],
         ["Demo shape", "Single prompt, allow or block"],
         ["Denied themes", "Violence, confidential info, and policy bypass prompts"],
-      ],
+      ]),
     },
     semantic_cache: {
-      title: "Semantic Cache",
-      intro: "Kong checks Redis for a semantically similar prior prompt before deciding whether it needs to call the model again.",
-      plainEnglish: [
+      title: t("policies.semanticCache.title", null, "Semantic Cache"),
+      intro: t("policies.semanticCache.intro", null, "Kong checks Redis for a semantically similar prior prompt before deciding whether it needs to call the model again."),
+      plainEnglish: tList("policies.semanticCache.plainEnglish", null, [
         "The first request seeds the cache.",
         "Kong embeds the prompt, checks Redis, misses, and forwards the request to the model.",
         "The second similar request hits the cache and returns from Kong without invoking the model again.",
-      ],
-      why: "It demonstrates lower cost and faster reuse for semantically similar prompts.",
-      config: [
+      ]),
+      why: t("policies.semanticCache.why", null, "It demonstrates lower cost and faster reuse for semantically similar prompts."),
+      config: tList("policies.semanticCache.config", null, [
         ["Policy", "AI Semantic Cache"],
         ["Embedding model", "text-embedding-3-small"],
         ["Vector store", "Redis"],
         ["Distance metric", "cosine"],
         ["Vector threshold", "0.1"],
         ["Demo shape", "First request misses, second similar request hits"],
-      ],
+      ]),
     },
     llm_as_judge: {
-      title: "LLM as Judge",
-      intro: "Kong sends the request to a candidate model, then invokes a separate judge model to score the response.",
-      plainEnglish: [
+      title: t("policies.llmAsJudge.title", null, "LLM as Judge"),
+      intro: t("policies.llmAsJudge.intro", null, "Kong sends the request to a candidate model, then invokes a separate judge model to score the response."),
+      plainEnglish: tList("policies.llmAsJudge.plainEnglish", null, [
         "The user prompt goes to the candidate model first.",
         "Kong then sends the candidate response to a separate judge model.",
         "The judged result returns normally, while the scoring metadata is written to the logs for Grafana.",
-      ],
-      why: "It shows gateway-side evaluation without adding app-side scoring code.",
-      config: [
+      ]),
+      why: t("policies.llmAsJudge.why", null, "It shows gateway-side evaluation without adding app-side scoring code."),
+      config: tList("policies.llmAsJudge.config", null, [
         ["Policy", "AI LLM as Judge"],
         ["Candidate model", "OpenAI 4o mini"],
         ["Judge model", "Gemini 2.5 Flash"],
         ["Judge rubric", "Accurate, relevant to the request, and useful for the user's stated task"],
         ["Prompt presets", "Escalation Triage, KongHQ Overview, or Kong vs Apigee/AWS"],
         ["Expected outcome", "One response is returned and Kong logs judge latency plus an accuracy score"],
-      ],
+      ]),
     },
     pii_sanitizer: {
-      title: "PII Sanitization",
-      intro: "Kong sanitizes sensitive data before it leaves the gateway and sanitizes the model response before it returns to the UI.",
-      plainEnglish: [
+      title: t("policies.piiSanitizer.title", null, "PII Sanitization"),
+      intro: t("policies.piiSanitizer.intro", null, "Kong sanitizes sensitive data before it leaves the gateway and sanitizes the model response before it returns to the UI."),
+      plainEnglish: tList("policies.piiSanitizer.plainEnglish", null, [
         "Kong inspects the prompt before the model call and the response before it returns to the UI.",
         "The route is configured in BOTH directions, so request and response are both protected.",
         "The selected mode decides whether sensitive values are replaced, synthesized, or blocked entirely.",
-      ],
-      why: "It shows privacy controls at the gateway rather than in every application and prompt path.",
+      ]),
+      why: t("policies.piiSanitizer.why", null, "It shows privacy controls at the gateway rather than in every application and prompt path."),
       config: [
         ["Policy", "AI Sanitizer"],
         ["Protected directions", "Request and response"],
@@ -1010,37 +1010,37 @@ function policyDetailsForScenario(scenario) {
       ],
     },
     rag: {
-      title: "RAG",
-      intro: "Kong uses AI RAG Injector to retrieve fictional AtlasFlow support KB content from Redis and inject it into the prompt before forwarding the request upstream.",
-      plainEnglish: [
+      title: t("policies.rag.title", null, "RAG"),
+      intro: t("policies.rag.intro", null, "Kong uses AI RAG Injector to retrieve fictional AtlasFlow support KB content from Redis and inject it into the prompt before forwarding the request upstream."),
+      plainEnglish: tList("policies.rag.plainEnglish", null, [
         "The baseline run sends the support question directly to the model.",
         "The RAG run embeds the question, retrieves the closest AtlasFlow KB chunks from Redis, and injects them into the prompt.",
         "The grounded route should answer with more specific support guidance than the baseline route.",
-      ],
-      why: "It shows retrieval and grounding at the gateway layer instead of in application code.",
-      config: [
+      ]),
+      why: t("policies.rag.why", null, "It shows retrieval and grounding at the gateway layer instead of in application code."),
+      config: tList("policies.rag.config", null, [
         ["Policy", "AI RAG Injector"],
         ["Vector store", "Redis"],
         ["Embedding model", "text-embedding-3-large"],
         ["Answer model", "OpenAI 4o mini"],
         ["Demo shape", "Before and after comparison"],
-      ],
+      ]),
     },
     lakera_guard: {
-      title: "Lakera Policy Guard",
-      intro: "Kong treats this as a one-shot Lakera probe: one prompt goes in, and Lakera either blocks it or allows it before the model call.",
-      plainEnglish: [
+      title: t("policies.lakeraGuard.title", null, "Lakera Policy Guard"),
+      intro: t("policies.lakeraGuard.intro", null, "Kong treats this as a one-shot Lakera probe: one prompt goes in, and Lakera either blocks it or allows it before the model call."),
+      plainEnglish: tList("policies.lakeraGuard.plainEnglish", null, [
         "Lakera inspects the request body before the model call happens.",
         "This demo uses one Lakera route with safe and blocked prompt modes.",
         "When Lakera blocks the request, Kong returns the detector category and logs the full blocked prompt for observability.",
-      ],
-      why: "It demonstrates external policy enforcement at the gateway without app-side moderation code.",
-      config: [
+      ]),
+      why: t("policies.lakeraGuard.why", null, "It demonstrates external policy enforcement at the gateway without app-side moderation code."),
+      config: tList("policies.lakeraGuard.config", null, [
         ["Policy", "AI Lakera Guard"],
         ["Reveal failure categories", "true"],
         ["Log blocked content", "true"],
         ["Demo shape", "Single prompt, allow or block"],
-      ],
+      ]),
     },
   };
 
@@ -1148,7 +1148,7 @@ function updateRunHistoryOptions(runs, preferredRunId = selectedRunViewId) {
   if (!runs.length) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "No saved runs";
+    option.textContent = t("js.runHistory.noSavedRuns", null, "No saved runs");
     runHistorySelect.appendChild(option);
     runHistorySelect.disabled = true;
     selectedRunViewId = null;
@@ -1172,7 +1172,7 @@ function updateRunHistoryOptions(runs, preferredRunId = selectedRunViewId) {
   return selectedRunId;
 }
 
-function clearRunHistoryOptions(message = "No saved runs") {
+function clearRunHistoryOptions(message = t("js.runHistory.noSavedRuns", null, "No saved runs")) {
   if (!runHistorySelect) {
     selectedRunViewId = null;
     return;
@@ -1209,7 +1209,7 @@ async function refreshRunHistory(preferredRunId = selectedRunViewId, { autoLoad 
     if (runHistorySelect && !runHistorySelect.options.length) {
       const option = document.createElement("option");
       option.value = "";
-      option.textContent = "Run history unavailable";
+      option.textContent = t("js.runHistory.unavailable", null, "Run history unavailable");
       runHistorySelect.appendChild(option);
       runHistorySelect.disabled = true;
     }
@@ -1970,7 +1970,7 @@ function scenarioRequestPayload(payload) {
   return payload;
 }
 
-function showNotice({ kicker = "Status", title, message }) {
+function showNotice({ kicker = t("status.label", null, "Status"), title, message }) {
   if (!noticeModal || !noticeTitle || !noticeMessage || !noticeKicker) {
     return;
   }
@@ -2045,12 +2045,12 @@ function renderTextBlock(text) {
 }
 
 function clearDetailPane() {
-  detailTitle.textContent = "No step selected";
-  detailSummary.textContent = "The selected trace step will show timing, request input, and output payload here.";
+  detailTitle.textContent = t("js.detailPane.noStepSelected", null, "No step selected");
+  detailSummary.textContent = t("js.detailPane.summary", null, "The selected trace step will show timing, request input, and output payload here.");
   detailInput.textContent = "-";
   detailOutput.textContent = "-";
   detailMeta.innerHTML = "";
-  detailMeta.appendChild(makeMetaChip("Click a trace row"));
+  detailMeta.appendChild(makeMetaChip(t("js.detailPane.clickTraceRow", null, "Click a trace row")));
 }
 
 function makeMetaChip(label) {
@@ -2068,7 +2068,7 @@ function updateSelectedDetail() {
   }
 
   detailTitle.textContent = node.title;
-  detailSummary.textContent = node.summary || "No summary available.";
+  detailSummary.textContent = node.summary || t("js.detailPane.noSummary", null, "No summary available.");
   detailInput.textContent = pretty(node.input);
   detailOutput.textContent = pretty(node.output);
   detailMeta.innerHTML = "";
@@ -3122,46 +3122,46 @@ function renderFinalOutput(result) {
   const lakeraProbe = result.lakera_probe;
   const isFocusedProbe = Boolean(loadBalancingProbe || tokenLimitProbe || promptEnhancementProbe || result.semantic_cache_probe || promptCompressionProbe || piiProbe || judgeProbe || ragProbe || lakeraProbe);
   const summaryCopy = lakeraProbe
-    ? "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call."
+    ? t("outputModal.summary.lakera", null, "This output comes from the Lakera policy guard probe and should show whether Kong blocked the prompt before the model call.")
     : ragProbe
-    ? "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
+    ? t("outputModal.summary.rag", null, "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route.")
     : loadBalancingProbe
       ? loadBalancingProbe.mode === "semantic"
-        ? "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt."
-        : "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path."
+        ? t("outputModal.summary.loadBalancingSemantic", null, "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt.")
+        : t("outputModal.summary.loadBalancing", null, "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path.")
     : tokenLimitProbe
-      ? "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request."
+      ? t("outputModal.summary.tokenLimit", null, "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request.")
     : promptEnhancementProbe
-      ? "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious."
+      ? t("outputModal.summary.promptEnhancement", null, "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious.")
     : promptCompressionProbe
-      ? "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call."
+      ? t("outputModal.summary.promptCompression", null, "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call.")
     : isFocusedProbe
-      ? "This output comes from a focused governance probe rather than the full multi-agent workflow."
-      : "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.";
+      ? t("outputModal.summary.focusedProbe", null, "This output comes from a focused governance probe rather than the full multi-agent workflow.")
+      : t("outputModal.summary.default", null, "Executive summary created by the orchestrator LLM after combining orchestrator context, support-agent output, and success-agent output.");
 
   finalOutput.innerHTML = `
     <section class="output-hero">
-      <p class="output-kicker">Final Output</p>
+      <p class="output-kicker">${t("outputModal.finalOutputKicker", null, "Final Output")}</p>
       <h3>${escapeHtml(result.headline)}</h3>
-      <p class="output-section-copy">Governance scenario: <strong>${escapeHtml(labelForScenario(result.governance_scenario || activeScenario))}</strong></p>
+      <p class="output-section-copy">${t("outputModal.governanceScenarioLabel", null, "Governance scenario:")} <strong>${escapeHtml(labelForScenario(result.governance_scenario || activeScenario))}</strong></p>
       <p class="output-section-copy">${escapeHtml(summaryCopy)}</p>
       <div class="output-summary">${escapeHtml(executiveSummary)}</div>
     </section>
     <div class="output-grid">
       <section class="output-section output-section-wide">
-        <strong>MCP Tool Usage</strong>
-        <p class="output-section-copy">These are the MCP tools that were actually called during this run, grouped by agent.</p>
+        <strong>${t("outputModal.mcpUsage.title", null, "MCP Tool Usage")}</strong>
+        <p class="output-section-copy">${t("outputModal.mcpUsage.copy", null, "These are the MCP tools that were actually called during this run, grouped by agent.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Orchestrator</span>
+            <span>${t("outputModal.label.orchestrator", null, "Orchestrator")}</span>
             ${renderBulletList(result.mcp_tools_by_agent?.["orchestrator"] || result.called_mcp_tools)}
           </div>
           <div class="output-subsection">
-            <span>Support Agent</span>
+            <span>${t("outputModal.label.supportAgent", null, "Support Agent")}</span>
             ${renderBulletList(result.mcp_tools_by_agent?.["support-agent"])}
           </div>
           <div class="output-subsection">
-            <span>Success Agent</span>
+            <span>${t("outputModal.label.successAgent", null, "Success Agent")}</span>
             ${renderBulletList(result.mcp_tools_by_agent?.["success-agent"])}
           </div>
         </div>
@@ -3170,15 +3170,15 @@ function renderFinalOutput(result) {
         loadBalancingProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Load Balancing Probe</strong>
+        <strong>${t("outputModal.loadBalancing.title", null, "Load Balancing Probe")}</strong>
         <p class="output-section-copy">${
           loadBalancingProbe.mode === "semantic"
-            ? "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider."
-            : "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route."
+            ? t("outputModal.loadBalancing.copySemantic", null, "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider.")
+            : t("outputModal.loadBalancing.copy", null, "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route.")
         }</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>${loadBalancingProbe.mode === "semantic" ? "Semantic Routing Policy" : "Failover Policy"}</span>
+            <span>${loadBalancingProbe.mode === "semantic" ? t("outputModal.loadBalancing.semanticPolicyLabel", null, "Semantic Routing Policy") : t("outputModal.loadBalancing.failoverPolicyLabel", null, "Failover Policy")}</span>
             ${renderDefinitionList([
               ["Mode", loadBalancingProbe.mode === "semantic" ? "Semantic Load Balancing" : "LLM Failover"],
               ...(loadBalancingProbe.mode === "semantic"
@@ -3196,7 +3196,7 @@ function renderFinalOutput(result) {
             ])}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(loadBalancingProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3207,11 +3207,11 @@ function renderFinalOutput(result) {
         tokenLimitProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>AI Token Rate Limit Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior.</p>
+        <strong>${t("outputModal.tokenLimit.title", null, "AI Token Rate Limit Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.tokenLimit.copy", null, "Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Policy Outcome</span>
+            <span>${t("outputModal.label.policyOutcome", null, "Policy Outcome")}</span>
             ${renderDefinitionList([
               ["Subscene", "Consumer Token Rate Limit"],
               ["First Attempt", tokenLimitProbe.first_attempt ? "Allowed" : (tokenLimitProbe.blocked_error?.attempt === "first" ? "Blocked" : "Not returned")],
@@ -3221,11 +3221,11 @@ function renderFinalOutput(result) {
             ])}
             ${renderTextBlock(
               tokenLimitProbe.blocked_error?.message ||
-                "No block was returned. This usually means the route budget was not exhausted the way the probe expected."
+                t("outputModal.tokenLimit.noBlock", null, "No block was returned. This usually means the route budget was not exhausted the way the probe expected.")
             )}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(tokenLimitProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3236,22 +3236,22 @@ function renderFinalOutput(result) {
         promptEnhancementProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Prompt Decorator Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route.</p>
+        <strong>${t("outputModal.promptDecorator.title", null, "Prompt Decorator Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.promptDecorator.copy", null, "Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Decorator Policy</span>
+            <span>${t("outputModal.promptDecorator.policyLabel", null, "Decorator Policy")}</span>
             ${renderDefinitionList([
               ["Mode", promptEnhancementProbe.mode === "plain" ? "Without Decorator" : "With Decorator"],
               ["Applied Route", promptEnhancementProbe.mode === "plain" ? "Plain prompt-enhancement probe route" : "Decorated prompt-enhancement probe route"],
             ])}
             ${renderTextBlock(
               promptEnhancementProbe.decorator?.decorator_prompt ||
-                "No decorator was applied. Kong forwarded the prompt to the model unchanged."
+                t("outputModal.promptDecorator.noDecorator", null, "No decorator was applied. Kong forwarded the prompt to the model unchanged.")
             )}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(promptEnhancementProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3262,11 +3262,11 @@ function renderFinalOutput(result) {
         promptCompressionProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Prompt Compression Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the AI Prompt Compressor scenario. Kong compresses the verbose upstream prompt before it reaches the model and emits compression metrics to the audit logs.</p>
+        <strong>${t("outputModal.promptCompression.title", null, "Prompt Compression Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.promptCompression.copy", null, "Created by the orchestrator in the AI Prompt Compressor scenario. Kong compresses the verbose upstream prompt before it reaches the model and emits compression metrics to the audit logs.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Compression Policy</span>
+            <span>${t("outputModal.promptCompression.policyLabel", null, "Compression Policy")}</span>
             ${renderDefinitionList([
               ["Mode", promptCompressionProbe.mode === "token_count" ? "By Token Count" : "By Ratio"],
               ["Requested Value", promptCompressionProbe.mode === "token_count" ? `${promptCompressionProbe.requested_value} tokens` : `${promptCompressionProbe.requested_value}%`],
@@ -3279,11 +3279,11 @@ function renderFinalOutput(result) {
             ])}
             ${renderTextBlock(
               promptCompressionProbe.metrics?.information ||
-                "Kong compressed the prompt before the model call and logged the token savings for observability."
+                t("outputModal.promptCompression.note", null, "Kong compressed the prompt before the model call and logged the token savings for observability.")
             )}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(promptCompressionProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3294,21 +3294,21 @@ function renderFinalOutput(result) {
         lakeraProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Lakera Policy Guard Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the Lakera scenario. Kong sends the prompt through AI Lakera Guard before any model response is allowed back to the UI.</p>
+        <strong>${t("outputModal.lakera.title", null, "Lakera Policy Guard Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.lakera.copy", null, "Created by the orchestrator in the Lakera scenario. Kong sends the prompt through AI Lakera Guard before any model response is allowed back to the UI.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Policy Outcome</span>
+            <span>${t("outputModal.label.policyOutcome", null, "Policy Outcome")}</span>
             ${renderDefinitionList([
               ["Mode", lakeraProbe.mode],
               ["Block Reason", lakeraProbe.block_reason || "Allowed"],
               ["Detector Types", (lakeraProbe.detector_types || []).join(", ") || "None"],
               ["Lakera Request UUID", lakeraProbe.request_uuid || "Not returned"],
             ])}
-            ${renderTextBlock(lakeraProbe.blocked_message || "Lakera allowed the request to pass to the model.")}
+            ${renderTextBlock(lakeraProbe.blocked_message || t("outputModal.lakera.allowed", null, "Lakera allowed the request to pass to the model."))}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(lakeraProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3319,11 +3319,11 @@ function renderFinalOutput(result) {
         ragProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>RAG Probe</strong>
-        <p class="output-section-copy">Uses the same AtlasFlow support KB question in two modes so the answer quality difference comes only from Kong retrieval.</p>
+        <strong>${t("outputModal.rag.title", null, "RAG Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.rag.copy", null, "Uses the same AtlasFlow support KB question in two modes so the answer quality difference comes only from Kong retrieval.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Probe Mode</span>
+            <span>${t("outputModal.rag.modeLabel", null, "Probe Mode")}</span>
             ${renderDefinitionList([
               ["Mode", ragProbe.mode === "after" ? "After (with RAG)" : "Before (baseline)"],
               ["Vector Backend", ragProbe.vector_backend],
@@ -3331,7 +3331,7 @@ function renderFinalOutput(result) {
             ${renderTextBlock(ragProbe.comparison_note)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(ragProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3342,11 +3342,11 @@ function renderFinalOutput(result) {
         result.semantic_cache_probe
           ? `
       <section class="output-section output-section-wide">
-        <strong>Semantic Cache Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the semantic-cache scenario. This run sends either the first cache-seed request or the second cache-reuse request through Kong.</p>
+        <strong>${t("outputModal.semanticCache.title", null, "Semantic Cache Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.semanticCache.copy", null, "Created by the orchestrator in the semantic-cache scenario. This run sends either the first cache-seed request or the second cache-reuse request through Kong.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>${result.semantic_cache_probe?.step === "seed" ? "First Request" : "Second Request"}</span>
+            <span>${result.semantic_cache_probe?.step === "seed" ? t("outputModal.semanticCache.firstRequest", null, "First Request") : t("outputModal.semanticCache.secondRequest", null, "Second Request")}</span>
             ${renderDefinitionList([
               ["Step", result.semantic_cache_probe?.step],
               ["X-Cache-Status", result.semantic_cache_probe?.headers?.["x-cache-status"]],
@@ -3363,11 +3363,11 @@ function renderFinalOutput(result) {
         judgeProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>LLM as Judge Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the LLM as Judge scenario. Kong evaluates the returned answer with a separate judge model and emits the score into the audit logs for Grafana.</p>
+        <strong>${t("outputModal.judge.title", null, "LLM as Judge Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.judge.copy", null, "Created by the orchestrator in the LLM as Judge scenario. Kong evaluates the returned answer with a separate judge model and emits the score into the audit logs for Grafana.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Evaluation Route</span>
+            <span>${t("outputModal.judge.routeLabel", null, "Evaluation Route")}</span>
             ${renderDefinitionList([
               ["Scenario", "LLM as Judge"],
               ["Candidate Models", "OpenAI 4o mini, Gemini 2.5 Flash"],
@@ -3376,7 +3376,7 @@ function renderFinalOutput(result) {
             ${renderTextBlock(judgeProbe.scoring_note)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(judgeProbe.original_prompt?.user_prompt)}
           </div>
         </div>
@@ -3387,11 +3387,11 @@ function renderFinalOutput(result) {
         piiProbe
           ? `
       <section class="output-section output-section-wide">
-        <strong>PII Sanitizer Probe</strong>
-        <p class="output-section-copy">Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes or blocks the upstream request before the model call, and sanitizes the downstream response when the request is allowed.</p>
+        <strong>${t("outputModal.pii.title", null, "PII Sanitizer Probe")}</strong>
+        <p class="output-section-copy">${t("outputModal.pii.copy", null, "Created by the orchestrator in the AI PII Sanitizer scenario. Kong sanitizes or blocks the upstream request before the model call, and sanitizes the downstream response when the request is allowed.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Sanitization Policy</span>
+            <span>${t("outputModal.pii.policyLabel", null, "Sanitization Policy")}</span>
             ${renderDefinitionList([
               ["Mode", piiProbe.mode],
               ["Sanitization Direction", piiProbe.sanitization_mode],
@@ -3400,19 +3400,19 @@ function renderFinalOutput(result) {
             ])}
             ${renderTextBlock(
               piiProbe.mode === "synthetic"
-                ? "Synthetic mode replaces supported detected values with category-matched synthetic values. Some credential-like secrets may still appear masked rather than replaced with natural-looking values."
+                ? t("outputModal.pii.synthetic", null, "Synthetic mode replaces supported detected values with category-matched synthetic values. Some credential-like secrets may still appear masked rather than replaced with natural-looking values.")
                 : piiProbe.mode === "placeholder"
-                  ? "Placeholder mode replaces supported detected values with placeholder tokens."
-                  : "Block mode stops the request before it reaches the model when supported PII or credentials are detected."
+                  ? t("outputModal.pii.placeholder", null, "Placeholder mode replaces supported detected values with placeholder tokens.")
+                  : t("outputModal.pii.block", null, "Block mode stops the request before it reaches the model when supported PII or credentials are detected.")
             )}
             ${renderBulletList(piiProbe.anonymized_categories)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Original Request Prompt</span>
+            <span>${t("outputModal.label.originalPrompt", null, "Original Request Prompt")}</span>
             ${renderTextBlock(piiProbe.original_prompt?.user_prompt)}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Sanitized Response Returned Through Kong</span>
+            <span>${t("outputModal.pii.sanitizedResponseLabel", null, "Sanitized Response Returned Through Kong")}</span>
             ${renderTextBlock(piiProbe.sanitized_response)}
           </div>
         </div>
@@ -3424,8 +3424,8 @@ function renderFinalOutput(result) {
           ? ""
           : `
       <section class="output-section">
-        <strong>Account Context</strong>
-        <p class="output-section-copy">Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts.</p>
+        <strong>${t("outputModal.accountContext.title", null, "Account Context")}</strong>
+        <p class="output-section-copy">${t("outputModal.accountContext.copy", null, "Created by the orchestrator using the MCP tool <code>get_customer_account</code> before any sub-agent work starts.")}</p>
         ${renderDefinitionList([
           ["Customer ID", accountContext?.customer_id],
           ["Account Name", accountContext?.account_name],
@@ -3437,8 +3437,8 @@ function renderFinalOutput(result) {
         ])}
       </section>
       <section class="output-section">
-        <strong>Renewal Risk</strong>
-        <p class="output-section-copy">Created by the orchestrator using the MCP tool <code>get_renewal_risk</code> to show the current renewal score and its drivers.</p>
+        <strong>${t("outputModal.renewalRisk.title", null, "Renewal Risk")}</strong>
+        <p class="output-section-copy">${t("outputModal.renewalRisk.copy", null, "Created by the orchestrator using the MCP tool <code>get_renewal_risk</code> to show the current renewal score and its drivers.")}</p>
         ${renderDefinitionList([
           ["Score", renewalRisk?.score],
           ["Level", renewalRisk?.level],
@@ -3446,22 +3446,22 @@ function renderFinalOutput(result) {
         ${renderBulletList(renewalRisk?.drivers)}
       </section>
       <section class="output-section">
-        <strong>Support Track</strong>
-        <p class="output-section-copy">Created by the support agent using <code>get_incident_status</code>, <code>search_runbook</code>, and its Gemini summary step.</p>
+        <strong>${t("outputModal.supportTrack.title", null, "Support Track")}</strong>
+        <p class="output-section-copy">${t("outputModal.supportTrack.copy", null, "Created by the support agent using <code>get_incident_status</code>, <code>search_runbook</code>, and its Gemini summary step.")}</p>
         ${renderTextBlock(result.support_track?.technical_response)}
         ${renderBulletList(result.support_track?.recommended_actions)}
       </section>
       <section class="output-section">
-        <strong>Success Plan</strong>
-        <p class="output-section-copy">Created by the success agent using <code>draft_customer_reply</code>, <code>create_followup_task</code>, and its Gemini summary step.</p>
+        <strong>${t("outputModal.successPlan.title", null, "Success Plan")}</strong>
+        <p class="output-section-copy">${t("outputModal.successPlan.copy", null, "Created by the success agent using <code>draft_customer_reply</code>, <code>create_followup_task</code>, and its Gemini summary step.")}</p>
         ${renderBulletList(result.success_track?.success_plan)}
       </section>
       <section class="output-section output-section-wide">
-        <strong>Full Support Payload</strong>
-        <p class="output-section-copy">Full support-agent output, built from <code>get_incident_status</code>, <code>search_runbook</code>, and the support-agent LLM summary.</p>
+        <strong>${t("outputModal.fullSupport.title", null, "Full Support Payload")}</strong>
+        <p class="output-section-copy">${t("outputModal.fullSupport.copy", null, "Full support-agent output, built from <code>get_incident_status</code>, <code>search_runbook</code>, and the support-agent LLM summary.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>Incident</span>
+            <span>${t("outputModal.fullSupport.incidentLabel", null, "Incident")}</span>
             ${renderDefinitionList([
               ["Incident ID", supportIncident?.incident_id],
               ["Status", supportIncident?.status],
@@ -3471,27 +3471,27 @@ function renderFinalOutput(result) {
             ])}
           </div>
           <div class="output-subsection">
-            <span>Runbook Matches</span>
+            <span>${t("outputModal.fullSupport.runbookLabel", null, "Runbook Matches")}</span>
             ${renderBulletList((supportRunbook?.results || []).map((item) => `${item.id}: ${item.title} - ${item.summary}`))}
           </div>
           <div class="output-subsection output-subsection-wide">
-            <span>Support LLM Summary</span>
+            <span>${t("outputModal.fullSupport.summaryLabel", null, "Support LLM Summary")}</span>
             ${renderTextBlock(result.support_track?.llm_summary?.summary)}
           </div>
         </div>
       </section>
       <section class="output-section output-section-wide">
-        <strong>Full Success Payload</strong>
-        <p class="output-section-copy">Full success-agent output, built from <code>draft_customer_reply</code>, <code>create_followup_task</code>, and the success-agent LLM summary.</p>
+        <strong>${t("outputModal.fullSuccess.title", null, "Full Success Payload")}</strong>
+        <p class="output-section-copy">${t("outputModal.fullSuccess.copy", null, "Full success-agent output, built from <code>draft_customer_reply</code>, <code>create_followup_task</code>, and the success-agent LLM summary.")}</p>
         <div class="output-subgrid">
           <div class="output-subsection output-subsection-wide">
-            <span>Draft Customer Reply</span>
-            <p class="output-section-copy">Created by the success agent using the MCP tool <code>draft_customer_reply</code>. This is the customer-facing message draft.</p>
+            <span>${t("outputModal.fullSuccess.draftLabel", null, "Draft Customer Reply")}</span>
+            <p class="output-section-copy">${t("outputModal.fullSuccess.draftCopy", null, "Created by the success agent using the MCP tool <code>draft_customer_reply</code>. This is the customer-facing message draft.")}</p>
             ${renderTextBlock(successReply?.draft)}
           </div>
           <div class="output-subsection">
-            <span>Follow-up Task</span>
-            <p class="output-section-copy">Created by the success agent using the MCP tool <code>create_followup_task</code>. This is the internal account-team follow-up record.</p>
+            <span>${t("outputModal.fullSuccess.taskLabel", null, "Follow-up Task")}</span>
+            <p class="output-section-copy">${t("outputModal.fullSuccess.taskCopy", null, "Created by the success agent using the MCP tool <code>create_followup_task</code>. This is the internal account-team follow-up record.")}</p>
             ${renderDefinitionList([
               ["Task ID", successTask?.task_id],
               ["Status", successTask?.status],
@@ -3501,8 +3501,8 @@ function renderFinalOutput(result) {
             ${renderBulletList(successTask?.action_items)}
           </div>
           <div class="output-subsection">
-            <span>Success LLM Summary</span>
-            <p class="output-section-copy">Created by the success-agent Gemini step after reviewing the reply draft and follow-up task. This is the concise business summary of customer posture and next actions.</p>
+            <span>${t("outputModal.fullSuccess.summaryLabel", null, "Success LLM Summary")}</span>
+            <p class="output-section-copy">${t("outputModal.fullSuccess.summaryCopy", null, "Created by the success-agent Gemini step after reviewing the reply draft and follow-up task. This is the concise business summary of customer posture and next actions.")}</p>
             ${renderTextBlock(result.success_track?.llm_summary?.summary)}
           </div>
         </div>
@@ -4711,12 +4711,12 @@ async function play(overrides = {}) {
       );
       finalOutput.innerHTML = `
         <section class="output-hero">
-          <p class="output-kicker">Final Output</p>
-          <h3>Renderer fallback</h3>
-          <p class="output-section-copy">The topology state was preserved because the run completed successfully.</p>
+          <p class="output-kicker">${t("outputModal.finalOutputKicker", null, "Final Output")}</p>
+          <h3>${t("outputModal.fallback.title", null, "Renderer fallback")}</h3>
+          <p class="output-section-copy">${t("outputModal.fallback.copy", null, "The topology state was preserved because the run completed successfully.")}</p>
         </section>
         <section class="output-section output-section-wide">
-          <strong>Raw Result</strong>
+          <strong>${t("outputModal.fallback.rawResult", null, "Raw Result")}</strong>
           ${renderTextBlock(JSON.stringify(data.result, null, 2))}
         </section>
       `;
@@ -4766,15 +4766,15 @@ async function clearSemanticCache() {
       renderSemanticCachePayloads();
     }
     showNotice({
-      kicker: "Semantic Cache",
-      title: "Cache deleted successfully",
+      kicker: t("notice.semanticCache.kicker", null, "Semantic Cache"),
+      title: t("notice.semanticCache.deletedTitle", null, "Cache deleted successfully"),
       message: `Deleted ${result.deleted_keys ?? 0} semantic cache entr${result.deleted_keys === 1 ? "y" : "ies"} from Redis.`,
     });
   } catch (error) {
     setFlowStage("Cache clear failed", error.message);
     showNotice({
-      kicker: "Semantic Cache",
-      title: "Cache delete failed",
+      kicker: t("notice.semanticCache.kicker", null, "Semantic Cache"),
+      title: t("notice.semanticCache.deleteFailedTitle", null, "Cache delete failed"),
       message: error.message,
     });
   }
@@ -4800,9 +4800,9 @@ async function resetObservability({ silent = false } = {}) {
     setFlowStage("Observability reset", "Recreated Loki and restarted Grafana.");
     if (!silent) {
       showNotice({
-        kicker: "Observability",
-        title: "Observability reset complete",
-        message: "Loki was recreated and Grafana was restarted. Refresh Grafana after a few seconds if panels still show old data.",
+        kicker: t("notice.observability.kicker", null, "Observability"),
+        title: t("notice.observability.resetCompleteTitle", null, "Observability reset complete"),
+        message: t("notice.observability.resetCompleteMessage", null, "Loki was recreated and Grafana was restarted. Refresh Grafana after a few seconds if panels still show old data."),
       });
     }
     return result;
@@ -4810,8 +4810,8 @@ async function resetObservability({ silent = false } = {}) {
     setFlowStage("Observability reset failed", error.message);
     if (!silent) {
       showNotice({
-        kicker: "Observability",
-        title: "Observability reset failed",
+        kicker: t("notice.observability.kicker", null, "Observability"),
+        title: t("notice.observability.resetFailedTitle", null, "Observability reset failed"),
         message: error.message,
       });
     }
@@ -5076,8 +5076,8 @@ runHistorySelect?.addEventListener("change", async (event) => {
   } catch (error) {
     setFlowStage("Run load failed", error.message);
     showNotice({
-      kicker: "Run History",
-      title: "Could not load run",
+      kicker: t("notice.runHistory.kicker", null, "Run History"),
+      title: t("notice.runHistory.loadFailedTitle", null, "Could not load run"),
       message: error.message,
     });
   }

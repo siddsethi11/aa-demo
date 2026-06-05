@@ -460,6 +460,9 @@ services:
       context: .
       dockerfile: ui/Dockerfile
     container_name: ui
+    environment:
+      # UI display language; rendered into the dashboard at container start.
+      UI_LANG: ${UI_LANG:-en}
     ports:
       - "3000:80"
 
