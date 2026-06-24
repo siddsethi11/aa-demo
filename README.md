@@ -681,9 +681,18 @@ The AI routes are split by caller type:
 - `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
   - used by the `Load Balancing -> Semantic Load Balancing` subscene
   - configured for Kong `ai-proxy-advanced` semantic routing with Redis-backed embeddings
+- `/ai/orchestrator-model-based-demo/chat/completions`
+  - used by the `Load Balancing -> Model-Based Routing` subscene
+  - configured for Kong `datakit` plus `ai-proxy-advanced` tier routing
+- `/ai/orchestrator-model-selector/chat/completions`
+  - internal selector route used by the model-based routing subscene
+  - configured for Kong `ai-prompt-decorator` plus `ai-proxy-advanced`
 - `/ai/orchestrator-token-demo/chat/completions`
   - used only for the AI token limit scenario
   - protected by Kong `ai-rate-limiting-advanced`
+- `/ai/orchestrator-prompt-enhance-plain-demo/chat/completions`
+  - used only for the plain side of the prompt decorator scenario
+  - applies no prompt-decoration policy so the baseline response can be compared directly
 - `/ai/orchestrator-prompt-enhance-demo/chat/completions`
   - used only for the prompt decorator scenario
   - applies a stronger prompt-decoration policy to shape a more structured executive output
@@ -699,6 +708,15 @@ The AI routes are split by caller type:
 - `/ai/orchestrator-pii-synthetic-demo/chat/completions`
   - used only for the PII Sanitization synthetic scenario
   - protected by Kong `ai-sanitizer` in `BOTH` mode with `redact_type: synthetic`
+- `/ai/orchestrator-pii-block-demo/chat/completions`
+  - used only for the PII Sanitization block scenario
+  - protected by Kong `ai-sanitizer` in `BOTH` mode with blocking behavior when protected content is detected
+- `/ai/orchestrator-lakera-demo/chat/completions`
+  - used only for the Lakera Policy Guard scenario
+  - protected by Kong `ai-lakera-guard`
+- `/ai/orchestrator-judge-demo/chat/completions`
+  - used only for the LLM as Judge scenario
+  - applies `ai-proxy-advanced` for the candidate response and `ai-llm-as-judge` for scoring
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
@@ -886,14 +904,16 @@ The UI includes a `Governance Scenario` selector. The customer escalation story 
 The route path is selected by the `governance_scenario` field sent in the `Play` request. In the orchestrator, `PlayRequest.governance_scenario` is mapped by `ai_route_for_scenario()` in [services/orchestrator/app.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py):
 
 - `normal` -> `/ai/orchestrator/chat/completions`
-- `load_balancing` -> `/ai/orchestrator-failover-demo/chat/completions` or `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
+- `load_balancing` -> `/ai/orchestrator-failover-demo/chat/completions`, `/ai/orchestrator-semantic-load-balance-demo/chat/completions`, or `/ai/orchestrator-model-based-demo/chat/completions`
 - `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
 - `prompt_compression` -> `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions` or `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
 - `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
 - `semantic_cache` -> `/ai/orchestrator-semantic-cache-demo/chat/completions`
+- `llm_as_judge` -> `/ai/orchestrator-judge-demo/chat/completions`
+- `lakera_guard` -> `/ai/orchestrator-lakera-demo/chat/completions`
 - `rag` -> `/ai/orchestrator-rag-before-demo/chat/completions` or `/ai/orchestrator-rag-after-demo/chat/completions`
-- `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions` or `/ai/orchestrator-pii-synthetic-demo/chat/completions`
+- `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions`, `/ai/orchestrator-pii-synthetic-demo/chat/completions`, or `/ai/orchestrator-pii-block-demo/chat/completions`
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
 
@@ -912,10 +932,11 @@ This mode is meant to show the standard happy-path behavior.
 
 ### 2. Load Balancing
 
-This parent scene has two focused subscenes:
+This parent scene has three focused subscenes:
 
 - `LLM Failover`
 - `Semantic Load Balancing`
+- `Model-Based Routing`
 
 #### LLM Failover
 
@@ -955,6 +976,34 @@ Behind the scenes:
 - the route then selects the most relevant target:
   - `OpenAI 4o mini` for support / operational prompts
   - `Gemini 2.5 Flash` for creative / marketing prompts
+
+#### Model-Based Routing
+
+This subscene demonstrates selector-driven tier routing rather than prompt similarity matching.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-model-based-demo/chat/completions`
+- Kong `datakit` intercepts the request before the final provider route
+- Kong calls `/ai/orchestrator-model-selector/chat/completions` with the same prompt
+- that selector route uses:
+  - `ai-prompt-decorator`
+  - `ai-proxy-advanced`
+  - selector model: `o3-mini` by default through `DECK_OPENAI_SELECTOR_MODEL`
+- the selector route is instructed to return only:
+  - `simple`
+  - `complex`
+- `datakit` rewrites the original request body `model` field with that tier
+- the main model-based route then uses `ai-proxy-advanced` target aliases:
+  - `complex` -> `OpenAI 4o mini`
+  - `simple` -> `Gemini 2.5 Flash`
+- the demo uses two editable prompt presets:
+  - `Simple`
+  - `Complex`
+- current provider mapping is explicit:
+  - `Simple` prompts are intended to route to `Gemini 2.5 Flash`
+  - `Complex` prompts are intended to route to `OpenAI 4o mini`
+- the UI uses a visualization heuristic for the selector/provider split because Kong performs both phases inside one request and the orchestrator receives only one end-to-end duration
 
 ### 3. AI Token Limit
 
@@ -1025,7 +1074,7 @@ Behind the scenes:
 - the UI exposes one top-level `Prompt Compression` scenario with two explicit sub-modes:
   - `By Ratio (50%)`
   - `By Token Count (100)`
-- the orchestrator switches to one of two dedicated routes:
+- the orchestrator switches to one of three dedicated routes:
   - `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions`
   - `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
 - each route applies `ai-prompt-compressor` before `ai-proxy-advanced`
@@ -1225,6 +1274,7 @@ This scenario demonstrates Kong anonymizing sensitive information in both the up
 Behind the scenes:
 
 - the orchestrator switches to one of two dedicated routes:
+  - `/ai/orchestrator-pii-block-demo/chat/completions`
   - `/ai/orchestrator-pii-placeholder-demo/chat/completions`
   - `/ai/orchestrator-pii-synthetic-demo/chat/completions`
 - each route applies `ai-sanitizer` before `ai-proxy-advanced`
@@ -1234,6 +1284,7 @@ Behind the scenes:
   - `recover_redacted: false`
 - the placeholder route uses `redact_type: placeholder`
 - the synthetic route uses `redact_type: synthetic`
+- the block route returns a policy block instead of forwarding the request when protected content is detected
 - both routes call the external Kong AI PII service at:
   - `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
 - the probe sends a prompt containing multiple categories of sensitive values and asks the model to restate them
@@ -1241,7 +1292,7 @@ Behind the scenes:
 
 The demo intentionally uses the focused-probe pattern instead of the full MCP/sub-agent orchestration flow so the request/response anonymization is easy to see.
 
-When `PII Sanitization` is selected in `View Scene`, the scene popup changes from a single `Play` action to two explicit PII-mode controls:
+When `PII Sanitization` is selected in `View Scene`, the scene popup changes from a single `Play` action to three explicit PII-mode controls:
 
 - `Send Placeholder Request`
   - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "placeholder"`
@@ -1250,6 +1301,10 @@ When `PII Sanitization` is selected in `View Scene`, the scene popup changes fro
 - `Send Synthetic Request`
   - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "synthetic"`
   - Kong replaces detected values with synthetic category-matched values in both request and response handling
+
+- `Send Block Request`
+  - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "block"`
+  - Kong blocks the request when the protected categories are detected instead of returning a sanitized model response
 
 The final output shows:
 
@@ -1331,6 +1386,25 @@ Current topology behavior:
 - the OpenAI candidate leg completes before the judge leg is shown as settled
 - the judge leg now uses a longer visible dwell in the UI so it better matches the multi-second judge latency seen in Grafana rather than flashing through on short synthetic timers
 - the orchestrator/UI return begins only after that longer judge-visible window, so the topology is easier to correlate with observed Kong latency
+
+### 11. Lakera Policy Guard
+
+This scenario demonstrates Kong sending prompts through Lakera before any model response is allowed back to the client.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-lakera-demo/chat/completions`
+- that route applies `ai-lakera-guard` before the model call
+- the UI exposes four explicit Lakera prompt modes:
+  - `Safe Prompt`
+  - `Content Moderation`
+  - `Prompt Defense`
+  - `Data Leak Prevention`
+- the safe mode should be allowed through to the model
+- the other three modes are intended to trigger Lakera detection and return a blocked response with detector metadata
+- Kong writes the Lakera decision into the trace and audit logs so the UI and Grafana can show the policy outcome directly
+
+This mode is useful for showing third-party safety enforcement at the gateway layer without adding moderation code to the application.
 
 ## What happens when Play is pressed
 

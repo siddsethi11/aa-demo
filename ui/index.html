@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kong Agent + MCP Demo</title>
-    <link rel="icon" type="image/png" href="/assets/logo.png?v=20260512-brand-1" />
-    <link rel="stylesheet" href="/styles.css?v=20260512-brand-1" />
+    <link rel="icon" type="image/png" href="/assets/logo.png?v=20260624-kong-config-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260624-kong-config-1" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-hero">
-          <img class="brand-mark" src="/assets/logo.png?v=20260512-brand-1" alt="Kong logo" />
+          <img class="brand-mark" src="/assets/logo.png?v=20260624-kong-config-1" alt="Kong logo" />
           <div class="brand-copy">
             <p class="eyebrow" data-i18n="topbar.eyebrow">Kong AI Gateway Demo</p>
             <h1 data-i18n="topbar.brand">Kong Unified Governance</h1>
@@ -106,7 +106,7 @@
                 <path id="line-kong-success" d="M660 456 L660 782 L404 782" />
                 <path id="line-kong-openai" d="M830 340 L1088 186" />
                 <path id="line-kong-gemini" d="M830 390 L1088 380" />
-                <path id="line-kong-judge" d="M830 360 L1010 360 L1010 560 L1090 560" />
+                <path id="line-kong-judge" d="M830 430 L936 430 L936 560" />
                 <path id="line-kong-mcp" d="M730 456 L936 696" />
                 <path id="line-kong-backend" d="M830 404 L1186 780" />
                 <path id="line-kong-redis" d="M830 396 L968 396 L968 520 L1090 520" />
@@ -377,8 +377,8 @@
           </form>
           <section id="load-balancing-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label" data-i18n="probe.loadBalancing.label">Load Balancing Mode</span>
-              <p class="probe-copy" data-i18n="probe.loadBalancing.copy">Use a focused probe for failover or semantic routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes to the most relevant model based on the prompt itself.</p>
+              <span class="probe-label">Load Balancing Mode</span>
+              <p class="probe-copy">Use a focused probe for failover, semantic routing, or model-based routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes by prompt similarity. The model-based path asks a selector model to choose between simple and complex before the final provider call.</p>
               <div class="preset-options" id="load-balancing-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_mode_choice" value="failover" checked />
@@ -388,15 +388,27 @@
                   <input type="radio" name="load_balancing_mode_choice" value="semantic" />
                   <span data-i18n="probe.loadBalancing.mode.semantic">Semantic Load Balancing</span>
                 </label>
+                <label class="preset-option">
+                  <input type="radio" name="load_balancing_mode_choice" value="model_based" />
+                  <span>Model-Based Routing</span>
+                </label>
               </div>
               <div id="load-balancing-preset-options" class="preset-options" hidden>
-                <label class="preset-option">
+                <label class="preset-option" data-load-balancing-mode="semantic">
                   <input type="radio" name="load_balancing_prompt_preset_choice" value="support_operational" checked />
                   <span data-i18n="probe.loadBalancing.preset.support">Support / Operational</span>
                 </label>
-                <label class="preset-option">
+                <label class="preset-option" data-load-balancing-mode="semantic">
                   <input type="radio" name="load_balancing_prompt_preset_choice" value="creative_marketing" />
                   <span data-i18n="probe.loadBalancing.preset.creative">Creative / Marketing</span>
+                </label>
+                <label class="preset-option" data-load-balancing-mode="model_based" hidden>
+                  <input type="radio" name="load_balancing_prompt_preset_choice" value="simple_status" />
+                  <span>Simple</span>
+                </label>
+                <label class="preset-option" data-load-balancing-mode="model_based" hidden>
+                  <input type="radio" name="load_balancing_prompt_preset_choice" value="complex_analysis" />
+                  <span>Complex</span>
                 </label>
               </div>
               <textarea id="load-balancing-payload" class="probe-payload" rows="10"></textarea>
@@ -1295,6 +1307,6 @@
          English baked into the markup and app.js is used unchanged. -->
     <script src="/i18n-active.js"></script>
     <script src="/i18n.js?v=20260601-i18n-1"></script>
-    <script src="/app.js?v=20260601-i18n-2" defer></script>
+    <script src="/app.js?v=20260624-kong-config-1" defer></script>
   </body>
 </html>

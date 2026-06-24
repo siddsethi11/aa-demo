@@ -121,6 +121,10 @@ const nodes = {
   mcp: document.querySelector('[data-node="mcp"]'),
   "backend-api": document.querySelector('[data-node="backend-api"]'),
 };
+const selectorNode = nodes["judge-model"];
+const selectorNodeLabel = selectorNode?.querySelector(".node-label");
+const selectorNodeTitle = selectorNode?.querySelector("h3");
+const selectorNodeDescription = selectorNode?.querySelector("p");
 
 const lineMap = {
   "user-ui": document.getElementById("line-user-ui"),
@@ -150,6 +154,9 @@ let llmSuccessTimer = null;
 let pendingMcpActivationTimer = null;
 let orchestratorLlmVisibleUntil = 0;
 let failoverActivationTimer = null;
+let modelBasedSelectionTimer = null;
+let modelBasedProviderVisibleUntil = 0;
+let lastModelBasedTotalDurationMs = 3200;
 let semanticRedisHandoffTimer = null;
 let semanticCacheOpenAiResetTimer = null;
 let semanticCacheReturnTimer = null;
@@ -175,6 +182,9 @@ const MIN_COMPONENT_ACTIVE_MS = 350;
 const MIN_COMPONENT_ERROR_MS = 850;
 const MIN_RETURN_COMPONENT_ACTIVE_MS = 1100;
 const MIN_JUDGE_VISIBLE_MS = 4000;
+const MODEL_BASED_SELECTOR_RATIO = 0.4;
+const MODEL_BASED_PROVIDER_RATIO = 0.6;
+const MODEL_BASED_MIN_TOTAL_MS = 2200;
 
 const scenePresets = {
   acme_default: {
@@ -226,6 +236,22 @@ const loadBalancingPromptDefaults = {
     "2) Three launch taglines.",
     "3) A short event teaser for a customer summit.",
     "4) Keep the tone polished, vivid, and marketing-forward.",
+  ].join("\n"),
+  model_based_simple_status: [
+    "Write a short customer-ready status update.",
+    "Requirements:",
+    "1) Acknowledge the issue.",
+    "2) State that the team is investigating.",
+    "3) Promise the next update within 24 hours.",
+    "4) Keep it under 90 words.",
+  ].join("\n"),
+  model_based_complex_analysis: [
+    "Create a complex cross-functional escalation analysis for the account team.",
+    "Requirements:",
+    "1) Explain the operational, commercial, and customer risks.",
+    "2) Rank the top three decisions for the next seven days.",
+    "3) Provide a coordinated plan across Support, Success, Billing, and Engineering.",
+    "4) Include tradeoffs and the most likely escalation trigger.",
   ].join("\n"),
 };
 
@@ -571,6 +597,55 @@ function currentLoadBalancingPromptPreset() {
     "support_operational";
 }
 
+function normalizeLoadBalancingPromptPreset(mode, preset) {
+  if (mode === "semantic") {
+    return preset === "creative_marketing" ? "creative_marketing" : "support_operational";
+  }
+  if (mode === "model_based") {
+    return preset === "complex_analysis" ? "complex_analysis" : "simple_status";
+  }
+  return "support_operational";
+}
+
+function labelForLoadBalancingMode(mode) {
+  if (mode === "semantic") {
+    return "Semantic Load Balancing";
+  }
+  if (mode === "model_based") {
+    return "Model-Based Routing";
+  }
+  return "LLM Failover";
+}
+
+function labelForLoadBalancingPreset(mode, preset) {
+  if (mode === "semantic") {
+    return preset === "creative_marketing" ? "Creative / Marketing" : "Support / Operational";
+  }
+  if (mode === "model_based") {
+    return preset === "complex_analysis" ? "Complex -> OpenAI 4o mini" : "Simple -> Gemini 2.5 Flash";
+  }
+  return "Focused Probe";
+}
+
+function isModelBasedRoutingScenario(scenario = activeScenario || "normal") {
+  return scenario === "load_balancing" && currentLoadBalancingMode() === "model_based";
+}
+
+function configureOptionalModelNode(scenario = activeScenario || "normal") {
+  if (!selectorNodeLabel || !selectorNodeTitle || !selectorNodeDescription) {
+    return;
+  }
+  if (isModelBasedRoutingScenario(scenario)) {
+    selectorNodeLabel.textContent = "Selector";
+    selectorNodeTitle.textContent = "OpenAI o3-mini";
+    selectorNodeDescription.textContent = "Kong calls this selector model first, then routes the real request to OpenAI 4o mini or Gemini 2.5 Flash.";
+    return;
+  }
+  selectorNodeLabel.textContent = "Judge";
+  selectorNodeTitle.textContent = "Gemini 2.5 Flash";
+  selectorNodeDescription.textContent = "Scores the candidate response for accuracy before Kong returns the judged result to the orchestrator.";
+}
+
 function nodeInfoDetails(target, scenario = activeScenario || "normal") {
   if (target === "kong") {
     const details = policyDetailsForScenario(scenario);
@@ -682,20 +757,36 @@ function nodeInfoDetails(target, scenario = activeScenario || "normal") {
         ["Governed through", "Kong AI routing"],
       ]),
     },
-    "judge-model": {
-      title: t("nodeDetails.judgeModel.title", null, "Judge Model"),
-      intro: t("nodeDetails.judgeModel.intro", null, "This node appears in the LLM as Judge scenario when Kong scores a candidate response with a separate model."),
-      plainEnglish: tList("nodeDetails.judgeModel.plainEnglish", null, [
-        "Kong invokes the judge after the candidate response is produced.",
-        "The judge returns a score and evaluation context.",
-        "That output is then exposed in observability and the final result path.",
-      ]),
-      why: t("nodeDetails.judgeModel.why", null, "It makes evaluation at the gateway layer visible."),
-      config: tList("nodeDetails.judgeModel.config", null, [
-        ["Scenario", "LLM as Judge"],
-        ["Purpose", "Quality scoring and judgment"],
-      ]),
-    },
+    "judge-model": isModelBasedRoutingScenario(scenario)
+      ? {
+          title: "Selector Model",
+          intro: "This node appears in the model-based routing scenario when Kong first asks a selector model which tier should handle the prompt.",
+          plainEnglish: [
+            "Kong sends the user prompt here before the final provider call.",
+            "The selector returns only simple or complex.",
+            "Kong uses that answer to route the real request to OpenAI 4o mini or Gemini 2.5 Flash.",
+          ],
+          why: "It makes model-tier routing visible as a separate decision step at the gateway layer.",
+          config: [
+            ["Scenario", "Model-Based Routing"],
+            ["Selector model", "OpenAI o3-mini"],
+            ["Returns", "simple or complex"],
+          ],
+        }
+      : {
+          title: "Judge Model",
+          intro: "This node appears in the LLM as Judge scenario when Kong scores a candidate response with a separate model.",
+          plainEnglish: [
+            "Kong invokes the judge after the candidate response is produced.",
+            "The judge returns a score and evaluation context.",
+            "That output is then exposed in observability and the final result path.",
+          ],
+          why: "It makes evaluation at the gateway layer visible.",
+          config: [
+            ["Scenario", "LLM as Judge"],
+            ["Purpose", "Quality scoring and judgment"],
+          ],
+        },
     redis: {
       title: t("nodeDetails.redis.title", null, "Redis Vector DB"),
       intro: t("nodeDetails.redis.intro", null, "Redis backs the semantic governance scenarios by storing or comparing embeddings."),
@@ -831,25 +922,35 @@ function policyDetailsForScenario(scenario) {
       title: t("policies.loadBalancing.title", null, "Load Balancing"),
       intro: currentLoadBalancingMode() === "semantic"
         ? t("policies.loadBalancing.intro.semantic", null, "Kong semantically routes the prompt to the most relevant model target before any provider call is made.")
-        : t("policies.loadBalancing.intro.failover", null, "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."),
+        : currentLoadBalancingMode() === "model_based"
+          ? "Kong asks a selector model whether the request is simple or complex, then routes complex prompts to OpenAI 4o mini and simple prompts to Gemini 2.5 Flash."
+          : t("policies.loadBalancing.intro.failover", null, "Kong tries the primary OpenAI path first, then fails over to Gemini when that path is configured to fail."),
       plainEnglish: currentLoadBalancingMode() === "semantic"
         ? tList("policies.loadBalancing.plainEnglish.semantic", null, [
             "The orchestrator makes one focused probe request through Kong.",
             "Kong embeds the prompt and compares it with the target descriptions stored for the semantic balancer.",
             "Kong then sends the request to the best-fit model target and returns that result directly.",
           ])
-        : tList("policies.loadBalancing.plainEnglish.failover", null, [
+        : currentLoadBalancingMode() === "model_based"
+          ? [
             "The orchestrator makes one focused probe request through Kong.",
-            "Kong sends that request to the primary OpenAI target first.",
-            "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result.",
-          ]),
+            "Kong sends the prompt to a selector route that returns only simple or complex.",
+            "Kong rewrites the request body with that tier and routes complex prompts to OpenAI 4o mini and simple prompts to Gemini 2.5 Flash.",
+          ]
+          : tList("policies.loadBalancing.plainEnglish.failover", null, [
+              "The orchestrator makes one focused probe request through Kong.",
+              "Kong sends that request to the primary OpenAI target first.",
+              "When the primary path fails, Kong retries using the Gemini fallback target and returns the fallback result.",
+            ]),
       why: currentLoadBalancingMode() === "semantic"
         ? t("policies.loadBalancing.why.semantic", null, "It shows prompt-aware model routing at the gateway layer instead of hard-coding model choice in application logic.")
-        : t("policies.loadBalancing.why.failover", null, "It shows model resilience at the gateway layer instead of in application code."),
+        : currentLoadBalancingMode() === "model_based"
+          ? "It shows request-by-request model-tier selection at the gateway layer without changing the client application."
+          : t("policies.loadBalancing.why.failover", null, "It shows model resilience at the gateway layer instead of in application code."),
       config: currentLoadBalancingMode() === "semantic"
         ? tList("policies.loadBalancing.config.semantic", null, [
             ["Mode", "Semantic Load Balancing"],
-            ["Prompt Preset", currentLoadBalancingPromptPreset() === "creative_marketing" ? t("policies.loadBalancing.promptPreset.creative", null, "Creative / Marketing") : t("policies.loadBalancing.promptPreset.support", null, "Support / Operational")],
+            ["Prompt Preset", `${labelForLoadBalancingPreset("semantic", currentLoadBalancingPromptPreset())} (${currentLoadBalancingPromptPreset() === "creative_marketing" ? "routes to Gemini 2.5 Flash" : "routes to OpenAI 4o mini"})`],
             ["Support target", "OpenAI 4o mini"],
             ["Creative target", "Gemini 2.5 Flash"],
             ["Plugin", "AI Proxy Advanced"],
@@ -857,15 +958,25 @@ function policyDetailsForScenario(scenario) {
             ["Embedding model", "text-embedding-3-small"],
             ["Vector store", "Redis"],
           ])
-        : tList("policies.loadBalancing.config.failover", null, [
-            ["Mode", "LLM Failover"],
-            ["Primary model", "OpenAI 4o mini"],
-            ["Fallback model", "Gemini 2.5 Flash"],
-            ["Plugin", "AI Proxy Advanced"],
-            ["Balancer algorithm", "priority"],
-            ["Retries", "3"],
-            ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
-          ]),
+        : currentLoadBalancingMode() === "model_based"
+          ? [
+            ["Mode", "Model-Based Routing"],
+            ["Prompt Preset", labelForLoadBalancingPreset("model_based", currentLoadBalancingPromptPreset())],
+            ["Selector route", "OpenAI o3-mini classifier"],
+            ["Complex tier", "OpenAI 4o mini"],
+            ["Simple tier", "Gemini 2.5 Flash"],
+            ["Plugins", "Datakit + AI Prompt Decorator + AI Proxy Advanced"],
+            ["Routing key", "model_alias complex/simple"],
+          ]
+          : tList("policies.loadBalancing.config.failover", null, [
+              ["Mode", "LLM Failover"],
+              ["Primary model", "OpenAI 4o mini"],
+              ["Fallback model", "Gemini 2.5 Flash"],
+              ["Plugin", "AI Proxy Advanced"],
+              ["Balancer algorithm", "priority"],
+              ["Retries", "3"],
+              ["Configured triggers", "error, timeout, invalid_header, http_403, http_404, http_429, http_500, http_502, http_503, http_504, non_idempotent"],
+            ]),
     },
     llm_failover: {
       title: t("policies.llmFailover.title", null, "LLM Failover"),
@@ -1050,6 +1161,7 @@ function policyDetailsForScenario(scenario) {
 function renderPolicyModal() {
   const details = nodeInfoDetails("kong", activeScenario || "normal");
   renderInfoModal(details);
+  void hydrateKongPolicyModal(details);
 }
 
 function renderInfoModal(details) {
@@ -1062,7 +1174,11 @@ function renderInfoModal(details) {
     .map((point) => `<p class="policy-point">${escapeHtml(point)}</p>`)
     .join("");
   policyWhy.textContent = details.why;
-  policyConfig.innerHTML = details.config
+  policyConfig.innerHTML = renderPolicyConfig(details);
+}
+
+function renderPolicyConfig(details) {
+  const baseConfig = (details.config || [])
     .map(
       ([label, value]) => `
         <div class="policy-kv-item">
@@ -1071,6 +1187,142 @@ function renderInfoModal(details) {
         </div>`,
     )
     .join("");
+
+  if (!details.gatewayInventory) {
+    return baseConfig;
+  }
+
+  const sections = [];
+  sections.push(`
+    <div class="policy-config-section">
+      <div class="policy-config-section-title">Plugin Scope Model</div>
+      <div class="policy-kv-item">
+        <strong>Scopes present</strong>
+        <span>${escapeHtml((details.gatewayInventory.plugin_scopes_present || []).join(", ") || "-")}</span>
+      </div>
+      <div class="policy-kv-item">
+        <strong>Consumer-scoped plugins</strong>
+        <span>${details.gatewayInventory.has_consumer_scoped_plugins ? "yes" : "none in this repo"}</span>
+      </div>
+    </div>
+  `);
+
+  const globalPlugins = details.gatewayInventory.global_plugins || [];
+  sections.push(`
+    <div class="policy-config-section">
+      <div class="policy-config-section-title">Global Plugins</div>
+      <div class="policy-kv-item">
+        <strong>Applied globally</strong>
+        <span>${escapeHtml(globalPlugins.join(", ") || "-")}</span>
+      </div>
+    </div>
+  `);
+
+  const objects = details.gatewayInventory.objects || [];
+  objects.forEach((object) => {
+    const directServicePlugins = object.service_plugins?.length ? object.service_plugins.join(", ") : "-";
+    const directRoutePlugins = object.route_plugins?.length ? object.route_plugins.join(", ") : "-";
+    const effectivePlugins = object.effective_plugins?.length
+      ? object.effective_plugins.map((plugin) => `${plugin.name} (${plugin.scope})`).join(", ")
+      : "-";
+    const mcpTools = object.mcp_tools?.length
+      ? object.mcp_tools
+        .map((tool) => `${tool.name} -> ${tool.method} ${tool.path} [${(tool.allowed_groups || []).join(", ")}]`)
+        .join("\n")
+      : "";
+    sections.push(`
+      <div class="policy-config-section">
+        <div class="policy-config-section-title">${escapeHtml(object.label || object.route_name || object.service_name || "Gateway object")}</div>
+        <div class="policy-kv-item">
+          <strong>Service name</strong>
+          <span>${escapeHtml(object.service_name || "-")}</span>
+        </div>
+        <div class="policy-kv-item">
+          <strong>Route name</strong>
+          <span>${escapeHtml(object.route_name || "-")}</span>
+        </div>
+        <div class="policy-kv-item">
+          <strong>Path</strong>
+          <span>${escapeHtml((object.paths || []).join(", ") || "-")}</span>
+        </div>
+        <div class="policy-kv-item">
+          <strong>Service plugins</strong>
+          <span>${escapeHtml(directServicePlugins)}</span>
+        </div>
+        <div class="policy-kv-item">
+          <strong>Route plugins</strong>
+          <span>${escapeHtml(directRoutePlugins)}</span>
+        </div>
+        <div class="policy-kv-item">
+          <strong>Effective plugins</strong>
+          <span>${escapeHtml(effectivePlugins)}</span>
+        </div>
+        ${mcpTools ? `
+          <div class="policy-kv-item policy-kv-item-wide">
+            <strong>MCP tool ACLs</strong>
+            <span class="policy-multiline">${escapeHtml(mcpTools)}</span>
+          </div>
+        ` : ""}
+      </div>
+    `);
+  });
+
+  const consumerBindings = details.gatewayInventory.consumer_bindings || [];
+  if (consumerBindings.length) {
+    const bindings = consumerBindings
+      .map((binding) => `${binding.username}: ${(binding.groups || []).join(", ")}`)
+      .join("\n");
+    sections.push(`
+      <div class="policy-config-section">
+        <div class="policy-config-section-title">Consumer Group Bindings</div>
+        <div class="policy-kv-item policy-kv-item-wide">
+          <strong>Consumers</strong>
+          <span class="policy-multiline">${escapeHtml(bindings)}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  return `${baseConfig}${sections.join("")}`;
+}
+
+function currentKongScenarioQuery() {
+  const params = new URLSearchParams();
+  params.set("load_balancing_mode", currentLoadBalancingMode());
+  params.set("prompt_enhancement_mode", currentPromptEnhancementMode());
+  params.set("pii_sanitizer_mode", currentPiiMode());
+  params.set("prompt_compression_mode", currentPromptCompressionMode());
+  params.set("rag_mode", playForm.elements.namedItem("rag_mode")?.value || "before");
+  params.set("lakera_mode", currentLakeraMode());
+  return params;
+}
+
+async function hydrateKongPolicyModal(baseDetails) {
+  try {
+    const query = currentKongScenarioQuery();
+    const response = await fetch(
+      `${config.apiBaseUrl}/scenario-config/${encodeURIComponent(activeScenario || "normal")}?${query.toString()}`,
+      {
+        headers: { apikey: config.apiKey },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to load Kong scenario config (${response.status})`);
+    }
+    const gatewayInventory = await response.json();
+    renderInfoModal({
+      ...baseDetails,
+      gatewayInventory,
+    });
+  } catch (error) {
+    renderInfoModal({
+      ...baseDetails,
+      config: [
+        ...baseDetails.config,
+        ["Live gateway config", error.message],
+      ],
+    });
+  }
 }
 
 function createTraceNode(id, level, title, summary, meta = {}) {
@@ -1352,7 +1604,7 @@ function applyScenarioChoice(scenario) {
     loadBalancingControls.hidden = !isLoadBalancing;
   }
   if (loadBalancingPresetOptions) {
-    loadBalancingPresetOptions.hidden = !isLoadBalancing || currentLoadBalancingMode() !== "semantic";
+    loadBalancingPresetOptions.hidden = !isLoadBalancing || !["semantic", "model_based"].includes(currentLoadBalancingMode());
   }
   if (tokenLimitControls) {
     tokenLimitControls.hidden = !isTokenLimit;
@@ -1459,23 +1711,30 @@ function semanticCacheEditablePayload(step) {
 
 function loadBalancingPayloadForMode(mode, presetOverride = currentLoadBalancingPromptPreset()) {
   const base = currentFormPayload();
-  const preset = presetOverride;
+  const preset = normalizeLoadBalancingPromptPreset(mode, presetOverride);
   const promptKey =
     mode === "semantic"
       ? (preset === "creative_marketing" ? "semantic_creative_marketing" : "semantic_support_operational")
+      : mode === "model_based"
+      ? (preset === "complex_analysis" ? "model_based_complex_analysis" : "model_based_simple_status")
       : "failover";
   return {
     governance_scenario: "load_balancing",
     load_balancing_mode: mode,
     load_balancing_prompt_preset: preset,
     system_prompt:
-      mode === "semantic"
+      mode === "semantic" || mode === "model_based"
         ? "You are a helpful assistant. Respond directly to the request and match the requested format."
         : "You are an executive escalation assistant. Return three short sections only: Situation, Risk, Next Action.",
     user_prompt: [
       loadBalancingPromptDefaults[promptKey] || loadBalancingPromptDefaults.failover,
       ...(mode === "semantic" && preset === "creative_marketing"
         ? []
+        : mode === "model_based" && preset === "simple_status"
+        ? [
+            `Account: ${base.account_name}`,
+            `Issue summary: ${base.issue_summary}`,
+          ]
         : [
             `Account: ${base.account_name}`,
             `Customer ID: ${base.customer_id}`,
@@ -1488,18 +1747,40 @@ function loadBalancingPayloadForMode(mode, presetOverride = currentLoadBalancing
   };
 }
 
+function renderLoadBalancingPresetOptions(mode) {
+  const presetField = playForm.elements.namedItem("load_balancing_prompt_preset");
+  const normalizedPreset = normalizeLoadBalancingPromptPreset(mode, currentLoadBalancingPromptPreset());
+  if (presetField) {
+    presetField.value = normalizedPreset;
+  }
+  if (!loadBalancingPresetOptions) {
+    return normalizedPreset;
+  }
+  const labels = loadBalancingPresetOptions.querySelectorAll("[data-load-balancing-mode]");
+  labels.forEach((label) => {
+    if (!(label instanceof HTMLElement)) {
+      return;
+    }
+    label.hidden = label.dataset.loadBalancingMode !== mode;
+  });
+  const radios = loadBalancingPresetOptions.querySelectorAll('input[name="load_balancing_prompt_preset_choice"]');
+  radios.forEach((radio) => {
+    if (!(radio instanceof HTMLInputElement)) {
+      return;
+    }
+    radio.checked = radio.value === normalizedPreset;
+  });
+  loadBalancingPresetOptions.hidden = !["semantic", "model_based"].includes(mode);
+  return normalizedPreset;
+}
+
 function renderLoadBalancingPayload(forcePrompt = false, mode = currentLoadBalancingMode()) {
   const modeField = playForm.elements.namedItem("load_balancing_mode");
   if (modeField) {
     modeField.value = mode;
   }
-  const presetField = playForm.elements.namedItem("load_balancing_prompt_preset");
-  if (presetField) {
-    presetField.value = currentLoadBalancingPromptPreset();
-  }
-  if (loadBalancingPresetOptions) {
-    loadBalancingPresetOptions.hidden = mode !== "semantic";
-  }
+  const normalizedPreset = renderLoadBalancingPresetOptions(mode);
+  updateScenarioInfraVisibility(activeScenario);
   if (!loadBalancingPayload) {
     return;
   }
@@ -1508,9 +1789,11 @@ function renderLoadBalancingPayload(forcePrompt = false, mode = currentLoadBalan
     loadBalancingPayloadForMode("failover").user_prompt,
     loadBalancingPayloadForMode("semantic", "support_operational").user_prompt,
     loadBalancingPayloadForMode("semantic", "creative_marketing").user_prompt,
+    loadBalancingPayloadForMode("model_based", "simple_status").user_prompt,
+    loadBalancingPayloadForMode("model_based", "complex_analysis").user_prompt,
   ]);
   if (forcePrompt || !currentValue || knownDefaults.has(currentValue)) {
-    loadBalancingPayload.value = loadBalancingPayloadForMode(mode).user_prompt;
+    loadBalancingPayload.value = loadBalancingPayloadForMode(mode, normalizedPreset).user_prompt;
   }
 }
 
@@ -1801,7 +2084,9 @@ const lakeraPromptDefaults = {
 
 function currentLakeraMode() {
   const selected = lakeraModeOptions?.querySelector('input[name="lakera_mode_choice"]:checked');
-  return selected instanceof HTMLInputElement ? selected.value : "safe";
+  return selected instanceof HTMLInputElement
+    ? selected.value
+    : playForm.elements.namedItem("lakera_mode")?.value || "content_moderation";
 }
 
 function lakeraScenarioPayload(mode = currentLakeraMode()) {
@@ -2704,11 +2989,13 @@ function updateScenarioInfraVisibility(scenario) {
   const showTokenLimit = scenario === "token_limit";
   const showPromptEnhancement = scenario === "prompt_enhancement";
   const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache" || scenario === "rag";
-  const showJudge = scenario === "llm_as_judge";
+  const showJudge = scenario === "llm_as_judge" || isModelBasedRoutingScenario(scenario);
   const showPii = scenario === "pii_sanitizer";
   const showCompression = scenario === "prompt_compression";
   const showLakera = scenario === "lakera_guard";
   const focusedScenario = showLoadBalancing || showTokenLimit || showPromptEnhancement || showRedis || showJudge || showPii || showCompression || showLakera;
+
+  configureOptionalModelNode(scenario);
 
   setScenarioVisibility("redis", showRedis);
   setLineVisibility("kong-redis", showRedis);
@@ -3046,8 +3333,73 @@ function setOrchestratorModelStates({ openai = "complete", gemini = "complete" }
   markLine("kong-gemini", gemini);
 }
 
+function setSelectorPath(state = "active") {
+  markNode("judge-model", state);
+  markLine("kong-judge", state);
+}
+
 function inferSemanticLoadBalancingProvider(preset = traceState.loadBalancingPromptPreset) {
   return preset === "creative_marketing" ? "gemini" : "openai";
+}
+
+function inferModelBasedLoadBalancingProvider(preset = traceState.loadBalancingPromptPreset) {
+  return preset === "complex_analysis" ? "openai" : "gemini";
+}
+
+function setModelBasedProviderPath(provider, state = "active") {
+  if (provider === "gemini") {
+    markNode("openai", "complete");
+    markLine("kong-openai", "complete");
+    markNode("gemini", state);
+    markLine("kong-gemini", state);
+    return;
+  }
+  markNode("gemini", "complete");
+  markLine("kong-gemini", "complete");
+  markNode("openai", state);
+  markLine("kong-openai", state);
+}
+
+function clearModelBasedSelectionTimer() {
+  if (modelBasedSelectionTimer) {
+    clearTimeout(modelBasedSelectionTimer);
+    modelBasedSelectionTimer = null;
+  }
+}
+
+function modelBasedTotalDurationMs(durationMs = lastModelBasedTotalDurationMs) {
+  return Math.max(MODEL_BASED_MIN_TOTAL_MS, Number(durationMs) || MODEL_BASED_MIN_TOTAL_MS);
+}
+
+function modelBasedSelectorDelayMs(durationMs = lastModelBasedTotalDurationMs) {
+  return Math.round(modelBasedTotalDurationMs(durationMs) * MODEL_BASED_SELECTOR_RATIO);
+}
+
+function modelBasedProviderDurationMs(durationMs = lastModelBasedTotalDurationMs) {
+  return Math.round(modelBasedTotalDurationMs(durationMs) * MODEL_BASED_PROVIDER_RATIO);
+}
+
+function scheduleModelBasedProviderPreview(delayMs = modelBasedSelectorDelayMs()) {
+  clearModelBasedSelectionTimer();
+  modelBasedSelectionTimer = window.setTimeout(() => {
+    if (traceState.scenario !== "load_balancing" || traceState.loadBalancingMode !== "model_based") {
+      modelBasedSelectionTimer = null;
+      return;
+    }
+    const provider = inferModelBasedLoadBalancingProvider();
+    activateActorPath("orchestrator", "active");
+    markNode("kong", "active");
+    setSelectorPath("complete");
+    setModelBasedProviderPath(provider, "active");
+    modelBasedProviderVisibleUntil = Date.now() + modelBasedProviderDurationMs();
+    setFlowStage(
+      "Predicted model route",
+      provider === "gemini"
+        ? "The selector is expected to classify this request as simple and route it to Gemini 2.5 Flash."
+        : "The selector is expected to classify this request as complex and route it to OpenAI 4o mini.",
+    );
+    modelBasedSelectionTimer = null;
+  }, delayMs);
 }
 
 function applyTokenLimitBlockedPath() {
@@ -3097,6 +3449,8 @@ function clearOrchestratorLlmPath() {
     clearTimeout(llmSuccessTimer);
     llmSuccessTimer = null;
   }
+  clearModelBasedSelectionTimer();
+  modelBasedProviderVisibleUntil = 0;
   orchestratorLlmVisibleUntil = 0;
   markNode("openai", "complete");
   markLine("kong-openai", "complete");
@@ -3128,7 +3482,9 @@ function renderFinalOutput(result) {
     : loadBalancingProbe
       ? loadBalancingProbe.mode === "semantic"
         ? t("outputModal.summary.loadBalancingSemantic", null, "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt.")
-        : t("outputModal.summary.loadBalancing", null, "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path.")
+        : loadBalancingProbe.mode === "model_based"
+          ? "This output comes from the model-based routing probe and should show Kong asking a selector model to choose simple or complex before the final model call."
+          : t("outputModal.summary.loadBalancing", null, "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path.")
     : tokenLimitProbe
       ? t("outputModal.summary.tokenLimit", null, "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request.")
     : promptEnhancementProbe
@@ -3174,16 +3530,26 @@ function renderFinalOutput(result) {
         <p class="output-section-copy">${
           loadBalancingProbe.mode === "semantic"
             ? t("outputModal.loadBalancing.copySemantic", null, "Created by the orchestrator in the semantic load-balancing subscene. Kong compares the prompt against target descriptions and routes it to the most relevant provider.")
-            : t("outputModal.loadBalancing.copy", null, "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route.")
+            : loadBalancingProbe.mode === "model_based"
+              ? "Created by the orchestrator in the model-based routing subscene. Kong calls a selector route, rewrites the request to simple or complex, and then routes the final request to the matching provider."
+              : t("outputModal.loadBalancing.copy", null, "Created by the orchestrator in the load-balancing scenario. Kong first tries the primary model route and then fails over to the fallback route.")
         }</p>
         <div class="output-subgrid">
           <div class="output-subsection">
-            <span>${loadBalancingProbe.mode === "semantic" ? t("outputModal.loadBalancing.semanticPolicyLabel", null, "Semantic Routing Policy") : t("outputModal.loadBalancing.failoverPolicyLabel", null, "Failover Policy")}</span>
+            <span>${loadBalancingProbe.mode === "semantic" ? t("outputModal.loadBalancing.semanticPolicyLabel", null, "Semantic Routing Policy") : loadBalancingProbe.mode === "model_based" ? "Model-Based Routing Policy" : t("outputModal.loadBalancing.failoverPolicyLabel", null, "Failover Policy")}</span>
             ${renderDefinitionList([
-              ["Mode", loadBalancingProbe.mode === "semantic" ? "Semantic Load Balancing" : "LLM Failover"],
+              ["Mode", labelForLoadBalancingMode(loadBalancingProbe.mode)],
               ...(loadBalancingProbe.mode === "semantic"
                 ? [
-                    ["Prompt Preset", loadBalancingProbe.prompt_preset === "creative_marketing" ? "Creative / Marketing" : "Support / Operational"],
+                    ["Prompt Preset", labelForLoadBalancingPreset(loadBalancingProbe.mode, loadBalancingProbe.prompt_preset)],
+                    ["Selected Provider", loadBalancingProbe.selected_provider],
+                    ["Selected Model", loadBalancingProbe.selected_model],
+                  ]
+                : loadBalancingProbe.mode === "model_based"
+                ? [
+                    ["Prompt Preset", labelForLoadBalancingPreset(loadBalancingProbe.mode, loadBalancingProbe.prompt_preset)],
+                    ["Selector Model", loadBalancingProbe.selector_model],
+                    ["Selector Decision", loadBalancingProbe.selector_decision],
                     ["Selected Provider", loadBalancingProbe.selected_provider],
                     ["Selected Model", loadBalancingProbe.selected_model],
                   ]
@@ -3552,6 +3918,8 @@ function resetTraceState() {
     clearTimeout(semanticCacheUiTimer);
     semanticCacheUiTimer = null;
   }
+  clearModelBasedSelectionTimer();
+  modelBasedProviderVisibleUntil = 0;
   if (semanticGuardSettleTimer) {
     clearTimeout(semanticGuardSettleTimer);
     semanticGuardSettleTimer = null;
@@ -3739,7 +4107,11 @@ function handleTraceEvent(payload) {
         markLine("kong-openai", "complete");
       } else if (traceState.scenario === "load_balancing") {
         setFlowStage(
-          traceState.loadBalancingMode === "semantic" ? "Semantic load-balancing probe" : "Failover probe",
+          traceState.loadBalancingMode === "semantic"
+            ? "Semantic load-balancing probe"
+            : traceState.loadBalancingMode === "model_based"
+            ? "Model-based routing probe"
+            : "Failover probe",
           payload.message,
         );
         hideTopologyActivity();
@@ -3752,6 +4124,9 @@ function handleTraceEvent(payload) {
               ? { openai: "complete", gemini: "active" }
               : { openai: "active", gemini: "complete" },
           );
+        } else if (traceState.loadBalancingMode === "model_based") {
+          setSelectorPath("active");
+          setOrchestratorModelStates({ openai: "complete", gemini: "complete" });
         } else {
           markNode("openai", "complete");
           markLine("kong-openai", "complete");
@@ -3924,7 +4299,7 @@ function handleTraceEvent(payload) {
       }
       if (
         ["llm_failover", "load_balancing"].includes(traceState.scenario) &&
-        traceState.loadBalancingMode !== "semantic" &&
+        traceState.loadBalancingMode === "failover" &&
         payload.actor === "orchestrator" &&
         !String(payload.model || "").toLowerCase().includes("gemini")
       ) {
@@ -3941,6 +4316,15 @@ function handleTraceEvent(payload) {
             : { openai: "active", gemini: "complete" },
         );
         setFlowStage("Semantic match in progress", "Kong is comparing the prompt with semantic target descriptions before selecting a model.");
+        break;
+      }
+      if (traceState.scenario === "load_balancing" && traceState.loadBalancingMode === "model_based") {
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        setSelectorPath("active");
+        setOrchestratorModelStates({ openai: "complete", gemini: "complete" });
+        setFlowStage("Model selection in progress", "Kong is asking the selector route whether this prompt is simple or complex.");
+        scheduleModelBasedProviderPreview();
         break;
       }
       markLlmPath(payload, "active");
@@ -4024,12 +4408,26 @@ function handleTraceEvent(payload) {
       }
       if (
         ["llm_failover", "load_balancing"].includes(traceState.scenario) &&
-        traceState.loadBalancingMode !== "semantic" &&
+        !["semantic", "model_based"].includes(traceState.loadBalancingMode) &&
         payload.actor === "orchestrator" &&
         String(payload.model || "").toLowerCase().includes("gemini")
       ) {
         lingerLlmSuccessPath(payload, 1700);
-      } else if (traceState.scenario === "load_balancing" && traceState.loadBalancingMode === "semantic") {
+      } else if (
+        traceState.scenario === "load_balancing" &&
+        ["semantic", "model_based"].includes(traceState.loadBalancingMode)
+      ) {
+        if (traceState.loadBalancingMode === "model_based") {
+          clearModelBasedSelectionTimer();
+          setSelectorPath("complete");
+          lastModelBasedTotalDurationMs = modelBasedTotalDurationMs(payload.duration_ms);
+          const remainingVisibleMs = Math.max(0, modelBasedProviderVisibleUntil - Date.now());
+          const targetProviderVisibleMs = modelBasedProviderDurationMs(payload.duration_ms);
+          const lingerMs = Math.max(targetProviderVisibleMs, remainingVisibleMs + 250);
+          lingerLlmSuccessPath(payload, lingerMs);
+          modelBasedProviderVisibleUntil = 0;
+          break;
+        }
         lingerLlmSuccessPath(payload, 1700);
       } else {
         markLlmPath(payload, "complete");
@@ -4082,6 +4480,8 @@ function handleTraceEvent(payload) {
         failover_primary_failed: "Primary model path failed",
         failover: "Kong selected fallback model",
         semantic_load_balancing: "Kong selected the semantic route target",
+        model_based_routing: "Kong selected the model tier",
+        load_balancing_upstream_error: "Load-balancing upstream failed",
       };
       const node = upsertSystemNode(
         `policy:${payload.stage}:${payload.llm_stage || "actor"}:${payload.timestamp}`,
@@ -4149,6 +4549,33 @@ function handleTraceEvent(payload) {
           markLine("kong-openai", "active");
         }
         setFlowStage("Semantic route selected", payload.summary || "Kong selected the best-fit model target for the prompt.");
+      }
+      if (payload.stage === "model_based_routing") {
+        clearModelBasedSelectionTimer();
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "active");
+        setSelectorPath("complete");
+        const selectedProvider = payload.output?.selected_provider || inferModelBasedLoadBalancingProvider();
+        setModelBasedProviderPath(selectedProvider, "active");
+        modelBasedProviderVisibleUntil = Math.max(
+          modelBasedProviderVisibleUntil,
+          Date.now() + modelBasedProviderDurationMs(),
+        );
+        setFlowStage(
+          "Model tier selected",
+          payload.summary || "Kong used the selector route to choose simple or complex for the prompt.",
+        );
+      }
+      if (payload.stage === "load_balancing_upstream_error") {
+        clearModelBasedSelectionTimer();
+        modelBasedProviderVisibleUntil = 0;
+        activateActorPath("orchestrator", "active");
+        markNode("kong", "error");
+        setSelectorPath("complete");
+        setFlowStage(
+          "Load-balancing probe failed",
+          payload.summary || "Kong failed to complete the selected upstream request.",
+        );
       }
       if (payload.stage === "prompt_compression") {
         activateCompressionPath("active");
@@ -5017,6 +5444,9 @@ lakeraModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderLakeraPayload(true, target.value);
+  if (policyModal?.open && activeScenario === "lakera_guard") {
+    renderPolicyModal();
+  }
 });
 
 resetButton.addEventListener("click", () => {
@@ -5098,7 +5528,11 @@ traceContextInput?.addEventListener("keydown", (event) => {
 nodeInfoButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const target = button.dataset.infoTarget || "kong";
-    renderInfoModal(nodeInfoDetails(target, activeScenario || "normal"));
+    if (target === "kong") {
+      renderPolicyModal();
+    } else {
+      renderInfoModal(nodeInfoDetails(target, activeScenario || "normal"));
+    }
     policyModal?.showModal();
   });
 });

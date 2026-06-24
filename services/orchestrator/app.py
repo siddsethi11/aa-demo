@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 from typing import TypedDict
 from urllib.parse import urljoin
+from urllib.parse import urlparse
 
 import httpx
 import redis.asyncio as redis
@@ -26,6 +27,8 @@ from services.common.a2a import extract_task_payload
 from services.common.a2a import extract_message_text
 from services.common.a2a import new_context_id
 from services.common.llm import OrchestratorLLM
+from services.common.kong_gateway_inventory import find_route_object
+from services.common.kong_gateway_inventory import load_kong_gateway_inventory
 from services.common.mcp_client import KongMCPClient
 from services.common.trace import TraceBroker
 from services.common.trace_context import current_trace_headers
@@ -50,6 +53,7 @@ os.environ.setdefault("KONG_AI_PROXY_URL", f"{KONG_PROXY_URL}/ai/orchestrator")
 llm = OrchestratorLLM()
 GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
 GEMINI_FALLBACK_MODEL = os.getenv("DECK_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
+MODEL_ROUTER_SELECTOR_MODEL = os.getenv("DECK_OPENAI_SELECTOR_MODEL") or "o3-mini"
 REDIS_HOST = os.getenv("DECK_REDIS_HOST") or os.getenv("REDIS_HOST") or "redis-stack"
 REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
 COMPOSE_PROJECT_DIR = os.getenv("OBSERVABILITY_COMPOSE_DIR", "/workspace")
@@ -164,6 +168,8 @@ def ai_route_for_scenario(
         "load_balancing": (
             f"{KONG_PROXY_URL}/ai/orchestrator-failover-demo"
             if load_balancing_mode == "failover"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-model-based-demo"
+            if load_balancing_mode == "model_based"
             else f"{KONG_PROXY_URL}/ai/orchestrator-semantic-load-balance-demo"
         ),
         "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
@@ -206,6 +212,8 @@ def scenario_summary(scenario: str, load_balancing_mode: str = "failover") -> st
         "load_balancing": (
             "Kong is expected to semantically route the prompt to the most relevant model target inside one focused load-balancing probe."
             if load_balancing_mode == "semantic"
+            else "Kong is expected to ask a selector model for a simple-versus-complex routing decision, then send complex prompts to OpenAI 4o mini and simple prompts to Gemini."
+            if load_balancing_mode == "model_based"
             else "Kong is expected to retry from the primary OpenAI path to the Gemini fallback path inside one focused load-balancing probe."
         ),
         "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
@@ -219,6 +227,126 @@ def scenario_summary(scenario: str, load_balancing_mode: str = "failover") -> st
         "pii_sanitizer": "Kong AI PII Sanitizer is expected to anonymize sensitive fields in both the request sent upstream and the response returned to the client.",
     }
     return summaries.get(scenario, summaries["normal"])
+
+
+def ai_route_path_for_scenario(
+    scenario: str,
+    load_balancing_mode: str = "failover",
+    prompt_enhancement_mode: str = "decorated",
+    pii_mode: str = "placeholder",
+    prompt_compression_mode: str = "rate",
+    rag_mode: str = "before",
+    lakera_mode: str = "content_moderation",
+) -> str:
+    base_url = ai_route_for_scenario(
+        scenario,
+        load_balancing_mode,
+        prompt_enhancement_mode,
+        pii_mode,
+        prompt_compression_mode,
+        rag_mode,
+        lakera_mode,
+    )
+    parsed = urlparse(base_url)
+    return f"{parsed.path}/chat/completions"
+
+
+def _gateway_route_spec(label: str, *, route_name: str | None = None, path: str | None = None) -> dict[str, str]:
+    return {"label": label, **({"route_name": route_name} if route_name else {}), **({"path": path} if path else {})}
+
+
+def _route_specs_for_scenario(
+    scenario: str,
+    *,
+    load_balancing_mode: str = "failover",
+    prompt_enhancement_mode: str = "decorated",
+    pii_mode: str = "placeholder",
+    prompt_compression_mode: str = "rate",
+    rag_mode: str = "before",
+    lakera_mode: str = "content_moderation",
+) -> list[dict[str, str]]:
+    specs = [_gateway_route_spec("UI to orchestrator ingress", route_name="orchestrator-route")]
+    if scenario == "normal":
+        return specs + [
+            _gateway_route_spec("Orchestrator LLM route", path="/ai/orchestrator/chat/completions"),
+            _gateway_route_spec("Support agent A2A route", route_name="support-agent-route"),
+            _gateway_route_spec("Success agent A2A route", route_name="success-agent-route"),
+            _gateway_route_spec("Shared sub-agent LLM route", path="/ai/subagent/chat/completions"),
+            _gateway_route_spec("MCP tool route", route_name="mock-mcp-route"),
+        ]
+
+    if scenario == "load_balancing" and load_balancing_mode == "model_based":
+        specs.append(
+            _gateway_route_spec(
+                "Model selector route",
+                path="/ai/orchestrator-model-selector/chat/completions",
+            )
+        )
+
+    specs.append(
+        _gateway_route_spec(
+            "Scenario AI route",
+            path=ai_route_path_for_scenario(
+                scenario,
+                load_balancing_mode,
+                prompt_enhancement_mode,
+                pii_mode,
+                prompt_compression_mode,
+                rag_mode,
+                lakera_mode,
+            ),
+        )
+    )
+    return specs
+
+
+def scenario_gateway_inventory(
+    scenario: str,
+    *,
+    load_balancing_mode: str = "failover",
+    prompt_enhancement_mode: str = "decorated",
+    pii_mode: str = "placeholder",
+    prompt_compression_mode: str = "rate",
+    rag_mode: str = "before",
+    lakera_mode: str = "content_moderation",
+) -> dict[str, Any]:
+    inventory = load_kong_gateway_inventory()
+    objects: list[dict[str, Any]] = []
+    for spec in _route_specs_for_scenario(
+        scenario,
+        load_balancing_mode=load_balancing_mode,
+        prompt_enhancement_mode=prompt_enhancement_mode,
+        pii_mode=pii_mode,
+        prompt_compression_mode=prompt_compression_mode,
+        rag_mode=rag_mode,
+        lakera_mode=lakera_mode,
+    ):
+        route_object = find_route_object(
+            inventory,
+            route_name=spec.get("route_name"),
+            path=spec.get("path"),
+        )
+        if route_object:
+            objects.append({"label": spec["label"], **route_object})
+
+    consumer_bindings = [
+        {
+            "username": consumer["username"],
+            "groups": consumer.get("groups", []),
+        }
+        for consumer in inventory.get("consumers", [])
+        if consumer.get("groups")
+    ]
+
+    return {
+        "scenario": scenario,
+        "global_plugins": inventory.get("global_plugins", []),
+        "objects": objects,
+        "consumer_groups": inventory.get("consumer_groups", []),
+        "consumer_bindings": consumer_bindings,
+        "plugin_scopes_present": ["global", "service", "route"],
+        "has_consumer_scoped_plugins": False,
+    }
 
 
 def build_prompt_decoration(scenario: str, system_prompt: str, user_prompt: str) -> dict[str, str] | None:
@@ -284,6 +412,30 @@ def build_load_balancing_probe_prompts(request: PlayRequest) -> dict[str, str]:
         "3) A short event teaser for a customer summit.\n"
         "4) Keep the tone polished, vivid, and marketing-forward.\n"
     )
+    model_based_simple_prompt = (
+        "Write a short customer-ready status update.\n"
+        f"Account: {request.account_name}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        "Requirements:\n"
+        "1) Acknowledge the issue.\n"
+        "2) State that the team is investigating.\n"
+        "3) Promise the next update within 24 hours.\n"
+        "4) Keep it under 90 words.\n"
+    )
+    model_based_deep_prompt = (
+        "Create a cross-functional escalation analysis for the account team.\n"
+        f"Account: {request.account_name}\n"
+        f"Customer ID: {request.customer_id}\n"
+        f"Issue summary: {request.issue_summary}\n"
+        f"Product issue: {request.product_issue}\n"
+        f"Billing issue: {request.billing_issue}\n"
+        f"Incident ID: {request.incident_id}\n"
+        "Requirements:\n"
+        "1) Explain the operational, commercial, and customer risks.\n"
+        "2) Rank the top three decisions that must be made in the next seven days.\n"
+        "3) Provide a cross-functional action plan covering Support, Success, Billing, and Engineering.\n"
+        "4) Include tradeoffs and the most likely escalation trigger.\n"
+    )
     failover_prompt = (
         "Create an executive-ready escalation update for the account team.\n"
         f"Account: {request.account_name}\n"
@@ -302,13 +454,17 @@ def build_load_balancing_probe_prompts(request: PlayRequest) -> dict[str, str]:
         if request.load_balancing_mode == "semantic" and request.load_balancing_prompt_preset == "creative_marketing"
         else semantic_support_prompt
         if request.load_balancing_mode == "semantic"
+        else model_based_deep_prompt
+        if request.load_balancing_mode == "model_based" and request.load_balancing_prompt_preset == "complex_analysis"
+        else model_based_simple_prompt
+        if request.load_balancing_mode == "model_based"
         else failover_prompt
     )
     return {
         "system_prompt": (
             "You are a helpful assistant. "
             "Respond directly to the request and match the requested format."
-            if request.load_balancing_mode == "semantic"
+            if request.load_balancing_mode in {"semantic", "model_based"}
             else "You are an executive escalation assistant. Return three short sections only: Situation, Risk, Next Action."
         ),
         "user_prompt": (request.user_prompt or "").strip() or default_prompt,
@@ -644,6 +800,25 @@ async def generate_for_scenario(
             **prompts,
         )
     except httpx.HTTPStatusError as exc:
+        if scenario == "load_balancing":
+            status_code = exc.response.status_code
+            await emit_component(run_id, "kong", "error", actor="orchestrator", stage=stage)
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="load_balancing_upstream_error",
+                llm_stage=stage,
+                summary=f"Kong load-balancing probe failed during {stage} with HTTP {status_code}.",
+                output={"status_code": status_code, "message": str(exc)},
+            )
+            return {
+                "llm_used": False,
+                "model": None,
+                "summary": f"Kong load-balancing probe failed with HTTP {status_code}.",
+                "error_status_code": status_code,
+                "error_message": str(exc),
+            }
         if scenario == "token_limit" and exc.response.status_code == 429:
             await emit_component(run_id, "openai", "error", actor="orchestrator", stage=stage)
             await emit(
@@ -1465,6 +1640,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             message=(
                 "Kong AI Proxy Advanced is semantically matching the prompt against model descriptions and will route to the best-fit target."
                 if load_balancing_mode == "semantic"
+                else "Kong is asking a selector model whether this prompt is simple or complex, then routing complex prompts to OpenAI 4o mini and simple prompts to Gemini."
+                if load_balancing_mode == "model_based"
                 else "Kong AI Proxy Advanced is running a focused load-balancing probe that should fail over from OpenAI to Gemini."
             ),
         )
@@ -1484,7 +1661,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             scenario="llm_failover" if load_balancing_mode == "failover" else "load_balancing",
             prompts=prompts,
             base_url=ai_route_base_url,
-            include_model=load_balancing_mode != "semantic",
+            include_model=load_balancing_mode == "failover",
         )
         selected_model = load_balancing_result.get("model")
         selected_provider = (
@@ -1492,6 +1669,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             if "gemini" in str(selected_model or "").lower()
             else "openai"
         )
+        selector_decision = "simple" if selected_provider == "gemini" else "complex"
         if load_balancing_mode == "semantic":
             await emit(
                 run_id,
@@ -1501,6 +1679,25 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
                 llm_stage=stage,
                 summary=f"Kong semantically routed the prompt to {selected_model or 'the selected model target'}.",
                 output={
+                    "selected_model": selected_model,
+                    "selected_provider": selected_provider,
+                    "prompt_preset": load_balancing_prompt_preset,
+                },
+            )
+        elif load_balancing_mode == "model_based":
+            await emit(
+                run_id,
+                "policy_event",
+                actor="orchestrator",
+                stage="model_based_routing",
+                llm_stage=stage,
+                summary=(
+                    f"Kong selector model {MODEL_ROUTER_SELECTOR_MODEL} classified the prompt as {selector_decision} "
+                    f"and routed the request to {selected_model or 'the selected model target'}."
+                ),
+                output={
+                    "selector_model": MODEL_ROUTER_SELECTOR_MODEL,
+                    "selector_decision": selector_decision,
                     "selected_model": selected_model,
                     "selected_provider": selected_provider,
                     "prompt_preset": load_balancing_prompt_preset,
@@ -1522,14 +1719,22 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "governance_scenario": scenario,
             "load_balancing_probe": {
                 "mode": load_balancing_mode,
-                "prompt_preset": load_balancing_prompt_preset if load_balancing_mode == "semantic" else None,
+                "prompt_preset": load_balancing_prompt_preset if load_balancing_mode in {"semantic", "model_based"} else None,
                 "request_payload": request.model_dump(),
                 "original_prompt": prompts,
                 "primary_model": llm.model,
                 "fallback_model": GEMINI_FALLBACK_MODEL if load_balancing_mode == "failover" else None,
+                "selector_model": MODEL_ROUTER_SELECTOR_MODEL if load_balancing_mode == "model_based" else None,
+                "selector_decision": selector_decision if load_balancing_mode == "model_based" else None,
                 "selected_model": selected_model,
                 "selected_provider": selected_provider,
-                "policy_outcome": "semantic_route_selected" if load_balancing_mode == "semantic" else "failover",
+                "policy_outcome": (
+                    "semantic_route_selected"
+                    if load_balancing_mode == "semantic"
+                    else "model_tier_selected"
+                    if load_balancing_mode == "model_based"
+                    else "failover"
+                ),
             },
             "executive_brief": load_balancing_result,
             "recommended_summary": load_balancing_result["summary"],
@@ -2824,6 +3029,28 @@ async def reset_observability() -> dict[str, Any]:
         "status": "reset",
         **result,
     }
+
+
+@app.get("/scenario-config/{scenario}")
+@app.get("/orchestrator/scenario-config/{scenario}")
+async def scenario_config(
+    scenario: str,
+    load_balancing_mode: str = "failover",
+    prompt_enhancement_mode: str = "decorated",
+    pii_sanitizer_mode: str = "placeholder",
+    prompt_compression_mode: str = "rate",
+    rag_mode: str = "before",
+    lakera_mode: str = "content_moderation",
+) -> dict[str, Any]:
+    return scenario_gateway_inventory(
+        scenario,
+        load_balancing_mode=load_balancing_mode,
+        prompt_enhancement_mode=prompt_enhancement_mode,
+        pii_mode=pii_sanitizer_mode,
+        prompt_compression_mode=prompt_compression_mode,
+        rag_mode=rag_mode,
+        lakera_mode=lakera_mode,
+    )
 
 
 @app.post("/v1/jsonrpc")

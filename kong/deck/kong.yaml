@@ -708,6 +708,156 @@ services:
                   output_cost: 2.50
               description: Specialist in creative marketing, launch messaging, campaign concepts, brand voice, event teasers, storytelling, and polished promotional copy.
 
+  - name: ai-orchestrator-model-selector-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-model-selector-chat-route
+        paths:
+          - /ai/orchestrator-model-selector/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-decorator
+        config:
+          llm_format: openai
+          prompts:
+            prepend:
+              - role: system
+                content: >
+                  You are a model router. Analyze the user's prompt and recommend the most appropriate model tier.
+                  Return ONLY ONE of these values:
+                  - "simple" for short, straightforward tasks such as greetings, quick status updates, and light formatting
+                  - "complex" for deeper reasoning, analysis, tradeoffs, synthesis, or multi-step planning
+
+                  Respond with just the single word "simple" or "complex", nothing else.
+      - name: ai-proxy-advanced
+        config:
+          max_request_body_size: 5242880
+          response_streaming: deny
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_statistics: true
+                log_payloads: true
+              model:
+                provider: openai
+                name: ${{ env "DECK_OPENAI_SELECTOR_MODEL" }}
+
+  - name: ai-orchestrator-model-based-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-model-based-demo-chat-route
+        paths:
+          - /ai/orchestrator-model-based-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: datakit
+        ordering:
+          before:
+            access:
+              - ai-proxy-advanced
+        config:
+          nodes:
+            - name: EXTRACT_PROMPT
+              type: jq
+              input: request.body
+              jq: |
+                ({"messages": .messages})
+            - name: EXTRACT_HEADERS
+              type: jq
+              input: request.headers
+              jq: |
+                {
+                  apikey: "${{ env "DECK_INTERNAL_ROUTER_KEY" }}",
+                  "x-demo-run-id": (."x-demo-run-id" // ."X-Demo-Run-Id" // ""),
+                  "x-demo-context-id": (."x-demo-context-id" // ."X-Demo-Context-Id" // ""),
+                  traceparent: (.traceparent // ""),
+                  tracestate: (.tracestate // ""),
+                  baggage: (.baggage // "")
+                }
+            - name: CALL_MODEL_SELECTOR
+              type: call
+              url: http://localhost:8000/ai/orchestrator-model-selector/chat/completions
+              method: POST
+              inputs:
+                body: EXTRACT_PROMPT
+                headers: EXTRACT_HEADERS
+            - name: EXTRACT_MODEL
+              type: jq
+              inputs:
+                body: CALL_MODEL_SELECTOR.body
+              jq: |
+                (
+                  .body.choices[0].message.content
+                  | if type == "array" then map(.text // "") | join(" ") else . end
+                  | tostring
+                  | ascii_downcase
+                  | gsub("[^a-z]"; " ")
+                  | if test("complex") then "complex" else "simple" end
+                )
+            - name: UPDATE_REQUEST
+              type: jq
+              inputs:
+                original: request.body
+                selected: EXTRACT_MODEL
+              output: service_request.body
+              jq: |
+                . as $in | $in.original | .model = ($in.selected // "simple")
+      - name: ai-proxy-advanced
+        config:
+          max_request_body_size: 10485760
+          response_streaming: allow
+          model_name_header: true
+          balancer:
+            connect_timeout: 120000
+            read_timeout: 120000
+            write_timeout: 120000
+            retries: 1
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_statistics: true
+                log_payloads: true
+              model:
+                model_alias: complex
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              logging:
+                log_statistics: true
+                log_payloads: true
+              model:
+                model_alias: simple
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
+
   - name: ai-orchestrator-token-demo-service
     url: https://api.openai.com
     routes:
@@ -1405,6 +1555,25 @@ services:
           key_names:
             - apikey
 
+  - name: orchestrator-trace-service
+    url: ws://orchestrator:8000
+    connect_timeout: 180000
+    read_timeout: 180000
+    write_timeout: 180000
+    routes:
+      - name: orchestrator-trace-route
+        paths:
+          - /orchestrator/trace
+        strip_path: false
+        protocols:
+          - ws
+          - wss
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+
   - name: support-agent-service
     url: http://support-agent:8000
     routes:
@@ -1635,6 +1804,9 @@ consumers:
   - username: ui-client
     keyauth_credentials:
       - key: ui-demo-key
+  - username: internal-router
+    keyauth_credentials:
+      - key: ${{ env "DECK_INTERNAL_ROUTER_KEY" }}
 
 consumer_groups:
   - name: orchestrator-tools

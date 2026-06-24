@@ -840,8 +840,9 @@ html[lang="ja"] .topbar h1 {
 }
 
 .judge-node {
-  top: 468px;
-  right: 88px;
+  top: 520px;
+  left: calc(50% + 126px);
+  right: auto;
   border-color: rgba(243, 179, 84, 0.56);
   background:
     linear-gradient(180deg, rgba(243, 179, 84, 0.14), rgba(243, 179, 84, 0.04)),
@@ -1289,6 +1290,33 @@ html[lang="ja"] .topbar h1 {
 .policy-kv-item span {
   color: var(--text);
   line-height: 1.5;
+}
+
+.policy-config-section {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.policy-config-section-title {
+  color: #d6ffbe;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.policy-kv-item-wide {
+  grid-column: 1 / -1;
+}
+
+.policy-multiline {
+  white-space: pre-wrap;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.88rem;
 }
 
 .scene-presets {
@@ -2290,6 +2318,12 @@ html[lang="ja"] .topbar h1 {
     right: 32px;
   }
 
+  .judge-node {
+    top: 600px;
+    left: calc(50% + 78px);
+    right: auto;
+  }
+
   .mcp-node {
     top: 700px;
     right: 270px;
@@ -2422,6 +2456,10 @@ html[lang="ja"] .topbar h1 {
     top: 580px;
   }
 
+  .judge-node {
+    top: 760px;
+  }
+
   .support-node {
     top: 760px;
   }
@@ -2431,11 +2469,11 @@ html[lang="ja"] .topbar h1 {
   }
 
   .openai-node {
-    top: 1120px;
+    top: 940px;
   }
 
   .gemini-node {
-    top: 1300px;
+    top: 1120px;
   }
 
   .mcp-node,
