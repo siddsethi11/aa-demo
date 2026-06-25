@@ -27,6 +27,7 @@ from services.common.a2a import extract_task_payload
 from services.common.a2a import extract_message_text
 from services.common.a2a import new_context_id
 from services.common.llm import OrchestratorLLM
+from services.common.kong_gateway_inventory import consumer_objects
 from services.common.kong_gateway_inventory import find_route_object
 from services.common.kong_gateway_inventory import load_kong_gateway_inventory
 from services.common.mcp_client import KongMCPClient
@@ -54,6 +55,14 @@ llm = OrchestratorLLM()
 GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
 GEMINI_FALLBACK_MODEL = os.getenv("DECK_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 MODEL_ROUTER_SELECTOR_MODEL = os.getenv("DECK_OPENAI_SELECTOR_MODEL") or "o3-mini"
+TOKEN_LIMIT_CONSUMER_KEYS = {
+    "consumer1": os.getenv("DECK_TOKEN_LIMIT_CONSUMER1_KEY", "consumer1-demo-key"),
+    "consumer2": os.getenv("DECK_TOKEN_LIMIT_CONSUMER2_KEY", "consumer2-demo-key"),
+}
+TOKEN_LIMIT_CONSUMER_LIMITS = {
+    "consumer1": 5,
+    "consumer2": 10,
+}
 REDIS_HOST = os.getenv("DECK_REDIS_HOST") or os.getenv("REDIS_HOST") or "redis-stack"
 REDIS_PORT = int(os.getenv("REDIS_PORT") or "6379")
 COMPOSE_PROJECT_DIR = os.getenv("OBSERVABILITY_COMPOSE_DIR", "/workspace")
@@ -75,6 +84,8 @@ class PlayRequest(BaseModel):
     billing_issue: str = "billing overcharge on enterprise add-ons"
     incident_id: str = "INC-1007"
     governance_scenario: str = "normal"
+    token_limit_mode: str = "consumer"
+    token_limit_consumer: str = "consumer1"
     load_balancing_mode: str = "failover"
     load_balancing_prompt_preset: str = "support_operational"
     semantic_cache_step: str = "single"
@@ -101,6 +112,8 @@ class OrchestratorState(TypedDict, total=False):
     run_id: str
     context_id: str
     governance_scenario: str
+    token_limit_mode: str
+    token_limit_consumer: str
     load_balancing_mode: str
     load_balancing_prompt_preset: str
     semantic_cache_step: str
@@ -155,6 +168,7 @@ def timed_ms(started_at: float) -> int:
 
 def ai_route_for_scenario(
     scenario: str,
+    token_limit_mode: str = "consumer",
     load_balancing_mode: str = "failover",
     prompt_enhancement_mode: str = "decorated",
     pii_mode: str = "placeholder",
@@ -172,7 +186,11 @@ def ai_route_for_scenario(
             if load_balancing_mode == "model_based"
             else f"{KONG_PROXY_URL}/ai/orchestrator-semantic-load-balance-demo"
         ),
-        "token_limit": f"{KONG_PROXY_URL}/ai/orchestrator-token-demo",
+        "token_limit": (
+            f"{KONG_PROXY_URL}/ai/orchestrator-consumer-cost-demo"
+            if token_limit_mode == "consumer_cost"
+            else f"{KONG_PROXY_URL}/ai/orchestrator-token-demo"
+        ),
         "prompt_enhancement": (
             f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo"
             if prompt_enhancement_mode == "decorated"
@@ -205,7 +223,11 @@ def ai_route_for_scenario(
     return route_map.get(scenario, route_map["normal"])
 
 
-def scenario_summary(scenario: str, load_balancing_mode: str = "failover") -> str:
+def scenario_summary(
+    scenario: str,
+    load_balancing_mode: str = "failover",
+    token_limit_mode: str = "consumer",
+) -> str:
     summaries = {
         "normal": "Standard Kong-governed orchestration flow.",
         "llm_failover": "OpenAI primary is expected to fail and Kong should fail over to Gemini.",
@@ -216,7 +238,11 @@ def scenario_summary(scenario: str, load_balancing_mode: str = "failover") -> st
             if load_balancing_mode == "model_based"
             else "Kong is expected to retry from the primary OpenAI path to the Gemini fallback path inside one focused load-balancing probe."
         ),
-        "token_limit": "Kong AI token governance is expected to block a later orchestrator LLM call.",
+        "token_limit": (
+            "Kong AI rate limiting is expected to enforce per-consumer cost budgets and block the selected consumer once the configured dollar limit is exhausted."
+            if token_limit_mode == "consumer_cost"
+            else "Kong AI token governance is expected to block a later orchestrator LLM call."
+        ),
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
         "prompt_compression": "Kong AI Prompt Compressor is expected to shrink the verbose prompt before the model call so the run saves input tokens.",
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
@@ -231,6 +257,7 @@ def scenario_summary(scenario: str, load_balancing_mode: str = "failover") -> st
 
 def ai_route_path_for_scenario(
     scenario: str,
+    token_limit_mode: str = "consumer",
     load_balancing_mode: str = "failover",
     prompt_enhancement_mode: str = "decorated",
     pii_mode: str = "placeholder",
@@ -240,6 +267,7 @@ def ai_route_path_for_scenario(
 ) -> str:
     base_url = ai_route_for_scenario(
         scenario,
+        token_limit_mode,
         load_balancing_mode,
         prompt_enhancement_mode,
         pii_mode,
@@ -258,6 +286,7 @@ def _gateway_route_spec(label: str, *, route_name: str | None = None, path: str 
 def _route_specs_for_scenario(
     scenario: str,
     *,
+    token_limit_mode: str = "consumer",
     load_balancing_mode: str = "failover",
     prompt_enhancement_mode: str = "decorated",
     pii_mode: str = "placeholder",
@@ -288,6 +317,7 @@ def _route_specs_for_scenario(
             "Scenario AI route",
             path=ai_route_path_for_scenario(
                 scenario,
+                token_limit_mode,
                 load_balancing_mode,
                 prompt_enhancement_mode,
                 pii_mode,
@@ -303,6 +333,8 @@ def _route_specs_for_scenario(
 def scenario_gateway_inventory(
     scenario: str,
     *,
+    token_limit_mode: str = "consumer",
+    token_limit_consumer: str = "consumer1",
     load_balancing_mode: str = "failover",
     prompt_enhancement_mode: str = "decorated",
     pii_mode: str = "placeholder",
@@ -314,6 +346,7 @@ def scenario_gateway_inventory(
     objects: list[dict[str, Any]] = []
     for spec in _route_specs_for_scenario(
         scenario,
+        token_limit_mode=token_limit_mode,
         load_balancing_mode=load_balancing_mode,
         prompt_enhancement_mode=prompt_enhancement_mode,
         pii_mode=pii_mode,
@@ -337,15 +370,22 @@ def scenario_gateway_inventory(
         for consumer in inventory.get("consumers", [])
         if consumer.get("groups")
     ]
+    scenario_consumers = (
+        consumer_objects(inventory, usernames=[token_limit_consumer, "consumer1", "consumer2"])
+        if scenario == "token_limit" and token_limit_mode == "consumer_cost"
+        else []
+    )
 
+    has_consumer_scoped_plugins = any(consumer.get("plugins") for consumer in inventory.get("consumers", []))
     return {
         "scenario": scenario,
         "global_plugins": inventory.get("global_plugins", []),
         "objects": objects,
         "consumer_groups": inventory.get("consumer_groups", []),
         "consumer_bindings": consumer_bindings,
-        "plugin_scopes_present": ["global", "service", "route"],
-        "has_consumer_scoped_plugins": False,
+        "plugin_scopes_present": ["global", "service", "route", *(["consumer"] if has_consumer_scoped_plugins else [])],
+        "scenario_consumers": scenario_consumers,
+        "has_consumer_scoped_plugins": has_consumer_scoped_plugins,
     }
 
 
@@ -472,6 +512,34 @@ def build_load_balancing_probe_prompts(request: PlayRequest) -> dict[str, str]:
 
 
 def build_token_limit_probe_prompts(request: PlayRequest) -> dict[str, str]:
+    if request.token_limit_mode == "consumer_cost":
+        default_prompt = (
+            "Summarize this customer status update in exactly six short bullets and one final next-step line.\n"
+            f"Account: {request.account_name}\n"
+            f"Customer ID: {request.customer_id}\n"
+            f"Issue summary: {request.issue_summary}\n"
+            f"Product issue: {request.product_issue}\n"
+            f"Billing issue: {request.billing_issue}\n"
+            f"Incident ID: {request.incident_id}\n"
+            "Context notes:\n"
+            "- The customer asked for a same-day update.\n"
+            "- Engineering is still validating the technical root cause.\n"
+            "- Billing operations is reviewing disputed usage charges.\n"
+            "- Success wants the wording to stay calm and factual.\n"
+            "- Include the current risk, owner, and next checkpoint.\n"
+            "- Restate the technical issue in business language.\n"
+            "- Restate the billing issue in business language.\n"
+            "- Keep the tone customer-ready and concise.\n"
+            "- Do not use tables.\n"
+        )
+        return {
+            "system_prompt": (
+                "You are a concise customer operations assistant. "
+                "Return exactly six bullets plus one short next-step line."
+            ),
+            "user_prompt": (request.user_prompt or "").strip() or default_prompt,
+        }
+
     default_prompt = (
         "Create an executive-ready escalation update for the account team.\n"
         f"Account: {request.account_name}\n"
@@ -492,6 +560,14 @@ def build_token_limit_probe_prompts(request: PlayRequest) -> dict[str, str]:
         ),
         "user_prompt": (request.user_prompt or "").strip() or default_prompt,
     }
+
+
+def token_limit_consumer_key(consumer: str) -> str:
+    return TOKEN_LIMIT_CONSUMER_KEYS.get(consumer, TOKEN_LIMIT_CONSUMER_KEYS["consumer1"])
+
+
+def token_limit_consumer_limit(consumer: str) -> int:
+    return TOKEN_LIMIT_CONSUMER_LIMITS.get(consumer, TOKEN_LIMIT_CONSUMER_LIMITS["consumer1"])
 
 
 def build_prompt_compression_prompts(request: PlayRequest) -> dict[str, str]:
@@ -790,6 +866,7 @@ async def generate_for_scenario(
     prompts: dict[str, str],
     base_url: str,
     include_model: bool = True,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     try:
         return await llm.generate(
@@ -797,6 +874,7 @@ async def generate_for_scenario(
             run_id=run_id,
             context_id=context_id,
             include_model=include_model,
+            api_key=api_key,
             **prompts,
         )
     except httpx.HTTPStatusError as exc:
@@ -868,6 +946,7 @@ async def generate_for_scenario(
                 model=GEMINI_FALLBACK_MODEL,
                 run_id=run_id,
                 context_id=context_id,
+                api_key=api_key,
                 **prompts,
             )
         raise
@@ -900,6 +979,7 @@ async def generate_for_scenario(
             model=GEMINI_FALLBACK_MODEL,
             run_id=run_id,
             context_id=context_id,
+            api_key=api_key,
             **prompts,
         )
         return fallback
@@ -1589,6 +1669,8 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     context_token = CURRENT_CONTEXT_ID.set(context_id)
     started = time.perf_counter()
     scenario = request.governance_scenario
+    token_limit_mode = request.token_limit_mode
+    token_limit_consumer = request.token_limit_consumer
     load_balancing_mode = request.load_balancing_mode
     load_balancing_prompt_preset = request.load_balancing_prompt_preset
     semantic_cache_step = request.semantic_cache_step
@@ -1600,6 +1682,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
     lakera_mode = request.lakera_mode
     ai_route_base_url = ai_route_for_scenario(
         scenario,
+        token_limit_mode,
         load_balancing_mode,
         prompt_enhancement_mode,
         pii_sanitizer_mode,
@@ -1621,9 +1704,11 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         "scenario_selected",
         actor="orchestrator",
         scenario=scenario,
-        summary=scenario_summary(scenario, load_balancing_mode),
+        summary=scenario_summary(scenario, load_balancing_mode, token_limit_mode),
         output={
             "ai_route_base_url": ai_route_base_url,
+            "token_limit_mode": token_limit_mode,
+            "token_limit_consumer": token_limit_consumer,
             "load_balancing_mode": load_balancing_mode,
             "load_balancing_prompt_preset": load_balancing_prompt_preset,
         },
@@ -1756,84 +1841,98 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         return {"run_id": run_id, "context_id": context_id, "result": final_response}
     if scenario == "token_limit":
         prompts = build_token_limit_probe_prompts(request)
-        allowed_stage = "token_limit_allowed_probe"
-        blocked_stage = "token_limit_blocked_probe"
+        blocked_error: dict[str, Any] | None = None
+        attempts: list[dict[str, Any]] = []
+        selected_consumer = token_limit_consumer if token_limit_mode == "consumer_cost" else "orchestrator-agent"
+        consumer_api_key = token_limit_consumer_key(token_limit_consumer) if token_limit_mode == "consumer_cost" else None
+        attempt_plan = (
+            [("token_limit_attempt", 1)]
+            if token_limit_mode != "consumer_cost"
+            else [
+                ("token_limit_consumer_cost_attempt", 1)
+            ]
+        )
         await emit(
             run_id,
             "planning",
-            message="Kong AI Rate Limiting Advanced is running a focused token-governance probe with one allowed request followed by one blocked request.",
+            message=(
+                f"Kong AI Rate Limiting Advanced is running one focused per-consumer cost probe for {selected_consumer} "
+                f"with a ${token_limit_consumer_limit(token_limit_consumer)} budget. Replay the scene to consume more budget and trigger the block."
+                if token_limit_mode == "consumer_cost"
+                else "Kong AI Rate Limiting Advanced is running one focused token-governance probe. Replay the scene to trigger the block after the route budget is consumed."
+            ),
         )
-        first_result: dict[str, Any] | None = None
-        second_result: dict[str, Any] | None = None
-        blocked_error: dict[str, Any] | None = None
-        await emit(run_id, "llm_started", actor="orchestrator", stage=allowed_stage, component="openai", input=prompts)
-        first_started = time.perf_counter()
-        try:
-            first_result = await generate_for_scenario(
-                run_id=run_id,
-                context_id=context_id,
-                stage=allowed_stage,
-                scenario="token_limit",
-                prompts=prompts,
-                base_url=ai_route_base_url,
-            )
-            await emit(
-                run_id,
-                "llm_completed",
-                actor="orchestrator",
-                stage=allowed_stage,
-                component=first_result["model"] if first_result.get("model") else "openai",
-                llm_used=first_result["llm_used"],
-                model=first_result["model"],
-                output=first_result,
-                duration_ms=timed_ms(first_started),
-            )
-        except (RateLimitError, APIStatusError, httpx.HTTPStatusError) as exc:
-            status_code = getattr(exc, "status_code", None)
-            if status_code is None and isinstance(exc, httpx.HTTPStatusError):
-                status_code = exc.response.status_code
-            blocked_error = {"attempt": "first", "status_code": status_code, "message": str(exc)}
-        if blocked_error is None:
-            await emit(run_id, "llm_started", actor="orchestrator", stage=blocked_stage, component="openai", input=prompts)
-            second_started = time.perf_counter()
+        for stage_name, attempt_label in attempt_plan:
+            if blocked_error is not None:
+                break
+            await emit(run_id, "llm_started", actor="orchestrator", stage=stage_name, component="openai", input=prompts)
+            attempt_started = time.perf_counter()
             try:
-                second_result = await generate_for_scenario(
+                result = await generate_for_scenario(
                     run_id=run_id,
                     context_id=context_id,
-                    stage=blocked_stage,
+                    stage=stage_name,
                     scenario="token_limit",
                     prompts=prompts,
                     base_url=ai_route_base_url,
+                    api_key=consumer_api_key,
                 )
                 await emit(
                     run_id,
                     "llm_completed",
                     actor="orchestrator",
-                    stage=blocked_stage,
-                    component=second_result["model"] if second_result.get("model") else "openai",
-                    llm_used=second_result["llm_used"],
-                    model=second_result["model"],
-                    output=second_result,
-                    duration_ms=timed_ms(second_started),
+                    stage=stage_name,
+                    component=result["model"] if result.get("model") else "openai",
+                    llm_used=result["llm_used"],
+                    model=result["model"],
+                    output=result,
+                    duration_ms=timed_ms(attempt_started),
+                )
+                attempts.append(
+                    {
+                        "attempt": attempt_label,
+                        "status": "allowed",
+                        "result": result,
+                    }
                 )
             except (RateLimitError, APIStatusError, httpx.HTTPStatusError) as exc:
                 status_code = getattr(exc, "status_code", None)
                 if status_code is None and isinstance(exc, httpx.HTTPStatusError):
                     status_code = exc.response.status_code
-                blocked_error = {"attempt": "second", "status_code": status_code, "message": str(exc)}
+                blocked_error = {"attempt": attempt_label, "status_code": status_code, "message": str(exc)}
+                attempts.append(
+                    {
+                        "attempt": attempt_label,
+                        "status": "blocked",
+                        "error": blocked_error,
+                    }
+                )
+
+        allowed_results = [attempt["result"] for attempt in attempts if attempt.get("status") == "allowed"]
+        first_result = allowed_results[0] if allowed_results else None
+        second_result = allowed_results[1] if len(allowed_results) > 1 else None
+        final_allowed_result = allowed_results[-1] if allowed_results else None
         final_response = {
-            "headline": "AI token limit probe completed",
+            "headline": (
+                f"Consumer cost limit probe completed for {selected_consumer}"
+                if token_limit_mode == "consumer_cost"
+                else "AI token limit probe completed"
+            ),
             "governance_scenario": scenario,
             "policy_outcome": "blocked" if blocked_error else "not_blocked",
             "token_limit_probe": {
+                "mode": token_limit_mode,
+                "consumer": selected_consumer,
+                "configured_limit_usd": token_limit_consumer_limit(token_limit_consumer) if token_limit_mode == "consumer_cost" else None,
                 "request_payload": request.model_dump(),
                 "original_prompt": prompts,
+                "attempts": attempts,
                 "first_attempt": first_result,
                 "second_attempt": second_result,
                 "blocked_error": blocked_error,
                 "policy_outcome": "blocked" if blocked_error else "not_blocked",
             },
-            "executive_brief": second_result or first_result or {
+            "executive_brief": final_allowed_result or {
                 "llm_used": False,
                 "model": None,
                 "summary": blocked_error["message"] if blocked_error else "No result returned.",
@@ -1841,7 +1940,7 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
             "recommended_summary": (
                 blocked_error["message"]
                 if blocked_error
-                else (second_result or first_result or {"summary": "No result returned."})["summary"]
+                else (final_allowed_result or {"summary": "No result returned."})["summary"]
             ),
             "available_tools": [],
             "called_mcp_tools": [],
@@ -3035,6 +3134,8 @@ async def reset_observability() -> dict[str, Any]:
 @app.get("/orchestrator/scenario-config/{scenario}")
 async def scenario_config(
     scenario: str,
+    token_limit_mode: str = "consumer",
+    token_limit_consumer: str = "consumer1",
     load_balancing_mode: str = "failover",
     prompt_enhancement_mode: str = "decorated",
     pii_sanitizer_mode: str = "placeholder",
@@ -3044,6 +3145,8 @@ async def scenario_config(
 ) -> dict[str, Any]:
     return scenario_gateway_inventory(
         scenario,
+        token_limit_mode=token_limit_mode,
+        token_limit_consumer=token_limit_consumer,
         load_balancing_mode=load_balancing_mode,
         prompt_enhancement_mode=prompt_enhancement_mode,
         pii_mode=pii_sanitizer_mode,

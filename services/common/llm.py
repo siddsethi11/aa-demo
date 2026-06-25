@@ -36,6 +36,7 @@ class OrchestratorLLM:
         task_id: str | None = None,
         message_id: str | None = None,
         scenario_mode: str | None = None,
+        api_key: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -55,7 +56,7 @@ class OrchestratorLLM:
             response = await client.post(
                 f"{resolved_base_url}/chat/completions",
                 headers={
-                    "apikey": self.kong_api_key or "",
+                    "apikey": api_key or self.kong_api_key or "",
                     "content-type": "application/json",
                     **current_trace_headers(),
                     **({"x-demo-run-id": run_id} if run_id else {}),
@@ -88,6 +89,7 @@ class OrchestratorLLM:
         task_id: str | None = None,
         message_id: str | None = None,
         scenario_mode: str | None = None,
+        api_key: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
@@ -107,7 +109,7 @@ class OrchestratorLLM:
             response = await client.post(
                 f"{resolved_base_url}/chat/completions",
                 headers={
-                    "apikey": self.kong_api_key or "",
+                    "apikey": api_key or self.kong_api_key or "",
                     "content-type": "application/json",
                     **current_trace_headers(),
                     **({"x-demo-run-id": run_id} if run_id else {}),

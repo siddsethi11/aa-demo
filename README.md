@@ -1011,14 +1011,18 @@ This scenario demonstrates Kong blocking the orchestrator with AI token governan
 
 Behind the scenes:
 
+- the UI now exposes two sub-scenes:
+  - `Model Token Rate Limit`
+  - `Consumer Cost Rate Limit`
 - the orchestrator switches to `/ai/orchestrator-token-demo/chat/completions`
 - that route uses `ai-rate-limiting-advanced`
 - the current config in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml) is:
   - provider: `openai`
   - `limit: [1]`
   - `window_size: [300]`
-- in plain terms, the demo route allows one counted OpenAI budget event in a 300-second window, and later orchestrator AI calls are blocked with `429`
-- the orchestrator planner or later executive-summary calls hit Kong's AI policy and receive `429`
+- in plain terms, the demo route allows one counted OpenAI budget event in a 300-second window, and a later replay is blocked with `429`
+- each run sends one request on that governed route
+- replay the scene to consume the route budget and observe the next request get `429`
 - instead of crashing the whole demo, the orchestrator converts that into a structured blocked result
 - the trace shows that Kong policy blocked the orchestrator before the executive brief could be completed
 
@@ -1031,6 +1035,33 @@ Important note:
 - in live logs, Kong reports `AI token rate limit exceeded for provider(s): openai`
 - for demo purposes, the effect is deterministic: the scenario shows a policy block after the first counted orchestrator AI usage on that route
 - the orchestrator now handles Kong `429` responses from the shared `httpx` LLM client correctly; earlier versions let those surface as `500`
+
+#### Consumer Cost Rate Limit
+
+This sub-scene demonstrates cost-based consumer budgets on the same provider route.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-consumer-cost-demo/chat/completions`
+- that route uses `ai-proxy-advanced` for `OpenAI 4o mini`
+- the route itself is key-auth protected
+- the rate limiting policy is applied at the consumer scope, not the route scope
+- two demo consumers are configured:
+  - `consumer1`
+    - key: `consumer1-demo-key`
+    - cost limit: `$5` per `300` seconds
+  - `consumer2`
+    - key: `consumer2-demo-key`
+    - cost limit: `$10` per `300` seconds
+- each consumer has its own `ai-rate-limiting-advanced` plugin with:
+  - `tokens_count_strategy: cost`
+  - `llm_providers: [{ name: openai, limit: [...], window_size: [300] }]`
+- each run sends one request for the selected consumer
+- replay the scene manually to consume more budget until Kong returns `429`
+- the topology is intentionally simplified to the effective governed path:
+  - `user -> kong -> llm`
+
+The point of this mode is to show that Kong can enforce separate budgets for different consumers even when they call the same model route.
 
 ### 4. Prompt Decorator
 
@@ -1574,6 +1605,10 @@ These are the demo consumer keys currently configured in the repo:
 
 - `ui-demo-key`
   - used by the hosted UI when it calls the orchestrator and subscribes to `/orchestrator/trace`
+- `consumer1-demo-key`
+  - used by the consumer cost rate-limit probe for the `consumer1` budget
+- `consumer2-demo-key`
+  - used by the consumer cost rate-limit probe for the `consumer2` budget
 - `orchestrator-demo-key`
   - used by the orchestrator when it calls:
     - `/mock-mcp`
@@ -1828,7 +1863,7 @@ If you do not already have those images locally:
 
 ```bash
 docker login docker.cloudsmith.io
-docker pull docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
+docker pull --platform linux/amd64 ocker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
 docker pull docker.cloudsmith.io/kong/ai-compress/service:v0.0.2
 ```
 
@@ -2202,6 +2237,15 @@ The dashboard `Kong Governance Overview` includes:
 - RAG fetch latency p95
 - LLM as Judge evaluations
 - a raw log stream panel for inspection
+
+Grafana now also provisions a dedicated dashboard called `Kong Consumer Cost Overview` for the consumer cost rate-limit scenario. It focuses on:
+
+- model calls by consumer
+- input tokens by consumer
+- output tokens by consumer
+- total tokens by consumer
+- total token cost by consumer
+- a filtered LLM log stream for `consumer1` and `consumer2`
 
 The dashboard also includes a `Run ID` selector:
 

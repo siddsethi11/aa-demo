@@ -292,7 +292,7 @@ outputModal.summary.lakera: "This output comes from the Lakera policy guard prob
 outputModal.summary.rag: "This answer comes from the orchestrator RAG probe using either the baseline route or the Kong RAG-injected route."
 outputModal.summary.loadBalancingSemantic: "This output comes from the semantic load-balancing probe and should show Kong choosing the most relevant model target for the prompt."
 outputModal.summary.loadBalancing: "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path."
-outputModal.summary.tokenLimit: "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request."
+outputModal.summary.tokenLimit: "This output comes from the model token rate limit probe and should show the route allowing one request and then blocking the next request."
 outputModal.summary.promptEnhancement: "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious."
 outputModal.summary.promptCompression: "This output comes from the prompt-compression probe and should show how Kong reduced the prompt before the model call."
 outputModal.summary.focusedProbe: "This output comes from a focused governance probe rather than the full multi-agent workflow."
@@ -310,7 +310,7 @@ outputModal.loadBalancing.copy: "Created by the orchestrator in the load-balanci
 outputModal.loadBalancing.semanticPolicyLabel: "Semantic Routing Policy"
 outputModal.loadBalancing.failoverPolicyLabel: "Failover Policy"
 outputModal.tokenLimit.title: "AI Token Rate Limit Probe"
-outputModal.tokenLimit.copy: "Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior."
+outputModal.tokenLimit.copy: "Created by the orchestrator in the model token rate limit subscene. Kong sends the same prompt on the governed route across repeated plays to show the allow-then-block behavior."
 outputModal.tokenLimit.noBlock: "No block was returned. This usually means the route budget was not exhausted the way the probe expected."
 outputModal.promptDecorator.title: "Prompt Decorator Probe"
 outputModal.promptDecorator.copy: "Created by the orchestrator in the prompt-decorator scenario. The same input prompt is sent through either a plain route or a Kong-decorated route."
@@ -522,17 +522,17 @@ policies.semanticGuard.plainEnglish:
 policies.semanticGuard.title: "Semantic Guard"
 policies.semanticGuard.why: "It shows semantic allow-or-deny behavior based on meaning, not simple keyword matching."
 policies.tokenLimit.config:
-  - ["Subscene", "Consumer Token Rate Limit"]
+  - ["Subscene", "Model Token Rate Limit"]
   - ["Protected route", "Orchestrator AI route"]
   - ["Policy", "AI Rate Limiting Advanced"]
   - ["Provider key", "openai"]
   - ["Configured limit", "1 request"]
   - ["Window", "300 seconds"]
   - ["Expected outcome", "A later orchestrator LLM call is blocked with HTTP 429"]
-policies.tokenLimit.intro: "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted."
+policies.tokenLimit.intro: "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured model-route budget is exhausted."
 policies.tokenLimit.plainEnglish:
   - "The route is protected by AI Rate Limiting Advanced."
-  - "This subscene demonstrates a consumer-scoped token rate limit."
+  - "This subscene demonstrates a model-route token rate limit."
   - "The first probe request is expected to be allowed through."
   - "The second probe request is expected to be rejected at Kong with HTTP 429 instead of reaching the provider."
 policies.tokenLimit.title: "AI Token Rate Limit"
@@ -599,7 +599,7 @@ probe.semanticGuard.mode.safe: "Safe Prompt"
 probe.semanticGuard.mode.violence: "Violence / Bomb"
 probe.tokenLimit.copy: "This focused probe sends the same editable prompt twice on the rate-limited route so the first call can pass and the second can be blocked by Kong at the consumer level."
 probe.tokenLimit.label: "AI Token Rate Limit"
-probe.tokenLimit.mode.consumer: "Consumer Token Rate Limit"
+probe.tokenLimit.mode.consumer: "Model Token Rate Limit"
 probe.tokenLimit.send: "Send Token Rate Limit Request"
 scenario.lakera_guard: "Lakera Policy Guard"
 scenario.llm_as_judge: "LLM as Judge"

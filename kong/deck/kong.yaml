@@ -79,6 +79,7 @@ plugins:
           local service = log_payload['service'] or { name = 'noService' }
           local route = log_payload['route'] or { name = 'noRoute' }
           local consumer = log_payload['consumer'] or {}
+          local consumer_groups = kong.client.get_consumer_groups() or {}
           local request = log_payload['request'] or {}
           local request_headers = request['headers'] or {}
           local response = log_payload['response'] or {}
@@ -331,6 +332,18 @@ plugins:
           log_payload['service_name_extracted'] = tostring(service['name'] or '')
           log_payload['route_name_extracted'] = tostring(route['name'] or '')
           log_payload['consumer_username'] = tostring(consumer['username'] or consumer['custom_id'] or consumer['id'] or 'anonymous')
+          local extracted_consumer_groups = {}
+          if type(consumer_groups) == 'table' then
+            for _, group in ipairs(consumer_groups) do
+              if type(group) == 'table' then
+                extracted_consumer_groups[#extracted_consumer_groups + 1] = tostring(group['name'] or group['id'] or '')
+              elseif type(group) == 'string' then
+                extracted_consumer_groups[#extracted_consumer_groups + 1] = group
+              end
+            end
+          end
+          log_payload['consumer_group_extracted'] = tostring(extracted_consumer_groups[1] or '')
+          log_payload['consumer_groups_extracted'] = table.concat(extracted_consumer_groups, ',')
           log_payload['request_uri'] = tostring(request['uri'] or '')
           log_payload['response_status'] = tonumber(response['status'] or 0) or 0
           log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
@@ -896,6 +909,37 @@ services:
                 - 1
               window_size:
                 - 300
+
+  - name: ai-orchestrator-consumer-cost-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-consumer-cost-demo-chat-route
+        paths:
+          - /ai/orchestrator-consumer-cost-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 5000
+                  output_cost: 10000
 
   - name: ai-orchestrator-prompt-enhance-demo-service
     url: https://api.openai.com
@@ -1804,6 +1848,36 @@ consumers:
   - username: ui-client
     keyauth_credentials:
       - key: ui-demo-key
+  - username: consumer1
+    groups:
+      - name: team-a
+    keyauth_credentials:
+      - key: consumer1-demo-key
+    plugins:
+      - name: ai-rate-limiting-advanced
+        config:
+          llm_providers:
+            - name: openai
+              limit:
+                - 5
+              window_size:
+                - 300
+          tokens_count_strategy: cost
+  - username: consumer2
+    groups:
+      - name: team-a
+    keyauth_credentials:
+      - key: consumer2-demo-key
+    plugins:
+      - name: ai-rate-limiting-advanced
+        config:
+          llm_providers:
+            - name: openai
+              limit:
+                - 10
+              window_size:
+                - 300
+          tokens_count_strategy: cost
   - username: internal-router
     keyauth_credentials:
       - key: ${{ env "DECK_INTERNAL_ROUTER_KEY" }}
@@ -1812,3 +1886,4 @@ consumer_groups:
   - name: orchestrator-tools
   - name: support-tools
   - name: success-tools
+  - name: team-a

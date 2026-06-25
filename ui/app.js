@@ -48,6 +48,8 @@ const loadBalancingPresetOptions = document.getElementById("load-balancing-prese
 const loadBalancingPayload = document.getElementById("load-balancing-payload");
 const loadBalancingSendButton = document.getElementById("load-balancing-send-button");
 const tokenLimitControls = document.getElementById("token-limit-controls");
+const tokenLimitModeOptions = document.getElementById("token-limit-mode-options");
+const tokenLimitConsumerOptions = document.getElementById("token-limit-consumer-options");
 const tokenLimitPayload = document.getElementById("token-limit-payload");
 const tokenLimitSendButton = document.getElementById("token-limit-send-button");
 const promptEnhancementControls = document.getElementById("prompt-enhancement-controls");
@@ -261,6 +263,17 @@ const tokenLimitPromptDefault = [
   "1) Summarize the situation.",
   "2) Recommend next actions.",
   "3) Keep the response under 120 words.",
+].join("\n");
+
+const tokenLimitCostPromptDefault = [
+  "Summarize this customer status update in exactly six short bullets and one final next-step line.",
+  "Context notes:",
+  "- Engineering is still validating the technical root cause.",
+  "- Billing operations is reviewing disputed usage charges.",
+  "- Include the current risk, owner, and next checkpoint.",
+  "- Restate the technical issue in business language.",
+  "- Restate the billing issue in business language.",
+  "- Keep the tone customer-ready and concise.",
 ].join("\n");
 
 document.querySelectorAll("[data-close-modal]").forEach((button) => {
@@ -595,6 +608,18 @@ function currentLoadBalancingPromptPreset() {
   return document.querySelector('input[name="load_balancing_prompt_preset_choice"]:checked')?.value ||
     playForm.elements.namedItem("load_balancing_prompt_preset")?.value ||
     "support_operational";
+}
+
+function currentTokenLimitMode() {
+  return document.querySelector('input[name="token_limit_mode_choice"]:checked')?.value ||
+    playForm.elements.namedItem("token_limit_mode")?.value ||
+    "consumer";
+}
+
+function currentTokenLimitConsumer() {
+  return document.querySelector('input[name="token_limit_consumer_choice"]:checked')?.value ||
+    playForm.elements.namedItem("token_limit_consumer")?.value ||
+    "consumer1";
 }
 
 function normalizeLoadBalancingPromptPreset(mode, preset) {
@@ -995,23 +1020,47 @@ function policyDetailsForScenario(scenario) {
     },
     token_limit: {
       title: t("policies.tokenLimit.title", null, "AI Token Rate Limit"),
-      intro: t("policies.tokenLimit.intro", null, "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted."),
-      plainEnglish: tList("policies.tokenLimit.plainEnglish", null, [
-        "The route is protected by AI Rate Limiting Advanced.",
-        "This subscene demonstrates a consumer-scoped token rate limit.",
-        "The first probe request is expected to be allowed through.",
-        "The second probe request is expected to be rejected at Kong with HTTP 429 instead of reaching the provider.",
-      ]),
-      why: t("policies.tokenLimit.why", null, "It demonstrates usage control and budget enforcement at the gateway."),
-      config: tList("policies.tokenLimit.config", null, [
-        ["Subscene", "Consumer Token Rate Limit"],
-        ["Protected route", "Orchestrator AI route"],
-        ["Policy", "AI Rate Limiting Advanced"],
-        ["Provider key", "openai"],
-        ["Configured limit", "1 request"],
-        ["Window", "300 seconds"],
-        ["Expected outcome", "A later orchestrator LLM call is blocked with HTTP 429"],
-      ]),
+      intro: currentTokenLimitMode() === "consumer_cost"
+        ? "Kong applies a consumer-scoped cost budget and blocks each consumer independently once the configured dollar limit is exhausted."
+        : t("policies.tokenLimit.intro", null, "Kong applies a gateway-side rate limit on a focused probe route and blocks the request once the configured consumer budget is exhausted."),
+      plainEnglish: currentTokenLimitMode() === "consumer_cost"
+        ? [
+            "The cost route is protected by AI Rate Limiting Advanced with consumer-scoped plugins.",
+            "consumer1 is limited to $5 and consumer2 is limited to $10 over the same time window.",
+            "Each play sends one OpenAI 4o mini request for the selected consumer.",
+            "Replay the scene to consume more budget until Kong returns HTTP 429 for that consumer.",
+            "Grafana can then show per-consumer calls, tokens, and accumulated cost from the gateway logs.",
+          ]
+        : tList("policies.tokenLimit.plainEnglish", null, [
+            "The route is protected by AI Rate Limiting Advanced.",
+            "This subscene demonstrates a consumer-scoped token rate limit.",
+            "Each play sends one request through the governed route.",
+            "Replay the scene after the first allowed request to trigger the next blocked request.",
+          ]),
+      why: currentTokenLimitMode() === "consumer_cost"
+        ? "It demonstrates per-consumer budget enforcement at the gateway using model cost instead of raw request count."
+        : t("policies.tokenLimit.why", null, "It demonstrates usage control and budget enforcement at the gateway."),
+      config: currentTokenLimitMode() === "consumer_cost"
+        ? [
+            ["Subscene", "Consumer Cost Rate Limit"],
+            ["Protected route", "Consumer cost demo route"],
+            ["Selected consumer", currentTokenLimitConsumer()],
+            ["consumer1 budget", "$5"],
+            ["consumer2 budget", "$10"],
+            ["Policy", "AI Rate Limiting Advanced"],
+            ["Count strategy", "cost"],
+            ["Model", "OpenAI 4o mini"],
+            ["Window", "300 seconds"],
+          ]
+        : tList("policies.tokenLimit.config", null, [
+            ["Subscene", "Model Token Rate Limit"],
+            ["Protected route", "Orchestrator AI route"],
+            ["Policy", "AI Rate Limiting Advanced"],
+            ["Provider key", "openai"],
+            ["Configured limit", "1 request"],
+            ["Window", "300 seconds"],
+            ["Expected outcome", "A later orchestrator LLM call is blocked with HTTP 429"],
+          ]),
     },
     prompt_enhancement: {
       title: t("policies.promptEnhancement.title", null, "Prompt Decorator"),
@@ -1283,11 +1332,42 @@ function renderPolicyConfig(details) {
     `);
   }
 
+  const scenarioConsumers = details.gatewayInventory.scenario_consumers || [];
+  if (scenarioConsumers.length) {
+    const consumerLines = scenarioConsumers
+      .map((consumer) => {
+        const plugins = (consumer.plugins || [])
+          .map((plugin) => {
+            if (plugin.name === "ai-rate-limiting-advanced" && plugin.tokens_count_strategy) {
+              const provider = plugin.llm_providers?.[0];
+              const limit = provider?.limit?.join(", ") || "-";
+              const windowSize = provider?.window_size?.join(", ") || "-";
+              return `${plugin.name} [scope=consumer, strategy=${plugin.tokens_count_strategy}, limit=${limit}, window=${windowSize}s]`;
+            }
+            return `${plugin.name} [scope=consumer]`;
+          })
+          .join("; ");
+        return `${consumer.username}: ${plugins || "no consumer-scoped plugins"}`;
+      })
+      .join("\n");
+    sections.push(`
+      <div class="policy-config-section">
+        <div class="policy-config-section-title">Scenario Consumers</div>
+        <div class="policy-kv-item policy-kv-item-wide">
+          <strong>Consumer plugins</strong>
+          <span class="policy-multiline">${escapeHtml(consumerLines)}</span>
+        </div>
+      </div>
+    `);
+  }
+
   return `${baseConfig}${sections.join("")}`;
 }
 
 function currentKongScenarioQuery() {
   const params = new URLSearchParams();
+  params.set("token_limit_mode", currentTokenLimitMode());
+  params.set("token_limit_consumer", currentTokenLimitConsumer());
   params.set("load_balancing_mode", currentLoadBalancingMode());
   params.set("prompt_enhancement_mode", currentPromptEnhancementMode());
   params.set("pii_sanitizer_mode", currentPiiMode());
@@ -1600,6 +1680,14 @@ function applyScenarioChoice(scenario) {
   const isPiiSanitizer = activeScenario === "pii_sanitizer";
   const isRag = activeScenario === "rag";
   const isLakera = activeScenario === "lakera_guard";
+  const tokenLimitModeField = playForm.elements.namedItem("token_limit_mode");
+  if (tokenLimitModeField) {
+    tokenLimitModeField.value = currentTokenLimitMode();
+  }
+  const tokenLimitConsumerField = playForm.elements.namedItem("token_limit_consumer");
+  if (tokenLimitConsumerField) {
+    tokenLimitConsumerField.value = currentTokenLimitConsumer();
+  }
   if (loadBalancingControls) {
     loadBalancingControls.hidden = !isLoadBalancing;
   }
@@ -1797,31 +1885,66 @@ function renderLoadBalancingPayload(forcePrompt = false, mode = currentLoadBalan
   }
 }
 
-function tokenLimitPayloadValue() {
+function tokenLimitPayloadValue(mode = currentTokenLimitMode(), consumer = currentTokenLimitConsumer()) {
   const base = currentFormPayload();
+  const userPrompt =
+    mode === "consumer_cost"
+      ? [
+          tokenLimitCostPromptDefault,
+          `Account: ${base.account_name}`,
+          `Customer ID: ${base.customer_id}`,
+          `Issue summary: ${base.issue_summary}`,
+          `Product issue: ${base.product_issue}`,
+          `Billing issue: ${base.billing_issue}`,
+          `Incident ID: ${base.incident_id}`,
+          `Selected consumer: ${consumer}`,
+        ].join("\n")
+      : [
+          tokenLimitPromptDefault,
+          `Account: ${base.account_name}`,
+          `Customer ID: ${base.customer_id}`,
+          `Issue summary: ${base.issue_summary}`,
+          `Product issue: ${base.product_issue}`,
+          `Billing issue: ${base.billing_issue}`,
+          `Incident ID: ${base.incident_id}`,
+        ].join("\n");
   return {
     governance_scenario: "token_limit",
+    token_limit_mode: mode,
+    token_limit_consumer: consumer,
     system_prompt:
-      "You are an executive escalation assistant. Return one concise paragraph plus a short next-action line.",
-    user_prompt: [
-      tokenLimitPromptDefault,
-      `Account: ${base.account_name}`,
-      `Customer ID: ${base.customer_id}`,
-      `Issue summary: ${base.issue_summary}`,
-      `Product issue: ${base.product_issue}`,
-      `Billing issue: ${base.billing_issue}`,
-      `Incident ID: ${base.incident_id}`,
-    ].join("\n"),
+      mode === "consumer_cost"
+        ? "You are a concise customer operations assistant. Return exactly six bullets plus one short next-step line."
+        : "You are an executive escalation assistant. Return one concise paragraph plus a short next-action line.",
+    user_prompt: userPrompt,
   };
 }
 
 function renderTokenLimitPayload(forcePrompt = false) {
+  const mode = currentTokenLimitMode();
+  const consumer = currentTokenLimitConsumer();
+  const modeField = playForm.elements.namedItem("token_limit_mode");
+  if (modeField) {
+    modeField.value = mode;
+  }
+  const consumerField = playForm.elements.namedItem("token_limit_consumer");
+  if (consumerField) {
+    consumerField.value = consumer;
+  }
+  if (tokenLimitConsumerOptions) {
+    tokenLimitConsumerOptions.hidden = mode !== "consumer_cost";
+  }
   if (!tokenLimitPayload) {
     return;
   }
   const currentValue = tokenLimitPayload.value.trim();
-  const defaultPrompt = tokenLimitPayloadValue().user_prompt;
-  if (forcePrompt || !currentValue || currentValue === defaultPrompt) {
+  const defaultPrompt = tokenLimitPayloadValue(mode, consumer).user_prompt;
+  const knownDefaults = new Set([
+    tokenLimitPayloadValue("consumer", "consumer1").user_prompt,
+    tokenLimitPayloadValue("consumer_cost", "consumer1").user_prompt,
+    tokenLimitPayloadValue("consumer_cost", "consumer2").user_prompt,
+  ]);
+  if (forcePrompt || !currentValue || knownDefaults.has(currentValue)) {
     tokenLimitPayload.value = defaultPrompt;
   }
 }
@@ -2126,7 +2249,11 @@ function scenarioPromptOverrides(payload) {
     return payload;
   }
   if (scenario === "token_limit") {
-    const defaultPayload = tokenLimitPayloadValue();
+    const mode = payload.token_limit_mode || currentTokenLimitMode();
+    const consumer = payload.token_limit_consumer || currentTokenLimitConsumer();
+    const defaultPayload = tokenLimitPayloadValue(mode, consumer);
+    payload.token_limit_mode = mode;
+    payload.token_limit_consumer = consumer;
     payload.system_prompt = defaultPayload.system_prompt;
     payload.user_prompt = tokenLimitPayload?.value?.trim() || defaultPayload.user_prompt;
     return payload;
@@ -2210,6 +2337,8 @@ function scenarioRequestPayload(payload) {
   if (scenario === "token_limit") {
     return {
       governance_scenario: "token_limit",
+      token_limit_mode: payload.token_limit_mode,
+      token_limit_consumer: payload.token_limit_consumer,
       user_prompt: payload.user_prompt,
       run_id: payload.run_id,
       context_id: payload.context_id,
@@ -2987,6 +3116,7 @@ function setLineVisibility(name, visible) {
 function updateScenarioInfraVisibility(scenario) {
   const showLoadBalancing = scenario === "load_balancing";
   const showTokenLimit = scenario === "token_limit";
+  const showConsumerCostTokenLimit = showTokenLimit && currentTokenLimitMode() === "consumer_cost";
   const showPromptEnhancement = scenario === "prompt_enhancement";
   const showRedis = scenario === "semantic_guard" || scenario === "semantic_cache" || scenario === "rag";
   const showJudge = scenario === "llm_as_judge" || isModelBasedRoutingScenario(scenario);
@@ -3013,6 +3143,8 @@ function updateScenarioInfraVisibility(scenario) {
   setLineVisibility("kong-pii", showPii);
   setScenarioVisibility("openai", true);
   setLineVisibility("kong-openai", true);
+  setScenarioVisibility("orchestrator", !showConsumerCostTokenLimit);
+  setLineVisibility("kong-orchestrator", !showConsumerCostTokenLimit);
 
   setScenarioVisibility("gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
   setLineVisibility("kong-gemini", scenario === "load_balancing" || scenario === "llm_failover" || (!focusedScenario));
@@ -3486,7 +3618,9 @@ function renderFinalOutput(result) {
           ? "This output comes from the model-based routing probe and should show Kong asking a selector model to choose simple or complex before the final model call."
           : t("outputModal.summary.loadBalancing", null, "This output comes from the load-balancing probe and should show Kong failing over from the primary model path to the fallback path.")
     : tokenLimitProbe
-      ? t("outputModal.summary.tokenLimit", null, "This output comes from the consumer token rate limit probe and should show the route allowing one request and then blocking the next request.")
+      ? tokenLimitProbe.mode === "consumer_cost"
+        ? "This output comes from the consumer cost rate limit probe and should show Kong enforcing separate dollar budgets for consumer1 and consumer2."
+        : t("outputModal.summary.tokenLimit", null, "This output comes from the model token rate limit probe and should show the route allowing one request and then blocking the next request.")
     : promptEnhancementProbe
       ? t("outputModal.summary.promptEnhancement", null, "This output comes from the prompt-decorator probe and should make the difference between the plain and decorated routes obvious.")
     : promptCompressionProbe
@@ -3574,14 +3708,27 @@ function renderFinalOutput(result) {
           ? `
       <section class="output-section output-section-wide">
         <strong>${t("outputModal.tokenLimit.title", null, "AI Token Rate Limit Probe")}</strong>
-        <p class="output-section-copy">${t("outputModal.tokenLimit.copy", null, "Created by the orchestrator in the consumer token rate limit subscene. Kong sends the same prompt twice on the governed route to show the allow-then-block behavior.")}</p>
+        <p class="output-section-copy">${
+          tokenLimitProbe.mode === "consumer_cost"
+            ? `Created by the orchestrator in the consumer cost rate limit subscene. This run sends one OpenAI 4o mini request for ${escapeHtml(tokenLimitProbe.consumer || "the selected consumer")}. Replay the scene to keep consuming that consumer's configured dollar budget.`
+            : "Created by the orchestrator in the model token rate limit subscene. This run sends one request on the governed route. Replay the scene to consume the route budget and trigger the block."
+        }</p>
         <div class="output-subgrid">
           <div class="output-subsection">
             <span>${t("outputModal.label.policyOutcome", null, "Policy Outcome")}</span>
             ${renderDefinitionList([
-              ["Subscene", "Consumer Token Rate Limit"],
-              ["First Attempt", tokenLimitProbe.first_attempt ? "Allowed" : (tokenLimitProbe.blocked_error?.attempt === "first" ? "Blocked" : "Not returned")],
-              ["Second Attempt", tokenLimitProbe.second_attempt ? "Allowed" : (tokenLimitProbe.blocked_error?.attempt === "second" ? "Blocked" : "Not returned")],
+              ["Subscene", tokenLimitProbe.mode === "consumer_cost" ? "Consumer Cost Rate Limit" : "Model Token Rate Limit"],
+              ...(tokenLimitProbe.mode === "consumer_cost"
+                ? [
+                    ["Consumer", tokenLimitProbe.consumer],
+                    ["Configured Limit", tokenLimitProbe.configured_limit_usd ? `$${tokenLimitProbe.configured_limit_usd}` : "-"],
+                    ["Attempts", (tokenLimitProbe.attempts || []).map((attempt) => `#${attempt.attempt}:${attempt.status}`).join(", ") || "-"],
+                    ["Replay Behavior", "One request per Play"],
+                  ]
+                : [
+                    ["Attempt", (tokenLimitProbe.attempts || []).map((attempt) => `#${attempt.attempt}:${attempt.status}`).join(", ") || "-"],
+                    ["Replay Behavior", "One request per Play"],
+                  ]),
               ["Blocked Attempt", tokenLimitProbe.blocked_error?.attempt],
               ["Blocked Status", tokenLimitProbe.blocked_error?.status_code],
             ])}
@@ -5266,8 +5413,14 @@ loadBalancingSendButton?.addEventListener("click", (event) => {
 
 tokenLimitSendButton?.addEventListener("click", (event) => {
   event.preventDefault();
+  const selectedMode = currentTokenLimitMode();
+  const selectedConsumer = currentTokenLimitConsumer();
   sceneModal.close();
-  play({ governance_scenario: "token_limit" });
+  play({
+    governance_scenario: "token_limit",
+    token_limit_mode: selectedMode,
+    token_limit_consumer: selectedConsumer,
+  });
 });
 
 promptEnhancementSendButton?.addEventListener("click", (event) => {
@@ -5407,6 +5560,29 @@ loadBalancingPresetOptions?.addEventListener("change", (event) => {
   }
   renderLoadBalancingPayload(true, currentLoadBalancingMode());
   if (policyModal?.open && activeScenario === "load_balancing") {
+    renderPolicyModal();
+  }
+});
+
+tokenLimitModeOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "token_limit_mode_choice") {
+    return;
+  }
+  renderTokenLimitPayload(true);
+  updateScenarioInfraVisibility(activeScenario);
+  if (policyModal?.open && activeScenario === "token_limit") {
+    renderPolicyModal();
+  }
+});
+
+tokenLimitConsumerOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "token_limit_consumer_choice") {
+    return;
+  }
+  renderTokenLimitPayload(true);
+  if (policyModal?.open && activeScenario === "token_limit") {
     renderPolicyModal();
   }
 });

@@ -28,6 +28,7 @@ def load_kong_gateway_inventory() -> dict[str, Any]:
     service_mode: str | None = None
     route_mode: str | None = None
     consumer_mode: str | None = None
+    consumer_plugin_mode: str | None = None
     mcp_mode: str | None = None
     acl_mode: str | None = None
 
@@ -35,6 +36,7 @@ def load_kong_gateway_inventory() -> dict[str, Any]:
     current_route: dict[str, Any] | None = None
     current_plugin: dict[str, Any] | None = None
     current_consumer: dict[str, Any] | None = None
+    current_consumer_plugin: dict[str, Any] | None = None
     current_tool: dict[str, Any] | None = None
 
     for raw_line in lines:
@@ -55,6 +57,7 @@ def load_kong_gateway_inventory() -> dict[str, Any]:
             current_route = None
             current_plugin = None
             current_consumer = None
+            current_consumer_plugin = None
             current_tool = None
             continue
 
@@ -198,9 +201,12 @@ def load_kong_gateway_inventory() -> dict[str, Any]:
                 current_consumer = {
                     "username": _value_after_colon(stripped),
                     "groups": [],
+                    "plugins": [],
                 }
                 inventory["consumers"].append(current_consumer)
                 consumer_mode = None
+                consumer_plugin_mode = None
+                current_consumer_plugin = None
                 continue
 
             if current_consumer is None:
@@ -208,11 +214,71 @@ def load_kong_gateway_inventory() -> dict[str, Any]:
 
             if indent == 4 and stripped == "groups:":
                 consumer_mode = "groups"
+                consumer_plugin_mode = None
+                current_consumer_plugin = None
+                continue
+
+            if indent == 4 and stripped == "plugins:":
+                consumer_mode = "plugins"
+                consumer_plugin_mode = None
+                current_consumer_plugin = None
                 continue
 
             if consumer_mode == "groups" and indent == 6 and stripped.startswith("- name:"):
                 current_consumer["groups"].append(_value_after_colon(stripped))
                 continue
+
+            if consumer_mode == "plugins" and indent == 6 and stripped.startswith("- name:"):
+                current_consumer_plugin = {"name": _value_after_colon(stripped)}
+                current_consumer["plugins"].append(current_consumer_plugin)
+                consumer_plugin_mode = None
+                continue
+
+            if current_consumer_plugin is None:
+                continue
+
+            if indent == 8 and stripped == "config:":
+                consumer_plugin_mode = "config"
+                continue
+
+            if consumer_plugin_mode != "config":
+                continue
+
+            if current_consumer_plugin.get("name") == "ai-rate-limiting-advanced":
+                if indent == 10 and stripped.startswith("tokens_count_strategy:"):
+                    current_consumer_plugin["tokens_count_strategy"] = _value_after_colon(stripped)
+                    continue
+
+                if indent == 10 and stripped == "llm_providers:":
+                    current_consumer_plugin["llm_providers"] = []
+                    continue
+
+                if indent == 12 and stripped.startswith("- name:"):
+                    current_consumer_plugin.setdefault("llm_providers", []).append(
+                        {
+                            "name": _value_after_colon(stripped),
+                            "limit": [],
+                            "window_size": [],
+                        }
+                    )
+                    continue
+
+                llm_providers = current_consumer_plugin.get("llm_providers") or []
+                if not llm_providers:
+                    continue
+
+                current_provider = llm_providers[-1]
+                if indent == 14 and stripped == "limit:":
+                    current_provider["_reading"] = "limit"
+                    continue
+                if indent == 14 and stripped == "window_size:":
+                    current_provider["_reading"] = "window_size"
+                    continue
+                if indent == 16 and stripped.startswith("- "):
+                    reading = current_provider.get("_reading")
+                    if reading in {"limit", "window_size"}:
+                        current_provider[reading].append(stripped[2:].strip())
+                    continue
 
         if section == "consumer_groups":
             if indent == 2 and stripped.startswith("- name:"):
@@ -263,3 +329,23 @@ def build_route_object(
         "effective_plugins": effective_plugins,
         "mcp_tools": route.get("mcp_tools", []),
     }
+
+
+def consumer_objects(
+    inventory: dict[str, Any],
+    *,
+    usernames: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    selected = set(usernames or [])
+    consumers = []
+    for consumer in inventory.get("consumers", []):
+        if selected and consumer.get("username") not in selected:
+            continue
+        consumers.append(
+            {
+                "username": consumer.get("username"),
+                "groups": consumer.get("groups", []),
+                "plugins": consumer.get("plugins", []),
+            }
+        )
+    return consumers

@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kong Agent + MCP Demo</title>
-    <link rel="icon" type="image/png" href="/assets/logo.png?v=20260624-kong-config-1" />
-    <link rel="stylesheet" href="/styles.css?v=20260624-kong-config-1" />
+    <link rel="icon" type="image/png" href="/assets/logo.png?v=20260624-cost-limit-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260624-cost-limit-1" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-hero">
-          <img class="brand-mark" src="/assets/logo.png?v=20260624-kong-config-1" alt="Kong logo" />
+          <img class="brand-mark" src="/assets/logo.png?v=20260624-cost-limit-1" alt="Kong logo" />
           <div class="brand-copy">
             <p class="eyebrow" data-i18n="topbar.eyebrow">Kong AI Gateway Demo</p>
             <h1 data-i18n="topbar.brand">Kong Unified Governance</h1>
@@ -366,6 +366,7 @@
             <input type="hidden" name="load_balancing_mode" value="failover" />
             <input type="hidden" name="load_balancing_prompt_preset" value="support_operational" />
             <input type="hidden" name="token_limit_mode" value="consumer" />
+            <input type="hidden" name="token_limit_consumer" value="consumer1" />
             <input type="hidden" name="semantic_cache_step" value="single" />
             <input type="hidden" name="prompt_enhancement_mode" value="decorated" />
             <input type="hidden" name="prompt_compression_mode" value="rate" />
@@ -418,15 +419,29 @@
           <section id="token-limit-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label" data-i18n="probe.tokenLimit.label">AI Token Rate Limit</span>
-              <p class="probe-copy" data-i18n="probe.tokenLimit.copy">This focused probe sends the same editable prompt twice on the rate-limited route so the first call can pass and the second can be blocked by Kong at the consumer level.</p>
+              <p class="probe-copy">Use the token-limited route or the consumer-cost route. Both modes send one request per play; replay the scene yourself until Kong blocks the route or consumer budget.</p>
               <div class="preset-options" id="token-limit-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="token_limit_mode_choice" value="consumer" checked />
-                  <span data-i18n="probe.tokenLimit.mode.consumer">Consumer Token Rate Limit</span>
+                  <span data-i18n="probe.tokenLimit.mode.consumer">Model Token Rate Limit</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="token_limit_mode_choice" value="consumer_cost" />
+                  <span>Consumer Cost Rate Limit</span>
+                </label>
+              </div>
+              <div class="preset-options" id="token-limit-consumer-options" hidden>
+                <label class="preset-option">
+                  <input type="radio" name="token_limit_consumer_choice" value="consumer1" checked />
+                  <span>consumer1 ($5)</span>
+                </label>
+                <label class="preset-option">
+                  <input type="radio" name="token_limit_consumer_choice" value="consumer2" />
+                  <span>consumer2 ($10)</span>
                 </label>
               </div>
               <textarea id="token-limit-payload" class="probe-payload" rows="10"></textarea>
-              <button id="token-limit-send-button" class="primary" type="button" data-i18n="probe.tokenLimit.send">Send Token Rate Limit Request</button>
+              <button id="token-limit-send-button" class="primary" type="button">Run Rate Limit Probe</button>
             </article>
           </section>
           <section id="prompt-enhancement-controls" class="probe-controls" hidden>
@@ -1307,6 +1322,6 @@
          English baked into the markup and app.js is used unchanged. -->
     <script src="/i18n-active.js"></script>
     <script src="/i18n.js?v=20260601-i18n-1"></script>
-    <script src="/app.js?v=20260624-kong-config-1" defer></script>
+    <script src="/app.js?v=20260624-cost-limit-1" defer></script>
   </body>
 </html>

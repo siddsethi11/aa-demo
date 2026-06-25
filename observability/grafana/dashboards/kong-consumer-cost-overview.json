@@ -1,0 +1,510 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (count_over_time({component=\"llm\",consumer=~\"$consumer\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\" [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Model Calls By Consumer",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",consumer=~\"$consumer\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_prompt_tokens [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Input Tokens By Consumer",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",consumer=~\"$consumer\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_completion_tokens [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Output Tokens By Consumer",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",consumer=~\"$consumer\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_total_tokens [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Tokens By Consumer",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",consumer=~\"$consumer\",run_id!=\"\",run_id=~\"$run_id\"} | json | unwrap llm_usage_cost [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Token Cost By Consumer",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer_group_extracted) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | consumer_group_extracted != \"\" | unwrap llm_usage_cost [$__range]))",
+          "legendFormat": "{{consumer_group_extracted}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Token Cost By Team",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 6,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=\"llm\",consumer=~\"$consumer\",run_id!=\"\",run_id=~\"$run_id\"} | json | llm_usage_model != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Consumer Cost Log Stream",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "kong",
+    "loki",
+    "grafana",
+    "ai",
+    "rate-limit"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": "consumer1|consumer2",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "grafana-loki"
+        },
+        "definition": "label_values({component=\"llm\",consumer=~\"consumer1|consumer2\"}, consumer)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Consumer",
+        "multi": true,
+        "name": "consumer",
+        "options": [],
+        "query": "label_values({component=\"llm\",consumer=~\"consumer1|consumer2\"}, consumer)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "grafana-loki"
+        },
+        "definition": "label_values({run_id!=\"\"}, run_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Run ID",
+        "multi": false,
+        "name": "run_id",
+        "options": [],
+        "query": {
+          "label": "run_id",
+          "stream": "{run_id!=\"\"}",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 3,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Kong Consumer Cost Overview",
+  "uid": "kong-consumer-cost-overview",
+  "version": 1,
+  "weekStart": ""
+}
