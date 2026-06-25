@@ -30,6 +30,7 @@ Before running the demo, make sure you have:
 - `deck`
 - a valid Konnect personal access token with access to the target control plane
 - a populated `.env` file based on [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example)
+- MCP registry enabled in your org
 
 Cloudsmith-hosted supporting images required for focused governance scenarios:
 
