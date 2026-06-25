@@ -191,6 +191,7 @@ sync_plugin_schema() {
   case "$write_status" in
     200|201)
       rm -f "$write_body_file"
+      wait_for_plugin_schema "$cp_id" "$plugin_name"
       ok "Custom plugin schema '${plugin_name}' synced"
       ;;
     *)
@@ -200,6 +201,55 @@ sync_plugin_schema() {
       exit 1
       ;;
   esac
+}
+
+wait_for_plugin_schema() {
+  local cp_id="$1"
+  local plugin_name="$2"
+  local base_url="${KONNECT_API_URL}/v2/control-planes/${cp_id}/core-entities/plugin-schemas"
+  local attempt max_attempts sleep_seconds
+  max_attempts="${KONNECT_PLUGIN_SCHEMA_WAIT_ATTEMPTS:-15}"
+  sleep_seconds="${KONNECT_PLUGIN_SCHEMA_WAIT_SECONDS:-2}"
+
+  for (( attempt = 1; attempt <= max_attempts; attempt++ )); do
+    local check_response check_status check_body_file
+    check_response="$(konnect_api GET "${base_url}/${plugin_name}")"
+    check_status="${check_response%% *}"
+    check_body_file="${check_response#* }"
+
+    if [[ "$check_status" == "200" ]]; then
+      rm -f "$check_body_file"
+      return 0
+    fi
+
+    if [[ "$attempt" -lt "$max_attempts" ]]; then
+      info "Waiting for Konnect to expose custom plugin schema '${plugin_name}' (${attempt}/${max_attempts})"
+      rm -f "$check_body_file"
+      sleep "$sleep_seconds"
+      continue
+    fi
+
+    fail "Konnect did not expose custom plugin schema '${plugin_name}' after ${max_attempts} attempts."
+    cat "$check_body_file" >&2
+    rm -f "$check_body_file"
+    exit 1
+  done
+}
+
+sync_all_plugin_schemas() {
+  local cp_id="$1"
+  local schema_files plugin_name schema_file
+  schema_files=(kong/plugins/*/schema.lua(N))
+
+  if [[ "${#schema_files[@]}" -eq 0 ]]; then
+    fail "No custom plugin schemas found under kong/plugins/*/schema.lua"
+    exit 1
+  fi
+
+  for schema_file in "${schema_files[@]}"; do
+    plugin_name="$(basename "$(dirname "$schema_file")")"
+    sync_plugin_schema "$cp_id" "$plugin_name" "$schema_file"
+  done
 }
 
 if [[ ! -f .env ]]; then
@@ -250,9 +300,7 @@ else
 fi
 
 step "Syncing custom plugin schemas"
-sync_plugin_schema "$CONTROL_PLANE_ID" "prompt-capture" "kong/plugins/prompt-capture/schema.lua"
-sync_plugin_schema "$CONTROL_PLANE_ID" "trace-enricher" "kong/plugins/trace-enricher/schema.lua"
-sync_plugin_schema "$CONTROL_PLANE_ID" "workflow-graph" "kong/plugins/workflow-graph/schema.lua"
+sync_all_plugin_schemas "$CONTROL_PLANE_ID"
 
 step "Syncing Kong configuration"
 deck gateway sync \

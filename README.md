@@ -1053,6 +1053,7 @@ Behind the scenes:
   - `consumer2`
     - key: `consumer2-demo-key`
     - cost limit: `$10` per `300` seconds
+- both consumers are members of the consumer group `team-a`
 - each consumer has its own `ai-rate-limiting-advanced` plugin with:
   - `tokens_count_strategy: cost`
   - `llm_providers: [{ name: openai, limit: [...], window_size: [300] }]`
@@ -1061,7 +1062,7 @@ Behind the scenes:
 - the topology is intentionally simplified to the effective governed path:
   - `user -> kong -> llm`
 
-The point of this mode is to show that Kong can enforce separate budgets for different consumers even when they call the same model route.
+The point of this mode is to show that Kong can enforce separate budgets for different consumers even when they call the same model route, while also rolling usage up to the team level through the consumer group.
 
 ### 4. Prompt Decorator
 
@@ -1606,9 +1607,9 @@ These are the demo consumer keys currently configured in the repo:
 - `ui-demo-key`
   - used by the hosted UI when it calls the orchestrator and subscribes to `/orchestrator/trace`
 - `consumer1-demo-key`
-  - used by the consumer cost rate-limit probe for the `consumer1` budget
+  - used by the consumer cost rate-limit probe for the `consumer1` budget in `team-a`
 - `consumer2-demo-key`
-  - used by the consumer cost rate-limit probe for the `consumer2` budget
+  - used by the consumer cost rate-limit probe for the `consumer2` budget in `team-a`
 - `orchestrator-demo-key`
   - used by the orchestrator when it calls:
     - `/mock-mcp`
@@ -1936,6 +1937,8 @@ deck file validate kong/deck/kong.yaml
 
 ### 6. Sync the Kong config to Konnect
 
+Before running `deck gateway sync`, make sure the custom plugin schemas have been created in the target Konnect control plane. `./scripts/start_rag_demo.sh` does this automatically for every plugin under `kong/plugins/*/schema.lua` and waits until Konnect can read the schema back. If you skip that step, decK can fail with errors such as `no plugin-schema for 'trace-enricher'`.
+
 ```bash
 deck gateway sync \
   --konnect-token "$KONNECT_TOKEN" \
@@ -2245,7 +2248,12 @@ Grafana now also provisions a dedicated dashboard called `Kong Consumer Cost Ove
 - output tokens by consumer
 - total tokens by consumer
 - total token cost by consumer
+- total token cost by team
 - a filtered LLM log stream for `consumer1` and `consumer2`
+
+Dashboard asset:
+
+- [observability/grafana/dashboards/kong-consumer-cost-overview.json](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/grafana/dashboards/kong-consumer-cost-overview.json)
 
 The dashboard also includes a `Run ID` selector:
 
@@ -2254,6 +2262,12 @@ The dashboard also includes a `Run ID` selector:
   - excludes traffic where `run_id` is blank
 - a specific run id
   - scopes the dashboard to one run
+
+Current dashboard behavior:
+
+- the `Consumer` filter drives the consumer-level panels
+- `Total Token Cost By Team` ignores the consumer filter and always shows the total across all consumers in the selected run/time range
+- the team label is populated from Kong consumer-group metadata and currently resolves to `team-a`
 
 The LLM cost panels and LLM call-count panels are intended to follow the active Grafana time range rather than a hardcoded lookback window.
 
