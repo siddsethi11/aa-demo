@@ -266,6 +266,8 @@ set -a
 source .env
 set +a
 
+source "${ROOT_DIR}/scripts/resolve_embeddings_env.sh"
+
 if [[ -z "${KONNECT_TOKEN:-}" ]]; then
   fail "KONNECT_TOKEN is not set in .env"
   exit 1

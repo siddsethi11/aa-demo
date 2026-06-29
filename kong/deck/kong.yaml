@@ -302,6 +302,39 @@ plugins:
           log_payload['ai_rag_embeddings_tokens'] = tonumber(rag['embeddings_tokens'] or 0) or 0
           log_payload['ai_rag_embeddings_provider'] = tostring(rag['embeddings_provider'] or '')
           log_payload['ai_rag_embeddings_model'] = tostring(rag['embeddings_model'] or '')
+          local embeddings_model = tostring(cache['embeddings_model'] or '')
+          local embeddings_provider = tostring(cache['embeddings_provider'] or '')
+          local embeddings_latency = tonumber(cache['embeddings_latency'] or 0) or 0
+          local embeddings_source = ''
+          if embeddings_model ~= '' then
+            embeddings_source = 'semantic_cache'
+          else
+            embeddings_model = tostring(rag['embeddings_model'] or '')
+            embeddings_provider = tostring(rag['embeddings_provider'] or '')
+            embeddings_latency = tonumber(rag['embeddings_latency'] or 0) or 0
+            if embeddings_model ~= '' then
+              embeddings_source = 'rag'
+            end
+          end
+          if embeddings_model == '' then
+            local route_name = tostring(route['name'] or '')
+            local latencies = log_payload['latencies'] or {}
+            local http_client = tonumber(latencies['http_client'] or 0) or 0
+            if http_client > 0 and (
+              route_name == 'ai-orchestrator-semantic-guard-demo-chat-route' or
+              route_name == 'ai-orchestrator-semantic-load-balance-demo-chat-route'
+            ) then
+              -- ponytail: Kong guard/LB audit omits embeddings_model; use decK-synced model name
+              embeddings_model = '${{ env "DECK_EMBEDDINGS_MODEL" }}'
+              embeddings_provider = 'openai'
+              embeddings_latency = http_client
+              embeddings_source = route_name == 'ai-orchestrator-semantic-guard-demo-chat-route' and 'semantic_guard' or 'semantic_load_balance'
+            end
+          end
+          log_payload['ai_embeddings_model'] = embeddings_model
+          log_payload['ai_embeddings_provider'] = embeddings_provider
+          log_payload['ai_embeddings_latency'] = embeddings_latency
+          log_payload['ai_embeddings_source'] = embeddings_source
           local lakera_input_block_detail = lakera['input_block_detail']
           local first_lakera_detector_type = ''
           if type(lakera_input_block_detail) == 'table' and type(lakera_input_block_detail[1]) == 'table' then
@@ -666,10 +699,12 @@ services:
           embeddings:
             auth:
               header_name: Authorization
-              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              header_value: Bearer ${{ env "DECK_EMBEDDINGS_API_KEY" }}
             model:
               provider: openai
-              name: text-embedding-3-small
+              name: ${{ env "DECK_EMBEDDINGS_MODEL" }}
+              options:
+                upstream_url: ${{ env "DECK_EMBEDDINGS_UPSTREAM_URL" }}
           vectordb:
             dimensions: 1024
             distance_metric: cosine
@@ -1121,10 +1156,12 @@ services:
           embeddings:
             auth:
               header_name: Authorization
-              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              header_value: Bearer ${{ env "DECK_EMBEDDINGS_API_KEY" }}
             model:
               provider: openai
-              name: text-embedding-3-small
+              name: ${{ env "DECK_EMBEDDINGS_MODEL" }}
+              options:
+                upstream_url: ${{ env "DECK_EMBEDDINGS_UPSTREAM_URL" }}
           search:
             threshold: 0.5
           vectordb:
@@ -1189,12 +1226,12 @@ services:
           embeddings:
             auth:
               header_name: Authorization
-              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              header_value: Bearer ${{ env "DECK_EMBEDDINGS_API_KEY" }}
             model:
               provider: openai
-              name: text-embedding-3-small
+              name: ${{ env "DECK_EMBEDDINGS_MODEL" }}
               options:
-                upstream_url: https://api.openai.com/v1/embeddings
+                upstream_url: ${{ env "DECK_EMBEDDINGS_UPSTREAM_URL" }}
           vectordb:
             dimensions: 1024
             distance_metric: cosine
