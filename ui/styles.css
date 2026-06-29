@@ -156,8 +156,9 @@ button:hover {
   max-width: 11ch;
 }
 
-/* Japanese brand wordmark is wider per glyph; give it room to avoid an awkward wrap. */
-html[lang="ja"] .topbar h1 {
+/* CJK brand wordmarks are wider per glyph; give them room to avoid an awkward wrap. */
+html[lang="ja"] .topbar h1,
+html[lang="ko"] .topbar h1 {
   max-width: 22ch;
 }
 

@@ -26,7 +26,7 @@ services:
       - "8080"
 
   loki:
-    image: grafana/loki:3.0.0
+    image: grafana/loki:3.7.2
     container_name: loki
     restart: unless-stopped
     command: ["-config.file=/etc/loki/local-config.yaml"]
@@ -50,7 +50,7 @@ services:
       - "9411"
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.139.0
+    image: otel/opentelemetry-collector-contrib:0.155.0
     container_name: otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -69,7 +69,7 @@ services:
         condition: service_started
 
   opik-mysql:
-    image: mysql:8.4.2
+    image: mysql:8.4.10
     container_name: opik-mysql
     profiles: ["opik"]
     restart: unless-stopped
@@ -85,7 +85,7 @@ services:
       retries: 300
 
   opik-redis:
-    image: redis:7.2.4-alpine3.19
+    image: redis:7-alpine
     container_name: opik-redis
     profiles: ["opik"]
     restart: unless-stopped
@@ -109,7 +109,7 @@ services:
       - opik-clickhouse-config:/config
 
   opik-zookeeper:
-    image: zookeeper:3.9.4
+    image: zookeeper:3.9
     container_name: opik-zookeeper
     profiles: ["opik"]
     restart: unless-stopped
@@ -344,7 +344,7 @@ services:
         condition: service_started
 
   kong-dp:
-    image: kong/kong-gateway:3.14.0.1
+    image: kong/kong-gateway:3.14.0.6
     container_name: kong-dp
     restart: unless-stopped
     env_file:
@@ -465,6 +465,8 @@ services:
       UI_LANG: ${UI_LANG:-en}
     ports:
       - "3000:80"
+    # Kong proxies / to http://ui:80. After force-recreate ui alone, restart kong-dp
+    # or :8000 returns 502 until Kong re-resolves the ui container IP.
 
 volumes:
   opik-clickhouse:

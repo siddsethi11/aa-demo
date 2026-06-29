@@ -563,7 +563,21 @@ async function loadTraceExplorer() {
 }
 
 function labelForScenario(scenario) {
-  const labels = {
+  const keys = {
+    normal: "scenario.normal",
+    load_balancing: "scenario.load_balancing",
+    llm_failover: "scenario.load_balancing",
+    token_limit: "scenario.token_limit",
+    prompt_enhancement: "scenario.prompt_enhancement",
+    prompt_compression: "scenario.prompt_compression",
+    semantic_guard: "scenario.semantic_guard",
+    semantic_cache: "scenario.semantic_cache",
+    llm_as_judge: "scenario.llm_as_judge",
+    pii_sanitizer: "scenario.pii_sanitizer",
+    rag: "scenario.rag",
+    lakera_guard: "scenario.lakera_guard",
+  };
+  const fallbacks = {
     normal: "Normal",
     load_balancing: "Load Balancing",
     llm_failover: "LLM Failover",
@@ -577,7 +591,8 @@ function labelForScenario(scenario) {
     rag: "RAG",
     lakera_guard: "Lakera Policy Guard",
   };
-  return labels[scenario] || "Normal";
+  const key = keys[scenario] || keys.normal;
+  return t(key, null, fallbacks[scenario] || fallbacks.normal);
 }
 
 function currentPiiMode() {
@@ -1437,8 +1452,18 @@ function touchActivity(timestamp) {
   lastRun.textContent = formatTime(timestamp || new Date().toISOString());
 }
 
+const RUN_STATE_I18N = {
+  idle: "status.idle",
+  starting: "status.starting",
+  running: "status.running",
+  loading: "status.loading",
+  complete: "status.complete",
+  error: "status.error",
+};
+
 function setRunState(state) {
-  runState.textContent = state;
+  const key = RUN_STATE_I18N[state];
+  runState.textContent = key ? t(key, null, state) : state;
   sceneStatus.classList.toggle("live", state !== "idle");
 }
 
@@ -1568,7 +1593,10 @@ async function loadRunTrace(runId) {
     resetTopology();
     resetTraceState();
     setRunState("idle");
-    setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");
+    setFlowStage(
+      t("stage.flowTitle", null, "Waiting for a run"),
+      t("stage.flowDetail", null, "Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths."),
+    );
     return;
   }
 
@@ -2502,8 +2530,8 @@ function renderTraceTree() {
   if (!traceState.rootIds.length) {
     traceTree.innerHTML = `
       <div class="trace-empty">
-        <h3>No run yet</h3>
-        <p>Press Play to stream the execution tree in real time.</p>
+        <h3>${escapeHtml(t("sidebar.emptyTitle", null, "No run yet"))}</h3>
+        <p>${escapeHtml(t("sidebar.emptyCopy", null, "Open Scenes to choose the demo input and start the run."))}</p>
       </div>
     `;
     return;
@@ -4098,13 +4126,13 @@ function resetTraceState() {
   orchestratorLlmVisibleUntil = 0;
   traceState = createInitialTraceState();
   selectedTraceId = null;
-  runIdLabel.textContent = "not started";
-  contextIdLabel.textContent = "not started";
-  lastRun.textContent = "not started";
+  runIdLabel.textContent = t("status.notStarted", null, "not started");
+  contextIdLabel.textContent = t("status.notStarted", null, "not started");
+  lastRun.textContent = t("status.notStarted", null, "not started");
   traceTree.innerHTML = `
     <div class="trace-empty">
-      <h3>No run yet</h3>
-      <p>Press Play to stream the execution tree in real time.</p>
+      <h3>${escapeHtml(t("sidebar.emptyTitle", null, "No run yet"))}</h3>
+      <p>${escapeHtml(t("sidebar.emptyCopy", null, "Open Scenes to choose the demo input and start the run."))}</p>
     </div>
   `;
   clearDetailPane();
@@ -4121,7 +4149,7 @@ function initializeRun(payload) {
   activeScenario = traceState.scenario;
   updateScenarioInfraVisibility(traceState.scenario);
   runIdLabel.textContent = payload.run_id;
-  contextIdLabel.textContent = payload.context_id || "not started";
+  contextIdLabel.textContent = payload.context_id || t("status.notStarted", null, "not started");
   touchActivity(payload.timestamp);
 
   const runNode = createTraceNode("run", 0, `Run started: ${payload.run_id}`, `Top-level workflow started for ${labelForScenario(traceState.scenario)}.`, {
@@ -5719,4 +5747,10 @@ applyScenePreset("acme_default");
 applyScenarioChoice("normal");
 resetTraceState();
 setRunState("idle");
-setFlowStage("Waiting for a run", "Press Play to see Kong route the request across AI, sub-agent, and MCP paths.");
+if (traceExplorerStatus) {
+  traceExplorerStatus.textContent = t("traceExplorer.statusIdle", null, "Idle");
+}
+setFlowStage(
+  t("stage.flowTitle", null, "Waiting for a run"),
+  t("stage.flowDetail", null, "Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths."),
+);

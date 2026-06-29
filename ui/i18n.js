@@ -102,10 +102,8 @@
   window.t = t;
   window.tList = tList;
 
-  // Translate static markup as soon as the DOM is ready, before app.js wires up.
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => applyStaticTranslations());
-  } else {
-    applyStaticTranslations();
-  }
+  // Apply once when this script runs. app.js (deferred, loaded after i18n.js) owns
+  // elements it updates at runtime — do not re-apply on DOMContentLoaded or live
+  // run labels (run id, flow stage, run state) get reset mid-scenario.
+  applyStaticTranslations();
 })();

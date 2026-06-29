@@ -45,7 +45,7 @@
               <p class="panel-kicker" data-i18n="sidebar.kicker">Execution Tree</p>
               <h2 data-i18n="sidebar.title">Run Trace</h2>
             </div>
-            <span class="run-state" id="run-state" data-i18n="status.idle">idle</span>
+            <span class="run-state" id="run-state">idle</span>
           </div>
           <div class="trace-summary">
             <div>
@@ -89,8 +89,8 @@
             </div>
             <div class="stage-banner">
               <span class="label" data-i18n="stage.currentStage">Current Stage</span>
-              <strong id="flow-stage-title" data-i18n="stage.flowTitle">Waiting for a run</strong>
-              <p id="flow-stage-detail" data-i18n="stage.flowDetail">Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths.</p>
+              <strong id="flow-stage-title">Waiting for a run</strong>
+              <p id="flow-stage-detail">Press Play to see Kong route the request across AI, A2A sub-agent, and MCP paths.</p>
             </div>
 
             <div class="topology">
@@ -234,7 +234,7 @@
             <div class="panel-head">
               <div>
                 <p class="panel-kicker" data-i18n="detail.kicker">Selected Step</p>
-                <h2 id="detail-title" data-i18n="detail.noStep">No step selected</h2>
+                <h2 id="detail-title">No step selected</h2>
               </div>
             </div>
             <div class="detail-meta" id="detail-meta">
@@ -242,7 +242,7 @@
             </div>
           <div class="detail-block">
               <strong data-i18n="detail.summary">Summary</strong>
-              <p id="detail-summary" data-i18n="detail.summaryCopy">The selected trace step will show timing, request input, and output payload here.</p>
+              <p id="detail-summary">The selected trace step will show timing, request input, and output payload here.</p>
             </div>
             <div class="detail-io">
               <div class="detail-code">
@@ -378,8 +378,8 @@
           </form>
           <section id="load-balancing-controls" class="probe-controls" hidden>
             <article class="probe-card">
-              <span class="probe-label">Load Balancing Mode</span>
-              <p class="probe-copy">Use a focused probe for failover, semantic routing, or model-based routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes by prompt similarity. The model-based path asks a selector model to choose between simple and complex before the final provider call.</p>
+              <span class="probe-label" data-i18n="probe.loadBalancing.label">Load Balancing Mode</span>
+              <p class="probe-copy" data-i18n="probe.loadBalancing.copy">Use a focused probe for failover, semantic routing, or model-based routing. The failover path demonstrates fallback after a primary-model failure. The semantic path routes by prompt similarity. The model-based path asks a selector model to choose between simple and complex before the final provider call.</p>
               <div class="preset-options" id="load-balancing-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_mode_choice" value="failover" checked />
@@ -391,7 +391,7 @@
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="load_balancing_mode_choice" value="model_based" />
-                  <span>Model-Based Routing</span>
+                  <span data-i18n="probe.loadBalancing.mode.modelBased">Model-Based Routing</span>
                 </label>
               </div>
               <div id="load-balancing-preset-options" class="preset-options" hidden>
@@ -405,11 +405,11 @@
                 </label>
                 <label class="preset-option" data-load-balancing-mode="model_based" hidden>
                   <input type="radio" name="load_balancing_prompt_preset_choice" value="simple_status" />
-                  <span>Simple</span>
+                  <span data-i18n="probe.loadBalancing.preset.simple">Simple</span>
                 </label>
                 <label class="preset-option" data-load-balancing-mode="model_based" hidden>
                   <input type="radio" name="load_balancing_prompt_preset_choice" value="complex_analysis" />
-                  <span>Complex</span>
+                  <span data-i18n="probe.loadBalancing.preset.complex">Complex</span>
                 </label>
               </div>
               <textarea id="load-balancing-payload" class="probe-payload" rows="10"></textarea>
@@ -419,7 +419,7 @@
           <section id="token-limit-controls" class="probe-controls" hidden>
             <article class="probe-card">
               <span class="probe-label" data-i18n="probe.tokenLimit.label">AI Token Rate Limit</span>
-              <p class="probe-copy">Use the token-limited route or the consumer-cost route. Both modes send one request per play; replay the scene yourself until Kong blocks the route or consumer budget.</p>
+              <p class="probe-copy" data-i18n="probe.tokenLimit.copy">Use the token-limited route or the consumer-cost route. Both modes send one request per play; replay the scene yourself until Kong blocks the route or consumer budget.</p>
               <div class="preset-options" id="token-limit-mode-options">
                 <label class="preset-option">
                   <input type="radio" name="token_limit_mode_choice" value="consumer" checked />
@@ -427,21 +427,21 @@
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="token_limit_mode_choice" value="consumer_cost" />
-                  <span>Consumer Cost Rate Limit</span>
+                  <span data-i18n="probe.tokenLimit.mode.consumerCost">Consumer Cost Rate Limit</span>
                 </label>
               </div>
               <div class="preset-options" id="token-limit-consumer-options" hidden>
                 <label class="preset-option">
                   <input type="radio" name="token_limit_consumer_choice" value="consumer1" checked />
-                  <span>consumer1 ($5)</span>
+                  <span data-i18n="probe.tokenLimit.consumer.consumer1">consumer1 ($5)</span>
                 </label>
                 <label class="preset-option">
                   <input type="radio" name="token_limit_consumer_choice" value="consumer2" />
-                  <span>consumer2 ($10)</span>
+                  <span data-i18n="probe.tokenLimit.consumer.consumer2">consumer2 ($10)</span>
                 </label>
               </div>
               <textarea id="token-limit-payload" class="probe-payload" rows="10"></textarea>
-              <button id="token-limit-send-button" class="primary" type="button">Run Rate Limit Probe</button>
+              <button id="token-limit-send-button" class="primary" type="button" data-i18n="probe.tokenLimit.send">Run Rate Limit Probe</button>
             </article>
           </section>
           <section id="prompt-enhancement-controls" class="probe-controls" hidden>
@@ -669,7 +669,7 @@
             </div>
             <div class="trace-explorer-stat">
               <span class="label" data-i18n="traceExplorer.status">Status</span>
-              <strong id="trace-explorer-status" data-i18n="traceExplorer.statusIdle">Idle</strong>
+              <strong id="trace-explorer-status">Idle</strong>
             </div>
           </div>
           <div class="trace-explorer-layout">
@@ -686,14 +686,14 @@
             </section>
             <section class="trace-explorer-detail panel-dark">
               <div class="trace-explorer-list-head">
-                <strong id="trace-detail-title" data-i18n="traceExplorer.detailTitle">Event Details</strong>
+                <strong id="trace-detail-title">Event Details</strong>
               </div>
               <div class="detail-meta" id="trace-detail-meta">
                 <span class="meta-chip" data-i18n="traceExplorer.selectEvent">Select an event</span>
               </div>
               <div class="detail-block">
                 <strong data-i18n="traceExplorer.summary">Summary</strong>
-                <p id="trace-detail-summary" data-i18n="traceExplorer.summaryCopy">The selected event will show lifecycle fields and payload details here.</p>
+                <p id="trace-detail-summary">The selected event will show lifecycle fields and payload details here.</p>
               </div>
               <div class="detail-io">
                 <div class="detail-code">
@@ -1268,12 +1268,12 @@
         <div class="modal-shell modal-notice">
           <div class="modal-head">
             <div>
-              <p class="eyebrow" id="notice-kicker" data-i18n="status.label">Status</p>
-              <h2 id="notice-title" data-i18n="noticeModal.title">Operation complete</h2>
+              <p class="eyebrow" id="notice-kicker">Status</p>
+              <h2 id="notice-title">Operation complete</h2>
             </div>
             <button class="ghost modal-close" data-close-modal="notice-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy" id="notice-message" data-i18n="noticeModal.message">The action completed successfully.</p>
+          <p class="modal-copy" id="notice-message">The action completed successfully.</p>
         </div>
       </dialog>
 
@@ -1282,11 +1282,11 @@
           <div class="modal-head">
             <div>
               <p class="eyebrow" data-i18n="policyModal.eyebrow">Kong Policy</p>
-              <h2 id="policy-title" data-i18n="policyModal.title">Scene Policy Details</h2>
+              <h2 id="policy-title">Scene Policy Details</h2>
             </div>
             <button class="ghost modal-close" data-close-modal="policy-modal" type="button" data-i18n="modal.close">Close</button>
           </div>
-          <p class="modal-copy" id="policy-intro" data-i18n="policyModal.intro">
+          <p class="modal-copy" id="policy-intro">
             This explains what Kong is doing for the current scene in plain English.
           </p>
           <div class="policy-sections">
@@ -1321,7 +1321,7 @@
          if absent (e.g. served statically without the container), the inline
          English baked into the markup and app.js is used unchanged. -->
     <script src="/i18n-active.js"></script>
-    <script src="/i18n.js?v=20260601-i18n-1"></script>
-    <script src="/app.js?v=20260624-cost-limit-1" defer></script>
+    <script defer src="/i18n.js?v=20260601-i18n-2"></script>
+    <script defer src="/app.js?v=20260629-i18n-fix-1"></script>
   </body>
 </html>
