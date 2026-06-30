@@ -289,76 +289,39 @@
             </div>
           </section>
           <section class="scene-presets">
-            <span class="scene-presets-label scene-presets-label-highlight" data-i18n="scene.chooseScenario">Choose a governance scenario</span>
-            <div class="preset-options" id="scenario-options">
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="normal" checked />
-                <span data-i18n="scenario.normal">Normal</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="load_balancing" />
-                <span data-i18n="scenario.load_balancing">Load Balancing</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="token_limit" />
-                <span data-i18n="scenario.token_limit">AI Token Rate Limit</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="prompt_enhancement" />
-                <span data-i18n="scenario.prompt_enhancement">Prompt Decorator</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="prompt_compression" />
-                <span data-i18n="scenario.prompt_compression">Prompt Compression</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="semantic_guard" />
-                <span data-i18n="scenario.semantic_guard">Semantic Guard</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="semantic_cache" />
-                <span data-i18n="scenario.semantic_cache">Semantic Cache</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="llm_as_judge" />
-                <span data-i18n="scenario.llm_as_judge">LLM as Judge</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="pii_sanitizer" />
-                <span data-i18n="scenario.pii_sanitizer">PII Sanitization</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="rag" />
-                <span data-i18n="scenario.rag">RAG</span>
-              </label>
-              <label class="preset-option">
-                <input type="radio" name="scenario_choice" value="lakera_guard" />
-                <span data-i18n="scenario.lakera_guard">Lakera Policy Guard</span>
-              </label>
-            </div>
+            <span class="scene-presets-label scene-presets-label-highlight" data-i18n="scene.chooseChallenge">Choose a challenge</span>
+            <div class="preset-options" id="challenge-options"></div>
+          </section>
+          <section class="scene-presets">
+            <span class="scene-presets-label" data-i18n="scene.chooseScene">Choose a scene</span>
+            <div class="preset-options" id="scenario-options"></div>
+          </section>
+          <section id="subscene-section" class="scene-presets" hidden>
+            <span class="scene-presets-label" data-i18n="scene.chooseSubscene">Choose a subscene</span>
+            <div class="preset-options" id="subscene-options"></div>
           </section>
           <form id="play-form" class="form-grid">
-            <label>
+            <label class="normal-only-field">
               <span data-i18n="form.customerId">Customer ID</span>
               <input name="customer_id" value="cust_acme" />
             </label>
-            <label>
+            <label class="normal-only-field">
               <span data-i18n="form.accountName">Account Name</span>
               <input name="account_name" value="Acme Health" />
             </label>
-            <label>
+            <label class="normal-only-field">
               <span data-i18n="form.productIssue">Product Issue</span>
               <input name="product_issue" value="workflow agent sync delays" />
             </label>
-            <label>
+            <label class="normal-only-field">
               <span data-i18n="form.billingIssue">Billing Issue</span>
               <input name="billing_issue" value="billing overcharge on enterprise add-ons" />
             </label>
-            <label class="full">
+            <label class="full normal-only-field">
               <span data-i18n="form.issueSummary">Issue Summary</span>
               <textarea name="issue_summary">Customer reports a billing dispute and workflow-agent sync delays.</textarea>
             </label>
-            <label>
+            <label class="normal-only-field">
               <span data-i18n="form.incidentId">Incident ID</span>
               <input name="incident_id" value="INC-1007" />
             </label>

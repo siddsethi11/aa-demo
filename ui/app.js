@@ -22,7 +22,11 @@ const topologyActivity = document.getElementById("topology-activity");
 const topologyActivityName = document.getElementById("topology-activity-name");
 const traceTree = document.getElementById("trace-tree");
 const presetOptions = document.getElementById("preset-options");
+const challengeOptions = document.getElementById("challenge-options");
 const scenarioOptions = document.getElementById("scenario-options");
+const subsceneSection = document.getElementById("subscene-section");
+const subsceneOptions = document.getElementById("subscene-options");
+const normalOnlyFields = document.querySelectorAll(".normal-only-field");
 const sceneModal = document.getElementById("scene-modal");
 const outputModal = document.getElementById("output-modal");
 const graphModal = document.getElementById("graph-modal");
@@ -174,6 +178,7 @@ let promptCompressionHandoffTimer = null;
 let piiModelHandoffPending = false;
 let piiResponseCompleteTimer = null;
 let activeScenario = "normal";
+let activeChallenge = "change_management_observability";
 let semanticCacheMissReturnPending = false;
 let semanticCacheProbeResolved = false;
 let semanticCacheModelVisibleUntil = 0;
@@ -578,6 +583,255 @@ function labelForScenario(scenario) {
     lakera_guard: "Lakera Policy Guard",
   };
   return labels[scenario] || "Normal";
+}
+
+const challengeSceneMap = {
+  change_management_observability: ["normal"],
+  compliance_abuse_prevention: ["prompt_enhancement", "semantic_guard", "pii_sanitizer", "lakera_guard"],
+  budget_management: ["prompt_compression", "semantic_cache"],
+  hallucinations_relevancy: ["rag", "llm_as_judge"],
+  traffic_management: ["load_balancing"],
+  monetization: ["token_limit"],
+};
+
+const sceneSubsceneMap = {
+  load_balancing: {
+    inputName: "load_balancing_mode_choice",
+    hiddenField: "load_balancing_mode",
+    defaultValue: "failover",
+    options: [
+      { value: "failover", label: () => "LLM Failover" },
+      { value: "semantic", label: () => "Semantic Load Balancing" },
+      { value: "model_based", label: () => "Model-Based Routing" },
+    ],
+  },
+  token_limit: {
+    inputName: "token_limit_mode_choice",
+    hiddenField: "token_limit_mode",
+    defaultValue: "consumer",
+    options: [
+      { value: "consumer", label: () => t("probe.tokenLimit.mode.consumer", null, "Model Token Rate Limit") },
+      { value: "consumer_cost", label: () => "Consumer Cost Rate Limit" },
+    ],
+  },
+  prompt_enhancement: {
+    inputName: "prompt_enhancement_mode_choice",
+    hiddenField: "prompt_enhancement_mode",
+    defaultValue: "decorated",
+    options: [
+      { value: "plain", label: () => t("probe.promptDecorator.mode.plain", null, "Without Decorator") },
+      { value: "decorated", label: () => t("probe.promptDecorator.mode.decorated", null, "With Decorator") },
+    ],
+  },
+  prompt_compression: {
+    inputName: "prompt_compression_mode_choice",
+    hiddenField: "prompt_compression_mode",
+    defaultValue: "rate",
+    options: [
+      { value: "rate", label: () => t("probe.promptCompression.mode.rate", null, "By Ratio (50%)") },
+      { value: "token_count", label: () => t("probe.promptCompression.mode.tokenCount", null, "By Token Count (100)") },
+    ],
+  },
+  semantic_guard: {
+    inputName: "semantic_guard_mode_choice",
+    hiddenField: "semantic_guard_mode",
+    defaultValue: "safe",
+    options: [
+      { value: "safe", label: () => t("probe.semanticGuard.mode.safe", null, "Safe Prompt") },
+      { value: "violence_bomb", label: () => t("probe.semanticGuard.mode.violence", null, "Violence / Bomb") },
+      { value: "employee_info", label: () => t("probe.semanticGuard.mode.employee", null, "Employee / Confidential Info") },
+      { value: "policy_bypass", label: () => t("probe.semanticGuard.mode.policy", null, "Policy / Access Bypass") },
+    ],
+  },
+  llm_as_judge: {
+    inputName: "llm_judge_prompt_choice",
+    defaultValue: "escalation",
+    options: [
+      { value: "escalation", label: () => t("probe.llmJudge.prompt.escalation", null, "Escalation Triage") },
+      { value: "konghq_overview", label: () => t("probe.llmJudge.prompt.overview", null, "KongHQ Overview") },
+      { value: "konghq_precision", label: () => t("probe.llmJudge.prompt.lowScore", null, "Low Score Probe") },
+    ],
+  },
+  pii_sanitizer: {
+    inputName: "pii_mode_choice",
+    hiddenField: "pii_sanitizer_mode",
+    defaultValue: "placeholder",
+    options: [
+      { value: "placeholder", label: () => t("probe.pii.mode.placeholder", null, "Placeholder") },
+      { value: "synthetic", label: () => t("probe.pii.mode.synthetic", null, "Synthetic") },
+      { value: "block", label: () => t("probe.pii.mode.block", null, "Block") },
+    ],
+  },
+  rag: {
+    hiddenField: "rag_mode",
+    defaultValue: "before",
+    options: [
+      { value: "before", label: () => t("probe.rag.beforeSend", null, "Run Baseline") },
+      { value: "after", label: () => t("probe.rag.afterSend", null, "Run With RAG") },
+    ],
+  },
+  lakera_guard: {
+    inputName: "lakera_mode_choice",
+    hiddenField: "lakera_mode",
+    defaultValue: "safe",
+    options: [
+      { value: "safe", label: () => t("probe.lakera.mode.safe", null, "Safe Prompt") },
+      { value: "content_moderation", label: () => t("probe.lakera.mode.contentModeration", null, "Content Moderation") },
+      { value: "prompt_defense", label: () => t("probe.lakera.mode.promptDefense", null, "Prompt Defense") },
+      { value: "data_leak_prevention", label: () => t("probe.lakera.mode.dataLeak", null, "Data Leak Prevention") },
+    ],
+  },
+};
+
+function labelForChallenge(challenge) {
+  const labels = {
+    change_management_observability: t("challenge.change_management_observability", null, "Change Management & Observability"),
+    compliance_abuse_prevention: t("challenge.compliance_abuse_prevention", null, "Compliance & Abuse Prevention"),
+    budget_management: t("challenge.budget_management", null, "Budget Management"),
+    hallucinations_relevancy: t("challenge.hallucinations_relevancy", null, "Hallucinations & Relevancy"),
+    traffic_management: t("challenge.traffic_management", null, "Traffic Management"),
+    monetization: t("challenge.monetization", null, "Monetization"),
+  };
+  return labels[challenge] || labels.change_management_observability;
+}
+
+function challengeForScenario(scenario) {
+  return Object.entries(challengeSceneMap).find(([, scenes]) => scenes.includes(scenario))?.[0] || "change_management_observability";
+}
+
+function selectedSubsceneForScenario(scenario) {
+  const config = sceneSubsceneMap[scenario];
+  if (!config) {
+    return null;
+  }
+  const selectedValue = config.inputName
+    ? document.querySelector(`input[name="${config.inputName}"]:checked`)?.value
+    : playForm.elements.namedItem(config.hiddenField)?.value;
+  const fallbackValue = config.hiddenField
+    ? playForm.elements.namedItem(config.hiddenField)?.value
+    : config.defaultValue;
+  return selectedValue || fallbackValue || config.defaultValue || null;
+}
+
+function buildPresetChoice(name, value, label, checked, extraClasses = []) {
+  const wrapper = document.createElement("label");
+  wrapper.className = ["preset-option", ...extraClasses].join(" ");
+  const input = document.createElement("input");
+  input.type = "radio";
+  input.name = name;
+  input.value = value;
+  input.checked = checked;
+  const text = document.createElement("span");
+  text.textContent = label;
+  wrapper.append(input, text);
+  return wrapper;
+}
+
+function renderChallengeOptions(selectedChallenge = activeChallenge) {
+  if (!challengeOptions) {
+    return;
+  }
+  challengeOptions.replaceChildren(
+    ...Object.keys(challengeSceneMap).map((challenge) =>
+      buildPresetChoice(
+        "challenge_choice",
+        challenge,
+        labelForChallenge(challenge),
+        challenge === selectedChallenge,
+        ["challenge-option", `challenge-option-${challenge.replaceAll("_", "-")}`]
+      )
+    )
+  );
+}
+
+function renderSceneOptions(selectedChallenge = activeChallenge, selectedScenario = activeScenario) {
+  if (!scenarioOptions) {
+    return;
+  }
+  const scenes = challengeSceneMap[selectedChallenge] || [];
+  scenarioOptions.replaceChildren(
+    ...scenes.map((scenario, index) =>
+      buildPresetChoice(
+        "scenario_choice",
+        scenario,
+        labelForScenario(scenario),
+        scenario === selectedScenario || (!scenes.includes(selectedScenario) && index === 0)
+      )
+    )
+  );
+}
+
+function renderSubsceneOptions(selectedScenario = activeScenario) {
+  if (!subsceneSection || !subsceneOptions) {
+    return;
+  }
+  const config = sceneSubsceneMap[selectedScenario];
+  if (!config || !config.options?.length) {
+    subsceneSection.hidden = true;
+    subsceneOptions.replaceChildren();
+    return;
+  }
+  const selectedValue = selectedSubsceneForScenario(selectedScenario);
+  subsceneSection.hidden = false;
+  subsceneOptions.replaceChildren(
+    ...config.options.map((option) =>
+      buildPresetChoice("subscene_choice", option.value, option.label(), option.value === selectedValue)
+    )
+  );
+}
+
+function renderSceneHierarchy(selectedChallenge = activeChallenge, selectedScenario = activeScenario) {
+  activeChallenge = selectedChallenge;
+  renderChallengeOptions(selectedChallenge);
+  renderSceneOptions(selectedChallenge, selectedScenario);
+  renderSubsceneOptions(selectedScenario);
+}
+
+function setChoiceInput(inputName, value) {
+  const input = document.querySelector(`input[name="${inputName}"][value="${value}"]`);
+  if (input instanceof HTMLInputElement) {
+    input.checked = true;
+  }
+}
+
+function applySubsceneChoice(scenario, subscene) {
+  const config = sceneSubsceneMap[scenario];
+  if (!config || !subscene) {
+    return;
+  }
+  if (config.inputName) {
+    setChoiceInput(config.inputName, subscene);
+  }
+  if (config.hiddenField) {
+    const hiddenField = playForm.elements.namedItem(config.hiddenField);
+    if (hiddenField) {
+      hiddenField.value = subscene;
+    }
+  }
+  if (scenario === "load_balancing") {
+    renderLoadBalancingPayload(true, subscene);
+  } else if (scenario === "token_limit") {
+    renderTokenLimitPayload(true);
+    updateScenarioInfraVisibility(activeScenario);
+  } else if (scenario === "prompt_enhancement") {
+    renderPromptEnhancementPayload(true, subscene);
+  } else if (scenario === "prompt_compression") {
+    renderPromptCompressionPayload(true, subscene);
+  } else if (scenario === "semantic_guard") {
+    renderSemanticGuardPayload(true, subscene);
+  } else if (scenario === "llm_as_judge") {
+    renderLlmJudgePayload();
+  } else if (scenario === "pii_sanitizer") {
+    renderPiiSanitizerPayloads();
+  } else if (scenario === "rag") {
+    renderRagPayloads();
+  } else if (scenario === "lakera_guard") {
+    renderLakeraPayload(true, subscene);
+  }
+  renderSubsceneOptions(scenario);
+  if (policyModal?.open && activeScenario === scenario) {
+    renderPolicyModal();
+  }
 }
 
 function currentPiiMode() {
@@ -1626,6 +1880,7 @@ function applyScenePreset(presetId) {
 
 function applyScenarioChoice(scenario) {
   activeScenario = scenario || "normal";
+  activeChallenge = challengeForScenario(activeScenario);
   const hiddenField = playForm.elements.namedItem("governance_scenario");
   if (hiddenField) {
     hiddenField.value = activeScenario;
@@ -1724,6 +1979,10 @@ function applyScenarioChoice(scenario) {
   if (playButton) {
     playButton.hidden = isLoadBalancing || isTokenLimit || isPromptEnhancement || isPromptCompression || isSemanticCache || isPiiSanitizer || isRag;
   }
+  normalOnlyFields.forEach((field) => {
+    field.hidden = activeScenario !== "normal";
+  });
+  renderSceneHierarchy(activeChallenge, activeScenario);
   updateScenarioInfraVisibility(activeScenario);
   if (isLoadBalancing) {
     renderLoadBalancingPayload();
@@ -5509,6 +5768,20 @@ presetOptions?.addEventListener("change", (event) => {
   }
 });
 
+challengeOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "challenge_choice") {
+    return;
+  }
+  const scenes = challengeSceneMap[target.value] || [];
+  const nextScenario = scenes[0] || "normal";
+  renderSceneHierarchy(target.value, nextScenario);
+  applyScenarioChoice(nextScenario);
+  if (policyModal?.open) {
+    renderPolicyModal();
+  }
+});
+
 scenarioOptions?.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement) || target.name !== "scenario_choice") {
@@ -5520,12 +5793,21 @@ scenarioOptions?.addEventListener("change", (event) => {
   }
 });
 
+subsceneOptions?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || target.name !== "subscene_choice") {
+    return;
+  }
+  applySubsceneChoice(activeScenario, target.value);
+});
+
 promptCompressionModeOptions?.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement) || target.name !== "prompt_compression_mode_choice") {
     return;
   }
   renderPromptCompressionPayload(true, target.value);
+  renderSubsceneOptions(activeScenario);
   if (policyModal?.open && activeScenario === "prompt_compression") {
     renderPolicyModal();
   }
@@ -5537,6 +5819,7 @@ promptEnhancementModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderPromptEnhancementPayload(true, target.value);
+  renderSubsceneOptions(activeScenario);
   if (policyModal?.open && activeScenario === "prompt_enhancement") {
     renderPolicyModal();
   }
@@ -5548,6 +5831,7 @@ loadBalancingModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderLoadBalancingPayload(true, target.value);
+  renderSubsceneOptions(activeScenario);
   if (policyModal?.open && activeScenario === "load_balancing") {
     renderPolicyModal();
   }
@@ -5571,6 +5855,7 @@ tokenLimitModeOptions?.addEventListener("change", (event) => {
   }
   renderTokenLimitPayload(true);
   updateScenarioInfraVisibility(activeScenario);
+  renderSubsceneOptions(activeScenario);
   if (policyModal?.open && activeScenario === "token_limit") {
     renderPolicyModal();
   }
@@ -5593,6 +5878,7 @@ piiModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderPiiSanitizerPayloads();
+  renderSubsceneOptions(activeScenario);
   if (policyModal?.open && activeScenario === "pii_sanitizer") {
     renderPolicyModal();
   }
@@ -5604,6 +5890,7 @@ llmJudgePromptOptions?.addEventListener("change", (event) => {
     return;
   }
   renderLlmJudgePayload();
+  renderSubsceneOptions(activeScenario);
 });
 
 semanticGuardModeOptions?.addEventListener("change", (event) => {
@@ -5612,6 +5899,7 @@ semanticGuardModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderSemanticGuardPayload(true, target.value);
+  renderSubsceneOptions(activeScenario);
 });
 
 lakeraModeOptions?.addEventListener("change", (event) => {
@@ -5620,6 +5908,7 @@ lakeraModeOptions?.addEventListener("change", (event) => {
     return;
   }
   renderLakeraPayload(true, target.value);
+  renderSubsceneOptions(activeScenario);
   if (policyModal?.open && activeScenario === "lakera_guard") {
     renderPolicyModal();
   }
