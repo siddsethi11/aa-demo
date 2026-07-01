@@ -1375,84 +1375,23 @@ html[lang="ja"] .topbar h1 {
 .challenge-option {
   border-width: 1.5px;
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  border-color: rgba(131, 255, 94, 0.12);
+  background: rgba(131, 255, 94, 0.025);
+  color: #d5e2cb;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.012);
 }
 
 .challenge-option span {
   letter-spacing: 0.01em;
 }
 
-.challenge-option-change-management-observability {
-  border-color: rgba(96, 198, 255, 0.32);
-  background: linear-gradient(180deg, rgba(96, 198, 255, 0.16), rgba(96, 198, 255, 0.05));
-  color: #dff6ff;
-}
-
-.challenge-option-compliance-abuse-prevention {
-  border-color: rgba(255, 126, 126, 0.34);
-  background: linear-gradient(180deg, rgba(255, 126, 126, 0.16), rgba(255, 126, 126, 0.05));
-  color: #ffe7e7;
-}
-
-.challenge-option-budget-management {
-  border-color: rgba(255, 205, 96, 0.34);
-  background: linear-gradient(180deg, rgba(255, 205, 96, 0.16), rgba(255, 205, 96, 0.05));
-  color: #fff2d6;
-}
-
-.challenge-option-hallucinations-relevancy {
-  border-color: rgba(189, 150, 255, 0.34);
-  background: linear-gradient(180deg, rgba(189, 150, 255, 0.16), rgba(189, 150, 255, 0.05));
-  color: #f0e6ff;
-}
-
-.challenge-option-traffic-management {
-  border-color: rgba(131, 255, 94, 0.34);
-  background: linear-gradient(180deg, rgba(131, 255, 94, 0.16), rgba(131, 255, 94, 0.05));
-  color: #ebffd8;
-}
-
-.challenge-option-monetization {
-  border-color: rgba(255, 143, 231, 0.34);
-  background: linear-gradient(180deg, rgba(255, 143, 231, 0.16), rgba(255, 143, 231, 0.05));
-  color: #ffe5f9;
-}
-
 .challenge-option:has(input:checked) {
-  color: #08110a;
+  color: #f6ffeb;
+  border-color: rgba(131, 255, 94, 0.28);
+  background: rgba(131, 255, 94, 0.045);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 8px 22px rgba(0, 0, 0, 0.22);
-}
-
-.challenge-option-change-management-observability:has(input:checked) {
-  border-color: rgba(152, 224, 255, 0.9);
-  background: linear-gradient(180deg, rgba(152, 224, 255, 0.98), rgba(110, 205, 255, 0.92));
-}
-
-.challenge-option-compliance-abuse-prevention:has(input:checked) {
-  border-color: rgba(255, 169, 169, 0.9);
-  background: linear-gradient(180deg, rgba(255, 182, 182, 0.98), rgba(255, 140, 140, 0.92));
-}
-
-.challenge-option-budget-management:has(input:checked) {
-  border-color: rgba(255, 226, 150, 0.92);
-  background: linear-gradient(180deg, rgba(255, 228, 154, 0.98), rgba(255, 205, 96, 0.92));
-}
-
-.challenge-option-hallucinations-relevancy:has(input:checked) {
-  border-color: rgba(214, 188, 255, 0.92);
-  background: linear-gradient(180deg, rgba(218, 191, 255, 0.98), rgba(189, 150, 255, 0.92));
-}
-
-.challenge-option-traffic-management:has(input:checked) {
-  border-color: rgba(179, 255, 156, 0.92);
-  background: linear-gradient(180deg, rgba(188, 255, 167, 0.98), rgba(131, 255, 94, 0.92));
-}
-
-.challenge-option-monetization:has(input:checked) {
-  border-color: rgba(255, 186, 243, 0.92);
-  background: linear-gradient(180deg, rgba(255, 196, 246, 0.98), rgba(255, 143, 231, 0.92));
+    0 0 0 1px rgba(131, 255, 94, 0.035) inset,
+    0 3px 8px rgba(0, 0, 0, 0.12);
 }
 
 .form-grid {

@@ -738,7 +738,7 @@ function renderChallengeOptions(selectedChallenge = activeChallenge) {
         challenge,
         labelForChallenge(challenge),
         challenge === selectedChallenge,
-        ["challenge-option", `challenge-option-${challenge.replaceAll("_", "-")}`]
+        ["challenge-option"]
       )
     )
   );
