@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from services.common.trace_context import current_trace_headers
+
 
 class OrchestratorLLM:
     def __init__(self) -> None:
@@ -28,36 +30,49 @@ class OrchestratorLLM:
         user_prompt: str,
         base_url: str | None = None,
         model: str | None = None,
+        include_model: bool = True,
         run_id: str | None = None,
+        context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
+        scenario_mode: str | None = None,
+        api_key: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
 
         resolved_base_url = (base_url or self.base_url or "").rstrip("/")
         resolved_model = model or self.model
+        payload = {
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        if include_model:
+            payload["model"] = resolved_model
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{resolved_base_url}/chat/completions",
                 headers={
-                    "apikey": self.kong_api_key or "",
+                    "apikey": api_key or self.kong_api_key or "",
                     "content-type": "application/json",
+                    **current_trace_headers(),
                     **({"x-demo-run-id": run_id} if run_id else {}),
+                    **({"x-demo-context-id": context_id} if context_id else {}),
+                    **({"x-demo-task-id": task_id} if task_id else {}),
+                    **({"x-demo-message-id": message_id} if message_id else {}),
+                    **({"x-demo-scenario-mode": scenario_mode} if scenario_mode else {}),
                 },
-                json={
-                    "model": resolved_model,
-                    "temperature": 0.2,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
+                json=payload,
             )
             response.raise_for_status()
             payload = response.json()
         text = payload.get("choices", [{}])[0].get("message", {}).get("content") or ""
         return {
             "llm_used": True,
-            "model": resolved_model,
+            "model": payload.get("model") or resolved_model,
             "summary": text.strip(),
         }
 
@@ -68,29 +83,42 @@ class OrchestratorLLM:
         user_prompt: str,
         base_url: str | None = None,
         model: str | None = None,
+        include_model: bool = True,
         run_id: str | None = None,
+        context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
+        scenario_mode: str | None = None,
+        api_key: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError("Kong-routed LLM is not configured")
 
         resolved_base_url = (base_url or self.base_url or "").rstrip("/")
         resolved_model = model or self.model
+        payload = {
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        if include_model:
+            payload["model"] = resolved_model
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{resolved_base_url}/chat/completions",
                 headers={
-                    "apikey": self.kong_api_key or "",
+                    "apikey": api_key or self.kong_api_key or "",
                     "content-type": "application/json",
+                    **current_trace_headers(),
                     **({"x-demo-run-id": run_id} if run_id else {}),
+                    **({"x-demo-context-id": context_id} if context_id else {}),
+                    **({"x-demo-task-id": task_id} if task_id else {}),
+                    **({"x-demo-message-id": message_id} if message_id else {}),
+                    **({"x-demo-scenario-mode": scenario_mode} if scenario_mode else {}),
                 },
-                json={
-                    "model": resolved_model,
-                    "temperature": 0.2,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
+                json=payload,
             )
             response.raise_for_status()
             payload = response.json()
@@ -103,7 +131,7 @@ class OrchestratorLLM:
         }
         return {
             "llm_used": True,
-            "model": resolved_model,
+            "model": payload.get("model") or resolved_model,
             "summary": text.strip(),
             "cache_headers": cache_headers,
         }
@@ -118,6 +146,7 @@ class OrchestratorLLM:
         support_track: Any | None = None,
         success_track: Any | None = None,
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             return self._fallback(
@@ -137,7 +166,7 @@ class OrchestratorLLM:
             support_track=support_track,
             success_track=success_track,
         )
-        return await self.generate(**prompts, run_id=run_id)
+        return await self.generate(**prompts, run_id=run_id, context_id=context_id)
 
     def build_executive_prompts(
         self,
@@ -181,6 +210,7 @@ class OrchestratorLLM:
         billing_issue: str,
         available_tools: list[str],
         run_id: str | None = None,
+        context_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.enabled:
             selected_tools = [
@@ -202,7 +232,7 @@ class OrchestratorLLM:
             billing_issue=billing_issue,
             available_tools=available_tools,
         )
-        response = await self.generate(**prompts, run_id=run_id)
+        response = await self.generate(**prompts, run_id=run_id, context_id=context_id)
         selected_tools = list(available_tools)
         reasoning = response["summary"]
 
@@ -258,6 +288,9 @@ class OrchestratorLLM:
         remaining_tools: list[str],
         current_context: dict[str, Any],
         run_id: str | None = None,
+        context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
     ) -> dict[str, Any]:
         if not remaining_tools:
             return {
@@ -294,7 +327,13 @@ class OrchestratorLLM:
             remaining_tools=remaining_tools,
             current_context=current_context,
         )
-        response = await self.generate(**prompts, run_id=run_id)
+        response = await self.generate(
+            **prompts,
+            run_id=run_id,
+            context_id=context_id,
+            task_id=task_id,
+            message_id=message_id,
+        )
         decision = {
             "llm_used": response["llm_used"],
             "model": response["model"],

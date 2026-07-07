@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from services.common.trace_context import current_trace_headers
+
 
 class MCPError(RuntimeError):
     pass
@@ -19,25 +21,64 @@ class KongMCPClient:
         client_name: str,
         timeout: float = 20.0,
         run_id: str | None = None,
+        context_id: str | None = None,
+        task_id: str | None = None,
+        message_id: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.client_name = client_name
         self.timeout = timeout
         self.run_id = run_id
+        self.context_id = context_id
+        self.task_id = task_id
+        self.message_id = message_id
         self.session_id: str | None = None
         self._initialized = False
+
+    def _trace_headers(self) -> dict[str, str]:
+        trace_headers = current_trace_headers()
+        return {key: value for key, value in trace_headers.items() if value}
+
+    def _attach_trace_meta(self, payload: dict[str, Any]) -> dict[str, Any]:
+        trace_headers = self._trace_headers()
+        if not trace_headers:
+            return payload
+
+        params = payload.get("params")
+        if not isinstance(params, dict):
+            params = {}
+            payload["params"] = params
+
+        meta = params.get("_meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            params["_meta"] = meta
+
+        for header_name in ("traceparent", "tracestate", "baggage"):
+            header_value = trace_headers.get(header_name)
+            if header_value:
+                meta[header_name] = header_value
+
+        return payload
 
     def _headers(self) -> dict[str, str]:
         headers = {
             "apikey": self.api_key,
             "content-type": "application/json",
             "accept": "application/json, text/event-stream",
+            **self._trace_headers(),
         }
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
         if self.run_id:
             headers["x-demo-run-id"] = self.run_id
+        if self.context_id:
+            headers["x-demo-context-id"] = self.context_id
+        if self.task_id:
+            headers["x-demo-task-id"] = self.task_id
+        if self.message_id:
+            headers["x-demo-message-id"] = self.message_id
         return headers
 
     def _parse_response(self, response: httpx.Response) -> dict[str, Any]:
@@ -59,6 +100,7 @@ class KongMCPClient:
         return json.loads(payload)
 
     async def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = self._attach_trace_meta(payload)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.base_url, headers=self._headers(), json=payload)
             response.raise_for_status()
@@ -75,6 +117,7 @@ class KongMCPClient:
         payload = {"jsonrpc": "2.0", "method": method}
         if params:
             payload["params"] = params
+        payload = self._attach_trace_meta(payload)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.base_url, headers=self._headers(), json=payload)
             response.raise_for_status()

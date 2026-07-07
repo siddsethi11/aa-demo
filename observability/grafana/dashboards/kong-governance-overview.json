@@ -30,7 +30,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 94
       },
       "id": 100,
       "options": {
@@ -50,7 +50,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/v1/jsonrpc\"",
+          "expr": "{component=\"agent\",consumer=\"orchestrator-agent\",run_id!=\"\",run_id=~\"$run_id\"} |~ \"/(support-agent|success-agent)/(a2a|v1/jsonrpc)\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -67,7 +67,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 102
       },
       "id": 108,
       "options": {
@@ -104,7 +104,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 110
       },
       "id": 116,
       "options": {
@@ -438,7 +438,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({route=\"ai-orchestrator-semantic-guard-demo-chat-route\",status=\"400\",run_id!=\"\",run_id=~\"$run_id\"}[$__range]))",
+          "expr": "sum(count_over_time({gateway=\"kong-unified-governance\",route=\"ai-orchestrator-semantic-guard-demo-chat-route\",status=\"400\",run_id!=\"\",run_id=~\"$run_id\"}[$__range]))",
           "legendFormat": "Blocked Requests",
           "queryType": "range",
           "refId": "A"
@@ -898,7 +898,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 74
       },
       "id": 240,
       "options": {
@@ -961,7 +961,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 74
       },
       "id": 252,
       "options": {
@@ -997,7 +997,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"support-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/support-agent/(a2a|v1/jsonrpc)\" | unwrap latencies_request [1h]))",
           "legendFormat": "Support Agent",
           "queryType": "range",
           "refId": "B"
@@ -1008,7 +1008,7 @@
             "uid": "grafana-loki"
           },
           "editorMode": "code",
-          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/v1/jsonrpc\" | unwrap latencies_request [1h]))",
+          "expr": "avg by (service) (avg_over_time({component=\"agent\",service=\"success-agent-service\",method=\"POST\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | request_uri =~ \".*/success-agent/(a2a|v1/jsonrpc)\" | unwrap latencies_request [1h]))",
           "legendFormat": "Success Agent",
           "queryType": "range",
           "refId": "C"
@@ -1017,6 +1017,165 @@
       "title": "Agent Execution Latency By Agent",
       "type": "bargauge",
       "description": "Derived from Kong request latency logs over the recent lookback. This averages only the real agent execution requests, excluding long-lived trace websocket traffic."
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 83
+      },
+      "id": 1102,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator.*service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Run Trace Table",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "context_id",
+                "run_id",
+                "request_id_extracted",
+                "task_id_extracted",
+                "message_id_extracted",
+                "trace_event_type",
+                "trace_operation",
+                "trace_latency_ms",
+                "service_name_extracted",
+                "consumer_username",
+                "a2a_method",
+                "a2a_task_state",
+                "a2a_latency",
+                "mcp_method",
+                "mcp_tool_name",
+                "mcp_tool_latency",
+                "request_uri",
+                "response_status"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "context_id": 1,
+              "run_id": 2,
+              "request_id_extracted": 3,
+              "task_id_extracted": 4,
+              "message_id_extracted": 5,
+              "trace_event_type": 6,
+              "trace_operation": 7,
+              "trace_latency_ms": 8,
+              "service_name_extracted": 9,
+              "consumer_username": 10,
+              "a2a_method": 11,
+              "a2a_task_state": 12,
+              "a2a_latency": 13,
+              "mcp_method": 14,
+              "mcp_tool_name": 15,
+              "mcp_tool_latency": 16,
+              "request_uri": 17,
+              "response_status": 18
+            },
+            "renameByName": {
+              "Time": "Time",
+              "context_id": "Context ID",
+              "run_id": "Run ID",
+              "request_id_extracted": "Request ID",
+              "task_id_extracted": "Task ID",
+              "message_id_extracted": "Message ID",
+              "trace_event_type": "Event Type",
+              "trace_operation": "Operation",
+              "trace_latency_ms": "Latency (ms)",
+              "service_name_extracted": "Service",
+              "consumer_username": "Consumer",
+              "a2a_method": "A2A Method",
+              "a2a_task_state": "Task State",
+              "a2a_latency": "A2A Latency (ms)",
+              "mcp_method": "MCP Method",
+              "mcp_tool_name": "MCP Tool",
+              "mcp_tool_latency": "MCP Latency (ms)",
+              "request_uri": "Request URI",
+              "response_status": "Status"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": false,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
     },
     {
       "datasource": {
@@ -1046,7 +1205,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 56
       },
       "id": 999,
       "options": {
@@ -1103,7 +1262,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 65
       },
       "id": 1001,
       "options": {
@@ -1163,7 +1322,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 84
       },
       "id": 320,
       "options": {
@@ -1250,11 +1409,197 @@
         "type": "loki",
         "uid": "grafana-loki"
       },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 118
+      },
+      "id": 1103,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator.*service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Trace Explorer",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "request_id_extracted",
+                "trace_event_type",
+                "service_name_extracted",
+                "consumer_username",
+                "request_uri",
+                "trace_operation",
+                "trace_subject",
+                "response_status",
+                "trace_latency_ms",
+                "a2a_task_state"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "request_id_extracted": 1,
+              "trace_event_type": 2,
+              "service_name_extracted": 3,
+              "consumer_username": 4,
+              "request_uri": 5,
+              "trace_operation": 6,
+              "trace_subject": 7,
+              "response_status": 8,
+              "trace_latency_ms": 9,
+              "a2a_task_state": 10
+            },
+            "renameByName": {
+              "Time": "Time",
+              "request_id_extracted": "Request ID",
+              "trace_event_type": "Trace Type",
+              "service_name_extracted": "Service",
+              "consumer_username": "Consumer",
+              "request_uri": "Request URI",
+              "trace_operation": "Operation",
+              "trace_subject": "Subject",
+              "response_status": "Status",
+              "trace_latency_ms": "Latency (ms)",
+              "a2a_task_state": "Task State"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 128
+      },
+      "id": 1105,
+      "options": {
+        "content": "Copy a **Request ID** from **Request Trace Explorer**, then use it in Grafana Explore with this LogQL query:\n\n```logql\n{gateway=\"kong-unified-governance\",run_id!=\"\"}\n| json\n| request_id_extracted=\"$request_id\"\n```",
+        "mode": "markdown"
+      },
+      "title": "Request ID Search Template",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 132
+      },
+      "id": 1104,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{service=~\"support-agent-service|success-agent-service|mock-api-service|ai-subagent-service|ai-orchestrator.*service\",run_id!=\"\",run_id=~\"$run_id\"} | json | context_id =~ \"$context_id\" | consumer_username != \"anonymous\" | trace_event_type =~ \"a2a|mcp|llm\" | request_id_extracted != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Request / Response Details",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 102
+        "y": 143
       },
       "id": 321,
       "options": {
@@ -1281,6 +1626,748 @@
       ],
       "title": "Kong Raw Log Stream",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "id": 311,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "100 * sum(count_over_time({route=\"ai-orchestrator-rag-after-demo-chat-route\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | ai_rag_injected = \"true\" [$__range])) / sum(count_over_time({route=\"ai-orchestrator-rag-after-demo-chat-route\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"}[$__range]))",
+          "legendFormat": "Injection Rate",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "RAG Injection Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "id": 312,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.95, {route=\"ai-orchestrator-rag-after-demo-chat-route\",status=\"200\",run_id!=\"\",run_id=~\"$run_id\"} | json | ai_rag_injected = \"true\" | unwrap ai_rag_fetch_latency [$__range])",
+          "legendFormat": "Fetch Latency p95",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "RAG Fetch Latency p95",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 94
+      },
+      "id": 313,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{route=\"ai-orchestrator-lakera-demo-chat-route\",run_id!=\"\",run_id=~\"$run_id\"} | json | ai_lakera_input_block_reason != \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Lakera Block Events",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "run_id",
+                "ai_lakera_mode",
+                "ai_lakera_input_faulty_prompt",
+                "ai_lakera_input_block_reason",
+                "ai_lakera_detector_type",
+                "ai_lakera_input_processing_latency",
+                "ai_lakera_guards_triggered_count",
+                "ai_lakera_input_request_uuid"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Time": 0,
+              "run_id": 1,
+              "ai_lakera_mode": 2,
+              "ai_lakera_input_faulty_prompt": 3,
+              "ai_lakera_input_block_reason": 4,
+              "ai_lakera_detector_type": 5,
+              "ai_lakera_input_processing_latency": 6,
+              "ai_lakera_guards_triggered_count": 7,
+              "ai_lakera_input_request_uuid": 8
+            },
+            "renameByName": {
+              "Time": "Time",
+              "run_id": "Run ID",
+              "ai_lakera_mode": "Mode",
+              "ai_lakera_input_faulty_prompt": "Prompt",
+              "ai_lakera_input_block_reason": "Block Reason",
+              "ai_lakera_detector_type": "Detector Type",
+              "ai_lakera_input_processing_latency": "Latency (ms)",
+              "ai_lakera_guards_triggered_count": "Guards Triggered",
+              "ai_lakera_input_request_uuid": "Lakera Request UUID"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Time"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 151
+      },
+      "id": 1110,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 | unwrap compressor_saved_tokens [$__range]))",
+          "legendFormat": "Saved Tokens",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Prompt Compression Tokens Saved",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 151
+      },
+      "id": 1111,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 [$__range]))",
+          "legendFormat": "Compression Requests",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Prompt Compression Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 151
+      },
+      "id": 1112,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "avg(avg_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 | unwrap compressor_saved_tokens [$__range]))",
+          "legendFormat": "Avg Saved / Request",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Tokens Saved Per Request",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 159
+      },
+      "id": 1113,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (consumer) (sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0 | unwrap compressor_saved_tokens [$__range]))",
+          "legendFormat": "{{consumer}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Saved Tokens By Consumer",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 159
+      },
+      "id": 1114,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_original_tokens > 0 | unwrap compressor_original_tokens [$__range]))",
+          "legendFormat": "Original Tokens",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(sum_over_time({component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_compressed_tokens > 0 | unwrap compressor_compressed_tokens [$__range]))",
+          "legendFormat": "Compressed Tokens",
+          "queryType": "range",
+          "refId": "B"
+        }
+      ],
+      "title": "Original vs Compressed Tokens",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 168
+      },
+      "id": 1115,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "{component=\"llm\",run_id!=\"\",run_id=~\"$run_id\"} | json | compressor_saved_tokens > 0",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Prompt Compression Log Stream",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 314,
+      "options": {
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (ai_embeddings_model) (count_over_time({run_id!=\"\",run_id=~\"$run_id\"} | json | ai_embeddings_model != \"\" [$__range]))",
+          "legendFormat": "{{ai_embeddings_model}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Embedding Calls By Model",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafana-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 315,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafana-loki"
+          },
+          "editorMode": "code",
+          "expr": "avg by (ai_embeddings_model) (avg_over_time({run_id!=\"\",run_id=~\"$run_id\"} | json | ai_embeddings_model != \"\" | unwrap ai_embeddings_latency [$__range]))",
+          "legendFormat": "{{ai_embeddings_model}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Avg Embedding Latency By Model",
+      "type": "stat"
     }
   ],
   "refresh": "10s",
@@ -1295,6 +2382,31 @@
   ],
   "templating": {
     "list": [
+      {
+        "allValue": ".+",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": ".+"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "grafana-loki"
+        },
+        "definition": "label_values({run_id=~\".+\", run_id!=\"\"}, context_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Context ID",
+        "multi": true,
+        "name": "context_id",
+        "options": [],
+        "query": "label_values({run_id=~\".+\", run_id!=\"\"}, context_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
       {
         "allValue": ".*",
         "current": {
@@ -1334,6 +2446,6 @@
   "timezone": "",
   "title": "Kong Governance Overview",
   "uid": "kong-governance-overview",
-  "version": 6,
+  "version": 10,
   "weekStart": ""
 }

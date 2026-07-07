@@ -1,6 +1,59 @@
 _format_version: "3.0"
 
 plugins:
+  - name: opentelemetry
+    config:
+      traces_endpoint: http://otel-collector:4318/v1/traces
+      propagation:
+        default_format: w3c
+        extract:
+          - w3c
+          - b3
+          - jaeger
+          - ot
+          - aws
+          - datadog
+          - gcp
+        inject:
+          - w3c
+      resource_attributes:
+        service.name: aa-demo-kong
+  - name: post-function
+    config:
+      access:
+        - |
+          local function header(name)
+            local value = kong.request.get_header(name)
+            if value == nil or value == "" then
+              return nil
+            end
+            return value
+          end
+
+          local attributes = {
+            ["demo.run_id"] = header("x-demo-run-id"),
+            ["demo.context_id"] = header("x-demo-context-id"),
+            ["a2a.task_id"] = header("x-demo-task-id"),
+            ["a2a.message_id"] = header("x-demo-message-id"),
+          }
+
+          local function set_attributes(span)
+            if not span then
+              return
+            end
+            for key, value in pairs(attributes) do
+              if value then
+                span:set_attribute(key, value)
+              end
+            end
+          end
+
+          local root_span = kong.tracing.get_root_span and kong.tracing.get_root_span() or nil
+          set_attributes(root_span)
+          set_attributes(kong.tracing.active_span())
+  - name: prompt-capture
+    config:
+      payload_max_len: 4000
   - name: http-log
     config:
       http_endpoint: http://loki:3100/loki/api/v1/push
@@ -26,6 +79,7 @@ plugins:
           local service = log_payload['service'] or { name = 'noService' }
           local route = log_payload['route'] or { name = 'noRoute' }
           local consumer = log_payload['consumer'] or {}
+          local consumer_groups = kong.client.get_consumer_groups() or {}
           local request = log_payload['request'] or {}
           local request_headers = request['headers'] or {}
           local response = log_payload['response'] or {}
@@ -33,6 +87,10 @@ plugins:
           local status = tostring(status_code)
           local status_class = tostring(math.floor(status_code / 100)) .. 'xx'
           local run_id = tostring(request_headers['x-demo-run-id'] or request_headers['X-Demo-Run-Id'] or '')
+          local context_id = tostring(request_headers['x-demo-context-id'] or request_headers['X-Demo-Context-Id'] or '')
+          local header_task_id = tostring(request_headers['x-demo-task-id'] or request_headers['X-Demo-Task-Id'] or '')
+          local header_message_id = tostring(request_headers['x-demo-message-id'] or request_headers['X-Demo-Message-Id'] or '')
+          local scenario_mode = tostring(request_headers['x-demo-scenario-mode'] or request_headers['X-Demo-Scenario-Mode'] or '')
           local component = 'gateway'
           if route['name'] == 'mock-mcp-route' then
             component = 'mcp'
@@ -49,11 +107,22 @@ plugins:
           local mcp = ai['mcp'] or {}
           local mcp_rpc = mcp['rpc'] or {}
           local mcp_entry = mcp_rpc[1] or {}
+          local a2a = ai['a2a'] or {}
+          local a2a_rpc = a2a['rpc'] or {}
+          local a2a_entry = a2a_rpc[1] or {}
+          local a2a_payload = a2a_entry['payload'] or {}
+          local decoded_a2a_request = nil
+          local decoded_a2a_response = nil
           local proxy = ai['proxy'] or {}
           local proxy_payload = proxy['payload'] or {}
           local meta = proxy['meta'] or {}
           local usage = proxy['usage'] or {}
           local cache = proxy['cache'] or {}
+          local compressor = ai['compressor'] or {}
+          local compressor_items = compressor['compress_items'] or {}
+          local compressor_entry = compressor_items[1] or compressor
+          local rag = proxy['rag-inject'] or proxy['rag_inject'] or ai['rag-inject'] or ai['rag_inject'] or {}
+          local lakera = proxy['lakera-guard'] or proxy['lakera_guard'] or ai['lakera-guard'] or ai['lakera_guard'] or {}
           local judge = ai['ai-llm-as-judge'] or {}
           local judge_meta = judge['meta'] or {}
           local judge_usage = judge['usage'] or {}
@@ -119,20 +188,77 @@ plugins:
             end
             return ''
           end
+          local function extract_chat_prompt_from_payload(payload)
+            local decoded = nil
+            if type(payload) == 'table' then
+              decoded = payload
+            elseif type(payload) == 'string' and payload ~= '' then
+              local ok, parsed = pcall(cjson.decode, payload)
+              if ok and type(parsed) == 'table' then
+                decoded = parsed
+              end
+            end
+            if type(decoded) ~= 'table' then
+              return ''
+            end
+            local messages = decoded['messages'] or decoded
+            return extract_request_text(messages)
+          end
+          local function decode_json(value)
+            if type(value) == 'table' then
+              return value
+            end
+            if type(value) ~= 'string' or value == '' then
+              return nil
+            end
+            local ok, decoded = pcall(cjson.decode, value)
+            if ok and type(decoded) == 'table' then
+              return decoded
+            end
+            return nil
+          end
+          local function decode_a2a_response(value)
+            local decoded = decode_json(value)
+            if decoded ~= nil then
+              return decoded
+            end
+            if type(value) ~= 'string' or value == '' then
+              return nil
+            end
+            local last_payload = nil
+            for payload in string.gmatch(value, 'data:%s*(.-)\n\n') do
+              if payload ~= '' and string.sub(payload, 1, 1) == '{' then
+                last_payload = payload
+              end
+            end
+            if last_payload == nil then
+              return nil
+            end
+            return decode_json(last_payload)
+          end
+          decoded_a2a_request = decode_json(a2a_payload['request'])
+          decoded_a2a_response = decode_a2a_response(a2a_payload['response'])
+          local a2a_request_params = type(decoded_a2a_request) == 'table' and decoded_a2a_request['params'] or {}
+          local a2a_request_message = type(a2a_request_params) == 'table' and a2a_request_params['message'] or {}
+          local a2a_response_result = type(decoded_a2a_response) == 'table' and decoded_a2a_response['result'] or {}
+          local a2a_response_status = type(a2a_response_result) == 'table' and a2a_response_result['status'] or {}
           local prompt_tokens = tonumber(usage['prompt_tokens'] or usage['input_tokens'] or 0) or 0
           local completion_tokens = tonumber(usage['completion_tokens'] or usage['output_tokens'] or 0) or 0
           local total_tokens = tonumber(usage['total_tokens'] or (prompt_tokens + completion_tokens) or 0) or 0
           local provider_name = tostring(meta['provider_name'] or '')
           local model_name = tostring(meta['response_model'] or meta['request_model'] or '')
+          local prompt_cost = 0
+          local completion_cost = 0
           local usage_cost = tonumber(usage['cost'])
+          if provider_name == 'openai' and string.find(model_name, 'gpt-4o-mini', 1, true) then
+            prompt_cost = (prompt_tokens * 0.15) / 1000000
+            completion_cost = (completion_tokens * 0.60) / 1000000
+          elseif provider_name == 'gemini' and string.find(model_name, 'gemini-2.5-flash', 1, true) then
+            prompt_cost = (prompt_tokens * 0.30) / 1000000
+            completion_cost = (completion_tokens * 2.50) / 1000000
+          end
           if usage_cost == nil or usage_cost <= 0 then
-            if provider_name == 'openai' and string.find(model_name, 'gpt-4o-mini', 1, true) then
-              usage_cost = ((prompt_tokens * 0.15) + (completion_tokens * 0.60)) / 1000000
-            elseif provider_name == 'gemini' and string.find(model_name, 'gemini-2.5-flash', 1, true) then
-              usage_cost = ((prompt_tokens * 0.30) + (completion_tokens * 2.50)) / 1000000
-            else
-              usage_cost = 0
-            end
+            usage_cost = prompt_cost + completion_cost
           end
           log_payload['llm_usage'] = {
             provider_name = provider_name,
@@ -141,6 +267,8 @@ plugins:
             prompt_tokens = prompt_tokens,
             completion_tokens = completion_tokens,
             total_tokens = total_tokens,
+            prompt_cost = prompt_cost,
+            completion_cost = completion_cost,
             cost = usage_cost,
             time_per_token = usage['time_per_token'],
             time_to_first_token = usage['time_to_first_token'],
@@ -148,6 +276,8 @@ plugins:
           log_payload['llm_usage_prompt_tokens'] = prompt_tokens
           log_payload['llm_usage_completion_tokens'] = completion_tokens
           log_payload['llm_usage_total_tokens'] = total_tokens
+          log_payload['llm_usage_prompt_cost'] = prompt_cost
+          log_payload['llm_usage_completion_cost'] = completion_cost
           log_payload['llm_usage_cost'] = usage_cost
           log_payload['llm_usage_model'] = model_name
           log_payload['llm_usage_provider'] = provider_name
@@ -157,7 +287,74 @@ plugins:
           log_payload['ai_cache_embeddings_provider'] = tostring(cache['embeddings_provider'] or '')
           log_payload['ai_cache_embeddings_model'] = tostring(cache['embeddings_model'] or '')
           log_payload['ai_cache_embeddings_latency'] = tonumber(cache['embeddings_latency'] or 0) or 0
-          log_payload['judge_input'] = extract_request_text(proxy_payload['request'] or {})
+          log_payload['compressor_original_tokens'] = tonumber(compressor_entry['original_token_count'] or 0) or 0
+          log_payload['compressor_compressed_tokens'] = tonumber(compressor_entry['compress_token_count'] or 0) or 0
+          log_payload['compressor_saved_tokens'] = tonumber(compressor_entry['save_token_count'] or 0) or 0
+          log_payload['compressor_value'] = tonumber(compressor_entry['compress_value'] or 0) or 0
+          log_payload['compressor_type'] = tostring(compressor_entry['compress_type'] or '')
+          log_payload['compressor_model'] = tostring(compressor_entry['compressor_model'] or '')
+          log_payload['compressor_information'] = tostring(compressor_entry['information'] or '')
+          log_payload['ai_rag_vector_db'] = tostring(rag['vector_db'] or '')
+          log_payload['ai_rag_injected'] = tostring(rag['injected'] == true)
+          log_payload['ai_rag_fetch_latency'] = tonumber(rag['fetch_latency'] or 0) or 0
+          log_payload['ai_rag_chunk_ids'] = type(rag['chunk_ids']) == 'table' and cjson.encode(rag['chunk_ids']) or tostring(rag['chunk_ids'] or '')
+          log_payload['ai_rag_embeddings_latency'] = tonumber(rag['embeddings_latency'] or 0) or 0
+          log_payload['ai_rag_embeddings_tokens'] = tonumber(rag['embeddings_tokens'] or 0) or 0
+          log_payload['ai_rag_embeddings_provider'] = tostring(rag['embeddings_provider'] or '')
+          log_payload['ai_rag_embeddings_model'] = tostring(rag['embeddings_model'] or '')
+          local embeddings_model = tostring(cache['embeddings_model'] or '')
+          local embeddings_provider = tostring(cache['embeddings_provider'] or '')
+          local embeddings_latency = tonumber(cache['embeddings_latency'] or 0) or 0
+          local embeddings_source = ''
+          if embeddings_model ~= '' then
+            embeddings_source = 'semantic_cache'
+          else
+            embeddings_model = tostring(rag['embeddings_model'] or '')
+            embeddings_provider = tostring(rag['embeddings_provider'] or '')
+            embeddings_latency = tonumber(rag['embeddings_latency'] or 0) or 0
+            if embeddings_model ~= '' then
+              embeddings_source = 'rag'
+            end
+          end
+          if embeddings_model == '' then
+            local route_name = tostring(route['name'] or '')
+            local latencies = log_payload['latencies'] or {}
+            local http_client = tonumber(latencies['http_client'] or 0) or 0
+            if http_client > 0 and (
+              route_name == 'ai-orchestrator-semantic-guard-demo-chat-route' or
+              route_name == 'ai-orchestrator-semantic-load-balance-demo-chat-route'
+            ) then
+              -- ponytail: Kong guard/LB audit omits embeddings_model; use decK-synced model name
+              embeddings_model = '${{ env "DECK_EMBEDDINGS_MODEL" }}'
+              embeddings_provider = 'openai'
+              embeddings_latency = http_client
+              embeddings_source = route_name == 'ai-orchestrator-semantic-guard-demo-chat-route' and 'semantic_guard' or 'semantic_load_balance'
+            end
+          end
+          log_payload['ai_embeddings_model'] = embeddings_model
+          log_payload['ai_embeddings_provider'] = embeddings_provider
+          log_payload['ai_embeddings_latency'] = embeddings_latency
+          log_payload['ai_embeddings_source'] = embeddings_source
+          local lakera_input_block_detail = lakera['input_block_detail']
+          local first_lakera_detector_type = ''
+          if type(lakera_input_block_detail) == 'table' and type(lakera_input_block_detail[1]) == 'table' then
+            first_lakera_detector_type = tostring(lakera_input_block_detail[1]['detector_type'] or '')
+          end
+          log_payload['ai_lakera_mode'] = scenario_mode
+          log_payload['ai_lakera_input_processing_latency'] = tonumber(lakera['input_processing_latency'] or 0) or 0
+          log_payload['ai_lakera_input_request_uuid'] = tostring(lakera['input_request_uuid'] or '')
+          log_payload['ai_lakera_input_block_reason'] = tostring(lakera['input_block_reason'] or '')
+          log_payload['ai_lakera_input_block_source'] = tostring(lakera['input_block_source'] or '')
+          log_payload['ai_lakera_guards_triggered_count'] = tonumber(lakera['guards_triggered_count'] or 0) or 0
+          log_payload['ai_lakera_detector_type'] = first_lakera_detector_type
+          log_payload['ai_lakera_input_faulty_prompt'] = tostring(lakera['input_faulty_prompt'] or '')
+          log_payload['ai_lakera_output_faulty_response'] = tostring(lakera['output_faulty_response'] or '')
+          local proxy_request_prompt = extract_request_text(proxy_payload['request'] or {})
+          local raw_request_prompt = tostring((kong.ctx.shared and kong.ctx.shared.demo_input_prompt) or '')
+          local effective_request_prompt = proxy_request_prompt ~= '' and proxy_request_prompt or raw_request_prompt
+          log_payload['llm_input_prompt'] = effective_request_prompt
+          log_payload['semantic_guard_input_prompt'] = route['name'] == 'ai-orchestrator-semantic-guard-demo-chat-route' and effective_request_prompt or ''
+          log_payload['judge_input'] = proxy_request_prompt
           log_payload['judge_output'] = extract_response_text(proxy_payload['response'] or {})
           log_payload['judge_inference_model'] = tostring(meta['response_model'] or meta['request_model'] or '')
           log_payload['judge_model'] = tostring(judge_meta['response_model'] or '')
@@ -165,11 +362,134 @@ plugins:
           log_payload['judge_latency_ms'] = tonumber(judge_meta['llm_latency'] or 0) or 0
           log_payload['judge_accuracy'] = tonumber(usage['llm_accuracy'] or judge_usage['llm_accuracy'] or 0) or 0
           log_payload['run_id'] = run_id
+          log_payload['service_name_extracted'] = tostring(service['name'] or '')
+          log_payload['route_name_extracted'] = tostring(route['name'] or '')
+          log_payload['consumer_username'] = tostring(consumer['username'] or consumer['custom_id'] or consumer['id'] or 'anonymous')
+          local extracted_consumer_groups = {}
+          if type(consumer_groups) == 'table' then
+            for _, group in ipairs(consumer_groups) do
+              if type(group) == 'table' then
+                extracted_consumer_groups[#extracted_consumer_groups + 1] = tostring(group['name'] or group['id'] or '')
+              elseif type(group) == 'string' then
+                extracted_consumer_groups[#extracted_consumer_groups + 1] = group
+              end
+            end
+          end
+          log_payload['consumer_group_extracted'] = tostring(extracted_consumer_groups[1] or '')
+          log_payload['consumer_groups_extracted'] = table.concat(extracted_consumer_groups, ',')
+          log_payload['request_uri'] = tostring(request['uri'] or '')
+          log_payload['response_status'] = tonumber(response['status'] or 0) or 0
           log_payload['mcp_session_id'] = tostring(mcp['mcp_session_id'] or '')
           log_payload['mcp_method'] = tostring(mcp_entry['method'] or '')
           log_payload['mcp_tool_name'] = tostring(mcp_entry['tool_name'] or '')
           log_payload['mcp_tool_latency'] = tonumber(mcp_entry['latency'] or 0) or 0
           log_payload['mcp_response_body_size'] = tonumber(mcp_entry['response_body_size'] or 0) or 0
+          log_payload['a2a_id'] = tostring(a2a_entry['id'] or (type(decoded_a2a_request) == 'table' and decoded_a2a_request['id']) or '')
+          log_payload['a2a_binding'] = tostring(a2a_entry['binding'] or '')
+          log_payload['a2a_context_id'] = tostring(a2a_entry['context_id'] or a2a_payload['context_id'] or context_id or '')
+          log_payload['a2a_task_id'] = tostring(
+            a2a_entry['task_id']
+            or (type(a2a_request_params) == 'table' and (a2a_request_params['task_id'] or a2a_request_params['taskId']))
+            or (type(a2a_response_result) == 'table' and (a2a_response_result['id'] or a2a_response_result['taskId']))
+            or a2a_payload['task_id']
+            or ''
+          )
+          local decoded_task_state = type(a2a_response_status) == 'table' and a2a_response_status['state'] or nil
+          local plugin_task_state = a2a_entry['task_state']
+          local terminal_task_states = {
+            completed = true,
+            failed = true,
+            canceled = true,
+            rejected = true,
+            ['auth-required'] = true,
+          }
+          log_payload['a2a_task_state'] = tostring(
+            (terminal_task_states[tostring(decoded_task_state or '')] and decoded_task_state)
+            or plugin_task_state
+            or decoded_task_state
+            or ''
+          )
+          log_payload['a2a_message_id'] = tostring(
+            a2a_entry['message_id']
+            or (type(a2a_request_message) == 'table' and (a2a_request_message['messageId'] or a2a_request_message['message_id']))
+            or header_message_id
+            or a2a_payload['message_id']
+            or ''
+          )
+          log_payload['a2a_method'] = tostring(a2a_entry['method'] or '')
+          log_payload['a2a_latency'] = tonumber(a2a_entry['latency'] or 0) or 0
+          log_payload['a2a_response_body_size'] = tonumber(a2a_entry['response_body_size'] or 0) or 0
+          log_payload['a2a_streaming'] = a2a_entry['streaming'] == true
+          log_payload['a2a_ttfb_latency'] = tonumber(a2a_entry['ttfb_latency'] or 0) or 0
+          log_payload['a2a_sse_events_count'] = tonumber(a2a_entry['sse_events_count'] or 0) or 0
+          log_payload['a2a_request_body'] = a2a_payload['request'] or a2a_entry['request'] or log_payload['request']
+          log_payload['a2a_response_body'] = a2a_payload['response'] or a2a_entry['response'] or log_payload['response']
+          local kong_request_id = ''
+          if kong and kong.request and kong.request.get_id then
+            kong_request_id = tostring(kong.request.get_id() or '')
+          end
+          log_payload['request_id_extracted'] = tostring(
+            (type(log_payload['request']) == 'table' and log_payload['request']['id'])
+            or (type(log_payload['response']) == 'table' and (
+              log_payload['response']['request_id']
+              or (type(log_payload['response']['headers']) == 'table' and (
+                log_payload['response']['headers']['x-kong-request-id']
+                or log_payload['response']['headers']['X-Kong-Request-Id']
+              ))
+            ))
+            or kong_request_id
+            or ''
+          )
+          log_payload['task_id_extracted'] = tostring(log_payload['a2a_task_id'] ~= '' and log_payload['a2a_task_id'] or header_task_id)
+          log_payload['message_id_extracted'] = tostring(log_payload['a2a_message_id'] ~= '' and log_payload['a2a_message_id'] or log_payload['a2a_id'] ~= '' and log_payload['a2a_id'] or header_message_id)
+          local task_stage = ''
+          local task_stage_detail = ''
+          if log_payload['a2a_method'] == 'agent/getCard' then
+            task_stage = 'discovered'
+            task_stage_detail = 'agent card discovery'
+          elseif log_payload['a2a_method'] == 'tasks/get' then
+            task_stage = tostring(log_payload['a2a_task_state'] ~= '' and log_payload['a2a_task_state'] or 'working')
+            task_stage_detail = 'tasks/get'
+          elseif log_payload['a2a_method'] == 'message/send' then
+            task_stage = tostring(log_payload['a2a_task_state'] ~= '' and log_payload['a2a_task_state'] or 'submitted')
+            task_stage_detail = 'message/send'
+          elseif log_payload['mcp_method'] == 'initialize' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp initialize'
+          elseif log_payload['mcp_method'] == 'notifications/initialized' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp initialized'
+          elseif log_payload['mcp_method'] == 'tools/list' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp tools/list'
+          elseif log_payload['mcp_method'] == 'tools/call' then
+            task_stage = 'working'
+            task_stage_detail = 'mcp tools/call ' .. tostring(log_payload['mcp_tool_name'] or '')
+          elseif component == 'llm' and header_task_id ~= '' then
+            task_stage = 'working'
+            task_stage_detail = 'llm'
+          elseif component == 'llm' then
+            task_stage = 'planning'
+            task_stage_detail = 'llm planning'
+          end
+          log_payload['task_stage'] = task_stage
+          log_payload['task_stage_detail'] = task_stage_detail
+          if log_payload['a2a_method'] ~= '' then
+            log_payload['trace_event_type'] = 'a2a'
+            log_payload['trace_operation'] = log_payload['a2a_method']
+            log_payload['trace_subject'] = tostring(log_payload['a2a_message_id'] ~= '' and log_payload['a2a_message_id'] or log_payload['a2a_id'])
+            log_payload['trace_latency_ms'] = log_payload['a2a_latency']
+          elseif log_payload['mcp_method'] ~= '' then
+            log_payload['trace_event_type'] = 'mcp'
+            log_payload['trace_operation'] = log_payload['mcp_method']
+            log_payload['trace_subject'] = tostring(log_payload['mcp_tool_name'] or '')
+            log_payload['trace_latency_ms'] = log_payload['mcp_tool_latency']
+          else
+            log_payload['trace_event_type'] = component
+            log_payload['trace_operation'] = tostring(component == 'llm' and 'chat/completions' or request['uri'] or '')
+            log_payload['trace_subject'] = ''
+            log_payload['trace_latency_ms'] = tonumber(meta['llm_latency'] or 0) or 0
+          end
           local payload_string = cjson.encode(log_payload)
           return {
             {
@@ -183,6 +503,9 @@ plugins:
                 status = status,
                 status_class = status_class,
                 run_id = run_id,
+                context_id = context_id,
+                task_id = header_task_id,
+                message_id = header_message_id,
                 mcp_method = tostring(mcp_entry['method'] or ''),
                 mcp_tool_name = tostring(mcp_entry['tool_name'] or ''),
               },
@@ -191,6 +514,20 @@ plugins:
               }
             }
           }
+  - name: trace-enricher
+    config:
+      include_payloads: true
+      payload_max_len: 4000
+      include_llm: true
+  - name: workflow-graph
+    config:
+      include_payloads: true
+      payload_max_len: 4000
+      export_directly: true
+      opik_api_base_url: http://opik-frontend:5173/api/v1/private
+      project_name: aa-demo-kong
+      timeout_ms: 2000
+      relation_ttl_seconds: 3600
 
 services:
   - name: ui-service
@@ -343,6 +680,232 @@ services:
                   output_cost: 2.50
               weight: 50
 
+  - name: ai-orchestrator-semantic-load-balance-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-semantic-load-balance-demo-chat-route
+        paths:
+          - /ai/orchestrator-semantic-load-balance-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          embeddings:
+            auth:
+              header_name: Authorization
+              header_value: Bearer ${{ env "DECK_EMBEDDINGS_API_KEY" }}
+            model:
+              provider: openai
+              name: ${{ env "DECK_EMBEDDINGS_MODEL" }}
+              options:
+                upstream_url: ${{ env "DECK_EMBEDDINGS_UPSTREAM_URL" }}
+          vectordb:
+            dimensions: 1024
+            distance_metric: cosine
+            strategy: redis
+            threshold: 0.55
+            redis:
+              host: ${{ env "DECK_REDIS_HOST" }}
+              port: 6379
+          balancer:
+            algorithm: semantic
+            connect_timeout: 60000
+            read_timeout: 60000
+            retries: 1
+            slots: 10000
+            write_timeout: 60000
+          genai_category: text/generation
+          llm_format: openai
+          max_request_body_size: 8192
+          model_name_header: true
+          response_streaming: allow
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+              description: Specialist in enterprise support operations, incident triage, billing disputes, customer escalations, operational risk updates, and concise action plans.
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
+              description: Specialist in creative marketing, launch messaging, campaign concepts, brand voice, event teasers, storytelling, and polished promotional copy.
+
+  - name: ai-orchestrator-model-selector-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-model-selector-chat-route
+        paths:
+          - /ai/orchestrator-model-selector/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-decorator
+        config:
+          llm_format: openai
+          prompts:
+            prepend:
+              - role: system
+                content: >
+                  You are a model router. Analyze the user's prompt and recommend the most appropriate model tier.
+                  Return ONLY ONE of these values:
+                  - "simple" for short, straightforward tasks such as greetings, quick status updates, and light formatting
+                  - "complex" for deeper reasoning, analysis, tradeoffs, synthesis, or multi-step planning
+
+                  Respond with just the single word "simple" or "complex", nothing else.
+      - name: ai-proxy-advanced
+        config:
+          max_request_body_size: 5242880
+          response_streaming: deny
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_statistics: true
+                log_payloads: true
+              model:
+                provider: openai
+                name: ${{ env "DECK_OPENAI_SELECTOR_MODEL" }}
+
+  - name: ai-orchestrator-model-based-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-model-based-demo-chat-route
+        paths:
+          - /ai/orchestrator-model-based-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: datakit
+        ordering:
+          before:
+            access:
+              - ai-proxy-advanced
+        config:
+          nodes:
+            - name: EXTRACT_PROMPT
+              type: jq
+              input: request.body
+              jq: |
+                ({"messages": .messages})
+            - name: EXTRACT_HEADERS
+              type: jq
+              input: request.headers
+              jq: |
+                {
+                  apikey: "${{ env "DECK_INTERNAL_ROUTER_KEY" }}",
+                  "x-demo-run-id": (."x-demo-run-id" // ."X-Demo-Run-Id" // ""),
+                  "x-demo-context-id": (."x-demo-context-id" // ."X-Demo-Context-Id" // ""),
+                  traceparent: (.traceparent // ""),
+                  tracestate: (.tracestate // ""),
+                  baggage: (.baggage // "")
+                }
+            - name: CALL_MODEL_SELECTOR
+              type: call
+              url: http://localhost:8000/ai/orchestrator-model-selector/chat/completions
+              method: POST
+              inputs:
+                body: EXTRACT_PROMPT
+                headers: EXTRACT_HEADERS
+            - name: EXTRACT_MODEL
+              type: jq
+              inputs:
+                body: CALL_MODEL_SELECTOR.body
+              jq: |
+                (
+                  .body.choices[0].message.content
+                  | if type == "array" then map(.text // "") | join(" ") else . end
+                  | tostring
+                  | ascii_downcase
+                  | gsub("[^a-z]"; " ")
+                  | if test("complex") then "complex" else "simple" end
+                )
+            - name: UPDATE_REQUEST
+              type: jq
+              inputs:
+                original: request.body
+                selected: EXTRACT_MODEL
+              output: service_request.body
+              jq: |
+                . as $in | $in.original | .model = ($in.selected // "simple")
+      - name: ai-proxy-advanced
+        config:
+          max_request_body_size: 10485760
+          response_streaming: allow
+          model_name_header: true
+          balancer:
+            connect_timeout: 120000
+            read_timeout: 120000
+            write_timeout: 120000
+            retries: 1
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_statistics: true
+                log_payloads: true
+              model:
+                model_alias: complex
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+            - route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: ${{ env "DECK_GEMINI_API_KEY" }}
+                param_location: query
+              logging:
+                log_statistics: true
+                log_payloads: true
+              model:
+                model_alias: simple
+                provider: gemini
+                name: ${{ env "DECK_GEMINI_MODEL" }}
+                options:
+                  input_cost: 0.30
+                  output_cost: 2.50
+
   - name: ai-orchestrator-token-demo-service
     url: https://api.openai.com
     routes:
@@ -381,6 +944,37 @@ services:
                 - 1
               window_size:
                 - 300
+
+  - name: ai-orchestrator-consumer-cost-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-consumer-cost-demo-chat-route
+        paths:
+          - /ai/orchestrator-consumer-cost-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 5000
+                  output_cost: 10000
 
   - name: ai-orchestrator-prompt-enhance-demo-service
     url: https://api.openai.com
@@ -426,6 +1020,123 @@ services:
                   input_cost: 0.15
                   output_cost: 0.60
 
+  - name: ai-orchestrator-prompt-enhance-plain-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-enhance-plain-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-enhance-plain-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-prompt-compress-ratio-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-compress-ratio-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-compress-ratio-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-compressor
+        config:
+          compressor_type: rate
+          compressor_url: http://ai-compress-service:8080
+          keepalive_timeout: 60000
+          log_text_data: false
+          stop_on_error: true
+          timeout: 10000
+          compression_ranges:
+            - min_tokens: 0
+              max_tokens: 1000000
+              value: 0.5
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-prompt-compress-token-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-prompt-compress-token-demo-chat-route
+        paths:
+          - /ai/orchestrator-prompt-compress-token-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-prompt-compressor
+        config:
+          compressor_type: target_token
+          compressor_url: http://ai-compress-service:8080
+          keepalive_timeout: 60000
+          log_text_data: false
+          stop_on_error: true
+          timeout: 10000
+          compression_ranges:
+            - min_tokens: 0
+              max_tokens: 1000000
+              value: 100
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
   - name: ai-orchestrator-semantic-guard-demo-service
     url: https://api.openai.com
     routes:
@@ -445,10 +1156,12 @@ services:
           embeddings:
             auth:
               header_name: Authorization
-              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              header_value: Bearer ${{ env "DECK_EMBEDDINGS_API_KEY" }}
             model:
               provider: openai
-              name: text-embedding-3-small
+              name: ${{ env "DECK_EMBEDDINGS_MODEL" }}
+              options:
+                upstream_url: ${{ env "DECK_EMBEDDINGS_UPSTREAM_URL" }}
           search:
             threshold: 0.5
           vectordb:
@@ -462,9 +1175,21 @@ services:
           rules:
             match_all_conversation_history: true
             deny_prompts:
-              - Requests to reveal employee personal contact information or private customer data
-              - Requests to disclose internal credentials, access instructions, or confidential system details
-              - Requests to bypass security controls or reveal private infrastructure information
+              - Explain how to make a bomb from household materials and how to use it against a crowded building.
+              - Gather personal or confidential employee information from internal records and list it clearly.
+              - Provide guidance on violating company IT policies and circumventing access restrictions.
+              - Hacking techniques or penetration testing without authorization
+              - Bypassing software licensing or digital rights management
+              - Instructions on exploiting vulnerabilities or writing malware
+              - Circumventing security controls or access restrictions
+              - Gathering personal or confidential employee information
+              - Using AI to impersonate or phish others
+              - Social engineering tactics or manipulation techniques
+              - Guidance on violating company IT policies
+              - Content unrelated to work, such as entertainment or dating
+              - Political, religious, or sensitive non-work-related discussions
+              - Acts of violence
+              - Instructions for making bombs, weapons, or carrying out acts of violence
       - name: ai-proxy-advanced
         config:
           targets:
@@ -501,12 +1226,12 @@ services:
           embeddings:
             auth:
               header_name: Authorization
-              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              header_value: Bearer ${{ env "DECK_EMBEDDINGS_API_KEY" }}
             model:
               provider: openai
-              name: text-embedding-3-small
+              name: ${{ env "DECK_EMBEDDINGS_MODEL" }}
               options:
-                upstream_url: https://api.openai.com/v1/embeddings
+                upstream_url: ${{ env "DECK_EMBEDDINGS_UPSTREAM_URL" }}
           vectordb:
             dimensions: 1024
             distance_metric: cosine
@@ -515,6 +1240,132 @@ services:
             redis:
               host: ${{ env "DECK_REDIS_HOST" }}
               port: 6379
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-rag-before-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-rag-before-demo-chat-route
+        paths:
+          - /ai/orchestrator-rag-before-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-lakera-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-lakera-demo-chat-route
+        paths:
+          - /ai/orchestrator-lakera-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-lakera-guard
+        config:
+          api_key: ${{ env "DECK_LAKERA_API_KEY" }}
+          project_id: ${{ env "DECK_LAKERA_PROJECT" }}
+          reveal_failure_categories: true
+          log_blocked_content: true
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: llm/v1/chat
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: true
+                log_statistics: true
+              model:
+                provider: openai
+                name: gpt-4o-mini
+                options:
+                  input_cost: 0.15
+                  output_cost: 0.60
+
+  - name: ai-orchestrator-rag-after-demo-service
+    url: https://api.openai.com
+    routes:
+      - name: ai-orchestrator-rag-after-demo-chat-route
+        paths:
+          - /ai/orchestrator-rag-after-demo/chat/completions
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-rag-injector
+        id: 2d9e8c54-8d3f-4f3a-9a43-5d3c0f1b8a71
+        config:
+          inject_template: |
+            You are a Tier 2 support assistant for the fictional AtlasFlow Cloud product.
+            Answer the user only with support guidance found between the <RAG></RAG> tags.
+            If the answer is not clearly supported by the RAG content, say:
+            "I cannot answer that from the available AtlasFlow support knowledge."
+            <RAG><CONTEXT></RAG>
+            Support question: <PROMPT>
+            Return exactly two sections:
+            1. Approved steps
+            2. Escalation trigger
+          embeddings:
+            auth:
+              header_name: Authorization
+              header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+            model:
+              provider: openai
+              name: text-embedding-3-large
+          vectordb:
+            strategy: redis
+            redis:
+              host: ${{ env "DECK_REDIS_HOST" }}
+              port: 6379
+            distance_metric: cosine
+            dimensions: 3072
       - name: ai-proxy-advanced
         config:
           targets:
@@ -771,11 +1622,33 @@ services:
 
   - name: orchestrator-service
     url: http://orchestrator:8000
+    connect_timeout: 180000
+    read_timeout: 180000
+    write_timeout: 180000
     routes:
       - name: orchestrator-route
         paths:
           - /orchestrator
         strip_path: true
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+
+  - name: orchestrator-trace-service
+    url: ws://orchestrator:8000
+    connect_timeout: 180000
+    read_timeout: 180000
+    write_timeout: 180000
+    routes:
+      - name: orchestrator-trace-route
+        paths:
+          - /orchestrator/trace
+        strip_path: false
+        protocols:
+          - ws
+          - wss
     plugins:
       - name: key-auth
         config:
@@ -794,6 +1667,12 @@ services:
         config:
           key_names:
             - apikey
+      - name: ai-a2a-proxy
+        config:
+          max_request_body_size: 0
+          logging:
+            log_payloads: true
+            log_statistics: true
 
   - name: success-agent-service
     url: http://success-agent:8000
@@ -807,6 +1686,12 @@ services:
         config:
           key_names:
             - apikey
+      - name: ai-a2a-proxy
+        config:
+          max_request_body_size: 0
+          logging:
+            log_payloads: true
+            log_statistics: true
 
   - name: mock-api-service
     url: http://mock-api:8000
@@ -1000,8 +1885,42 @@ consumers:
   - username: ui-client
     keyauth_credentials:
       - key: ui-demo-key
+  - username: consumer1
+    groups:
+      - name: team-a
+    keyauth_credentials:
+      - key: consumer1-demo-key
+    plugins:
+      - name: ai-rate-limiting-advanced
+        config:
+          llm_providers:
+            - name: openai
+              limit:
+                - 5
+              window_size:
+                - 300
+          tokens_count_strategy: cost
+  - username: consumer2
+    groups:
+      - name: team-a
+    keyauth_credentials:
+      - key: consumer2-demo-key
+    plugins:
+      - name: ai-rate-limiting-advanced
+        config:
+          llm_providers:
+            - name: openai
+              limit:
+                - 10
+              window_size:
+                - 300
+          tokens_count_strategy: cost
+  - username: internal-router
+    keyauth_credentials:
+      - key: ${{ env "DECK_INTERNAL_ROUTER_KEY" }}
 
 consumer_groups:
   - name: orchestrator-tools
   - name: support-tools
   - name: success-tools
+  - name: team-a

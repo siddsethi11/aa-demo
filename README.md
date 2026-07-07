@@ -1,10 +1,148 @@
 # Kong Agent + MCP Demo
 
-This repo is a simple Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
+This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [How to start the demo](#how-to-start-the-demo)
+- [What the project does](#what-the-project-does)
+- [Current UI](#current-ui)
+  - [Top-level controls](#top-level-controls)
+  - [Main UI behaviors](#main-ui-behaviors)
+  - [Diagram views](#diagram-views)
+- [What it will show](#what-it-will-show)
+- [Runtime shape](#runtime-shape)
+- [Observability](#observability)
+  - [Konnect observability](#konnect-observability)
+  - [Loki and Grafana](#loki-and-grafana)
+  - [Jaeger](#jaeger)
+  - [Opik](#opik)
+
+## Prerequisites
+
+Before running the demo, make sure you have:
+
+- Docker Desktop or a working local Docker Engine with `docker compose`
+- `python3`
+- `curl`
+- `jq`
+- `deck`
+- a valid Konnect personal access token with access to the target control plane
+- a populated `.env` file based on [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example)
+- MCP registry enabled in your org
+
+Cloudsmith-hosted supporting images required for focused governance scenarios:
+
+- `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
+- `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
+
+If you do not already have those images locally:
+
+```bash
+docker login docker.cloudsmith.io
+docker pull docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
+docker pull docker.cloudsmith.io/kong/ai-compress/service:v0.0.2
+```
+
+Notes:
+
+- the Cloudsmith images are used for the `PII Sanitization` and `Prompt Compression` scenarios
+- the registry credentials are separate from your Konnect PAT
+- for the AI PII image, AI compression image:
+  - username: `1Password from shared vault`
+  - password: `1Passwordfrom shared vault`
+- Prompt Compression requires memory. I have configured 16GB for docker
+
+Minimum environment values required for the main startup flow:
+
+- `KONNECT_TOKEN`
+- `KONNECT_CONTROL_PLANE_NAME`
+- `KONG_CLUSTER_CONTROL_PLANE`
+- `KONG_CLUSTER_SERVER_NAME`
+- `OPENAI_API_KEY`
+- `DECK_OPENAI_API_KEY`
+- `DECK_GEMINI_API_KEY`
+- `DECK_REDIS_HOST`
+
+Additional environment values required for optional/full governance scenarios:
+
+- `DECK_LAKERA_API_KEY`
+- `DECK_LAKERA_PROJECT`
+
+What the startup flow expects:
+
+- the startup script can create or reuse a Konnect control plane
+  - default name: `AA Demo`
+  - override with `KONNECT_CONTROL_PLANE_NAME`
+- Konnect custom plugin schemas can be created or updated
+- `deck gateway sync` can write the current Kong config to the target control plane
+- the local stack can start ports for:
+  - UI `8000`
+  - Grafana `3001`
+  - Opik `5173`
+  - Jaeger `16686`
+
+## How to start the demo
+
+1. Populate `.env` from [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example).
+2. Start the full demo stack:
+
+```bash
+./scripts/start_rag_demo.sh
+```
+
+The startup flow will:
+
+- create or reuse the Konnect control plane
+  - default name: `AA Demo`
+  - override with `KONNECT_CONTROL_PLANE_NAME`
+- sync custom plugin schemas
+- run `deck gateway sync`
+- upload Konnect dashboards
+- register the Konnect MCP registry entry
+- ingest the demo RAG knowledge base
+
+3. Open the main local surfaces:
+
+- UI: [http://localhost:8000](http://localhost:8000)
+- Grafana: [http://localhost:3001](http://localhost:3001)
+- Opik: [http://localhost:5173](http://localhost:5173)
+- Jaeger: [http://localhost:16686](http://localhost:16686)
+
+4. If you need to stop everything:
+
+```bash
+./scripts/stop_rag_demo.sh
+```
+
+Important links used in the demo:
+
+- Kong MCP remote: [http://localhost:8000/mock-mcp](http://localhost:8000/mock-mcp)
+- Support agent card through Kong: [http://localhost:8000/support-agent/.well-known/agent-card.json](http://localhost:8000/support-agent/.well-known/agent-card.json)
+- Success agent card through Kong: [http://localhost:8000/success-agent/.well-known/agent-card.json](http://localhost:8000/success-agent/.well-known/agent-card.json)
 
 ## What the project does
 
 This project demonstrates a small, visually clear agent system running behind Kong in Konnect hybrid mode.
+
+Example screens:
+
+Normal governed flow:
+
+![Normal governed flow](img/image1.png)
+
+Scene selector and baseline escalation input:
+
+![Scene selector and baseline input](img/image2.png)
+
+Focused governance scenario example for PII sanitization:
+
+![PII sanitization scenario](img/image3.png)
+
+Focused topology view showing the AI PII Service in the governed path:
+
+![PII topology view](img/image4.png)
 
 The demo uses:
 
@@ -13,8 +151,10 @@ The demo uses:
 - an orchestrator LLM step for triage and executive synthesis
 - LLM calls from the orchestrator and sub-agents routed through Kong AI Proxy Advanced
 - separate Kong AI routes for orchestrator and sub-agents
+- Kong's `ai-a2a-proxy` plugin for agent discovery, A2A execution, and A2A observability between the orchestrator and the sub-agents
 - 1 backing REST API
 - Kong's `ai-mcp-proxy` plugin to expose that API as MCP tools
+- Konnect MCP Registry to publish the demo MCP server for internal discovery
 - Consumers and Consumer Groups to control which agent can see which tools
 - a lightweight UI that shows the flow in real time
 
@@ -36,10 +176,42 @@ This makes Kong's role easy to explain:
 
 - route control
 - authentication
+- A2A agent discovery and execution through Kong
 - tool exposure through MCP
+- MCP server registration through Konnect MCP Registry
 - LLM routing through AI Proxy Advanced
 - per-agent tool restrictions
 - observability of agent traffic
+
+MCP discovery shape:
+
+- the runtime MCP traffic still goes through Kong on `/mock-mcp`
+- the same server is also registered in Konnect as:
+  - registry: `AA Demo MCP Registry`
+  - server: `com.aa-demo/mock-mcp`
+  - remote: `http://localhost:8000/mock-mcp`
+- this keeps discovery/governance metadata in Konnect while Kong remains the runtime control point for auth, routing, and observability
+
+## Core Governance Components
+
+- `AI A2A Proxy`
+  - Kong handles sub-agent discovery and A2A `message/stream` execution between the orchestrator and the support/success agents.
+- `AI MCP Proxy`
+  - Kong exposes the backing REST API as MCP tools and enforces per-agent access to those tools.
+- `AI Proxy Advanced`
+  - Kong routes orchestrator and sub-agent LLM traffic to the configured model providers and also supports failover behavior in the demo.
+- `AI Semantic Prompt Guard`
+  - Kong uses embeddings plus Redis to block prompts based on semantic similarity to denied themes.
+- `AI Semantic Cache`
+  - Kong checks Redis for semantically similar prompts and can return a cached response without calling the model again.
+- `AI Sanitizer / AI PII Service`
+  - Kong sends request and response content through the AI PII Service to anonymize or block sensitive data in the PII scenario.
+- `AI Prompt Compressor`
+  - Kong sends verbose prompts through the AI Prompt Compressor service before the model call so the demo can show token savings and prompt-size governance.
+- `AI Lakera Guard`
+  - Kong sends prompts to Lakera for policy inspection before allowing the request to reach the model.
+- `Workflow Graph`
+  - Kong builds a synthetic workflow tree and exports it to Opik so the demo can show a workflow-oriented AI trace instead of only raw request traces.
 
 ## Current UI
 
@@ -48,11 +220,17 @@ The UI is now opinionated around Kong as the control plane.
 Top-level controls:
 
 - `Scenes`
+  - opens the scene modal where you choose the governance scenario and edit the demo input
 - `View Diagrams`
+  - opens the sequence diagram and LangGraph state diagrams for the orchestrator and sub-agents
 - `Reset Scene`
+  - clears the current run state and resets the topology back to its idle demo view
 - `Reset Observability`
+  - clears Loki/Grafana demo state and the recent-runs list used by the UI
 - `View Run Output`
-- `?` help modal for the demo scenario and agent roles
+  - opens the structured business output produced by the selected run
+- `?`
+  - opens the help modal with the demo scenario summary and the role of each agent/component
 
 Main UI behaviors:
 
@@ -93,7 +271,375 @@ Diagram views:
 - `mock-api`: backing REST API for the 7 tools
 - `ai-llm-service`: LLM traffic routed through Kong AI Proxy Advanced
 - `redis-stack`: vector database backing the semantic guard scenario
-- `kong-dp`: Kong Gateway `3.13.0.1` in Konnect hybrid mode
+- `kong-dp`: Kong Gateway `3.14.0.1` in Konnect hybrid mode
+
+## Observability
+
+The demo exposes three main observability surfaces:
+
+- Konnect observability for managed analytics dashboards
+- Loki and Grafana for gateway logs, run-scoped tables, and governance dashboards
+- Jaeger for raw OpenTelemetry trace trees
+- Opik for the synthetic workflow-oriented AI trace exported by Kong
+
+### Konnect observability
+
+- Konnect is used for control-plane-managed observability dashboards
+- the repo startup flow uploads the demo dashboard definitions into Konnect
+- this is the managed analytics surface for the demo, separate from local Grafana
+
+### Loki and Grafana
+
+- Grafana UI: `http://localhost:3001`
+- Loki API: `http://localhost:3100`
+- Kong sends structured gateway logs to Loki through the global `http-log` path
+- Grafana is the main surface for:
+  - governance dashboards
+  - run trace tables
+  - policy events
+  - request/response exploration
+
+### Jaeger
+
+Jaeger is the local raw OTEL trace viewer for the demo.
+
+What is included:
+
+- Kong tracing enabled on `kong-dp` with:
+  - `KONG_TRACING_INSTRUMENTATIONS=all`
+  - `KONG_TRACING_SAMPLING_RATE=1.0`
+- a global Kong `opentelemetry` plugin in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
+- a local OpenTelemetry Collector service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
+- collector config in [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
+- a local Jaeger service in [docker-compose.yml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/docker-compose.yml)
+- Kong exports OTLP traces to `http://otel-collector:4318/v1/traces`
+- the collector exports traces onward to Jaeger at `http://jaeger:4318`
+- Jaeger UI is available at `http://localhost:16686`
+
+Current signal split:
+
+- `LLM`: Kong plugin spans for `ai-proxy-advanced` and child Gen AI spans/attributes
+- `A2A`: Kong plugin spans for `ai-a2a-proxy` and child `kong.a2a` spans/attributes
+- `MCP`: Kong Gateway request spans plus AI MCP log/metric fields from `ai-mcp-proxy`; dedicated MCP metric time series are not displayed in Jaeger
+- `Trace correlation`: the app propagates W3C `traceparent`, `tracestate`, and `baggage` headers across orchestrator, A2A, MCP, and LLM calls so one normal run appears as a single Jaeger trace tree
+
+- Kong adds searchable trace attributes from the demo headers: `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id`.
+
+### Opik
+
+- Opik UI: `http://localhost:5173`
+- Opik receives a synthetic workflow trace written directly by the `workflow-graph` plugin
+- unlike Jaeger, Opik is not fed from the raw Kong OTEL traces in this setup
+
+Opik export behavior:
+
+- Jaeger receives the full raw Kong trace set through the OTEL collector.
+- Opik receives a synthetic workflow trace written directly by the `workflow-graph` plugin.
+- That synthetic trace is keyed by `demo.run_id` and contains one workflow tree with:
+  - workflow root
+  - agent branch nodes
+  - A2A handoff events
+  - MCP tool calls
+  - LLM interactions
+- Relationship mapping for sub-agent traffic is resolved in Kong using a small in-memory shared dictionary keyed by run/task/message correlation IDs.
+- The direct Opik write is scheduled from Kong via `ngx.timer.at(...)` because outbound HTTP is not allowed directly in `log_by_lua`.
+
+### Field Ownership
+
+The trace pipeline now has three layers with distinct responsibilities:
+
+- Kong plugin native span attributes
+  - LLM:
+    - `gen_ai.operation.name`
+    - `gen_ai.provider.name`
+    - `gen_ai.request.model`
+    - `gen_ai.response.model`
+    - `gen_ai.response.id`
+    - `gen_ai.response.finish_reasons`
+    - `gen_ai.usage.input_tokens`
+    - `gen_ai.usage.output_tokens`
+    - `gen_ai.input.messages`
+    - `gen_ai.output.messages`
+  - A2A:
+    - `kong.a2a.operation`
+    - `kong.a2a.protocol.version`
+    - `kong.a2a.task.id`
+    - `kong.a2a.task.state`
+    - `kong.a2a.context.id`
+    - `kong.a2a.streaming`
+    - `kong.a2a.ttfb_latency`
+    - `kong.a2a.sse_events_count`
+    - `rpc.method`
+  - MCP:
+    - request/service/route span context from Kong Gateway
+    - MCP remains richer in logs/metrics than in native trace attributes
+
+- Kong `post-function` span tagging
+  - source file:
+    - [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml)
+  - behavior:
+    - reads request headers seen by Kong during the request
+    - in `access` phase, writes request-header-derived attributes onto both the root span and the currently active plugin/request span when present
+  - exact fields added in `access` phase:
+    - `demo.run_id`
+    - `demo.context_id`
+    - `a2a.task_id`
+    - `a2a.message_id`
+  - field source in `access` phase:
+    - `demo.run_id` <- request header `x-demo-run-id`
+    - `demo.context_id` <- request header `x-demo-context-id`
+    - `a2a.task_id` <- request header `x-demo-task-id`
+    - `a2a.message_id` <- request header `x-demo-message-id`
+
+- Custom trace enricher plugin
+  - source files:
+    - [kong/plugins/trace-enricher/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/handler.lua)
+    - [kong/plugins/trace-enricher/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher/schema.lua)
+  - attachment points:
+    - global plugin
+  - behavior:
+    - runs in `log` phase with priority `100`, ahead of `opentelemetry`
+    - reads serialized A2A, MCP, and LLM request data from Kong
+    - writes detailed A2A, MCP, and LLM attributes onto the root span and active span before the OpenTelemetry plugin exports the trace
+  - exact fields added for A2A, MCP, and LLM traffic:
+    - `demo.run_id`
+    - `demo.context_id`
+    - `a2a.task_id`
+    - `a2a.message_id`
+    - `a2a.method`
+    - `a2a.request.id`
+    - `a2a.error`
+    - `a2a.latency_ms`
+    - `a2a.response_body_size`
+    - `a2a.request.payload`
+    - `a2a.response.payload`
+    - `mcp.session_id`
+    - `mcp.request.id`
+    - `mcp.method`
+    - `mcp.tool_name`
+    - `mcp.error`
+    - `mcp.latency_ms`
+    - `mcp.response_body_size`
+    - `mcp.request.payload`
+    - `mcp.response.payload`
+    - `llm.provider`
+    - `llm.request_model`
+    - `llm.response_model`
+    - `llm.latency_ms`
+    - `llm.prompt_tokens`
+    - `llm.completion_tokens`
+    - `llm.total_tokens`
+    - `llm.cost`
+    - `llm.request.payload`
+    - `llm.response.payload`
+
+- Custom workflow graph plugin
+  - source files:
+    - [kong/plugins/workflow-graph/handler.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph/handler.lua)
+    - [kong/plugins/workflow-graph/schema.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph/schema.lua)
+  - attachment points:
+    - global plugin
+  - behavior:
+    - runs in `log` phase with priority `101`
+    - builds one synthetic workflow trace per `demo.run_id`
+    - creates a branch-level `agent` node for each subagent branch
+    - attaches `handoff`, `tool`, and `llm` spans under that agent node
+    - writes the synthetic trace directly to Opik from a background timer
+  - exact workflow fields:
+    - `workflow.run_id`
+    - `workflow.kind`
+    - `workflow.actor`
+    - `workflow.label`
+    - `workflow.branch_id`
+    - `workflow.node_id`
+    - `workflow.parent_node_id`
+    - `llm.provider`
+    - `llm.request_model`
+    - `llm.response_model`
+    - `llm.latency_ms`
+    - `llm.prompt_tokens`
+    - `llm.completion_tokens`
+    - `llm.total_tokens`
+    - `llm.cost`
+    - `llm.request.payload`
+    - `llm.response.payload`
+  - field source:
+    - `demo.run_id` <- request header `x-demo-run-id`
+    - `demo.context_id` <- request header `x-demo-context-id`
+    - `a2a.task_id` <- request header `x-demo-task-id`
+    - `a2a.message_id` <- request header `x-demo-message-id`
+    - `a2a.method` <- `ai.a2a.rpc[0].method`
+    - `a2a.request.id` <- `ai.a2a.rpc[0].id`
+    - `a2a.error` <- `ai.a2a.rpc[0].error`
+    - `a2a.latency_ms` <- `ai.a2a.rpc[0].latency`
+    - `a2a.response_body_size` <- `ai.a2a.rpc[0].response_body_size`
+    - `a2a.request.payload` <- `ai.a2a.rpc[0].payload.request`
+    - `a2a.response.payload` <- `ai.a2a.rpc[0].payload.response`
+    - `mcp.session_id` <- `ai.mcp.mcp_session_id`
+    - `mcp.request.id` <- `ai.mcp.rpc[0].id`
+    - `mcp.method` <- `ai.mcp.rpc[0].method`
+    - `mcp.tool_name` <- `ai.mcp.rpc[0].tool_name`
+    - `mcp.error` <- `ai.mcp.rpc[0].error`
+    - `mcp.latency_ms` <- `ai.mcp.rpc[0].latency`
+    - `mcp.response_body_size` <- `ai.mcp.rpc[0].response_body_size`
+    - `mcp.request.payload` <- `ai.mcp.rpc[0].payload.request`
+    - `mcp.response.payload` <- `ai.mcp.rpc[0].payload.response`
+
+- OpenTelemetry Collector enrichment
+  - source file:
+    - [observability/otel-collector/config.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/otel-collector/config.yaml)
+  - processors currently used on traces:
+    - `attributes/kong_trace_context`
+    - `batch`
+  - behavior:
+    - preserves all attributes received from Kong
+    - does not parse raw HTTP bodies or Loki log payloads
+    - adds a small number of fixed and copied attributes before forwarding to Jaeger
+  - exact actions in `attributes/kong_trace_context`:
+    - upsert `demo.observability.source = kong`
+    - upsert `demo.observability.pipeline = kong->otel-collector->jaeger`
+    - upsert `demo.trace_backend = jaeger`
+  - forwarding behavior:
+    - receives OTLP traces from Kong on `4318`
+    - exports enriched traces to Jaeger at `http://jaeger:4318`
+    - exposes Prometheus metrics on `9464`
+
+Important limitation:
+
+- the collector is not parsing Kong log payloads or raw JSON bodies
+- full request/response bodies still belong in Loki
+- Jaeger is used for trace tree plus compact span attributes, not raw-body inspection
+- MCP payload fields make Jaeger spans heavier; they are enabled here for demo/debug visibility, not as a default production recommendation
+
+### Jaeger Span Attributes
+
+The most relevant attributes visible in Jaeger for this demo are:
+
+- LLM
+  - `gen_ai.operation.name`
+  - `gen_ai.provider.name`
+  - `gen_ai.request.model`
+  - `gen_ai.response.model`
+  - `gen_ai.response.id`
+  - `gen_ai.response.finish_reasons`
+  - `gen_ai.usage.input_tokens`
+  - `gen_ai.usage.output_tokens`
+  - `gen_ai.input.messages`
+  - `gen_ai.output.messages`
+
+- A2A
+  - `kong.a2a.operation`
+  - `kong.a2a.protocol.version`
+  - `kong.a2a.task.id`
+  - `kong.a2a.task.state`
+  - `kong.a2a.context.id`
+  - `kong.a2a.streaming`
+  - `kong.a2a.ttfb_latency`
+  - `kong.a2a.sse_events_count`
+  - `rpc.method`
+  - `a2a.task_id`
+  - `a2a.message_id`
+  - span attributes added by the custom `trace-enricher` plugin:
+    - `a2a.method`
+    - `a2a.request.id`
+    - `a2a.error`
+    - `a2a.latency_ms`
+    - `a2a.response_body_size`
+    - `a2a.request.payload`
+    - `a2a.response.payload`
+
+- MCP
+  - standard Kong request/span context is present in Jaeger:
+    - `kong.service.name`
+    - `kong.route.name`
+    - `kong.auth.consumer.name`
+    - request/response status and latency-related span data
+  - MCP-specific span attributes added by the custom `trace-enricher` plugin:
+    - `demo.run_id`
+    - `demo.context_id`
+    - `a2a.task_id`
+    - `a2a.message_id`
+    - `mcp.session_id`
+    - `mcp.request.id`
+    - `mcp.method`
+    - `mcp.tool_name`
+    - `mcp.error`
+    - `mcp.latency_ms`
+    - `mcp.response_body_size`
+    - `mcp.request.payload`
+    - `mcp.response.payload`
+
+- Kong post-function
+  - `demo.run_id`
+  - `demo.context_id`
+  - `a2a.task_id`
+  - `a2a.message_id`
+
+- OTel collector
+  - `demo.observability.source`
+  - `demo.observability.pipeline`
+  - `demo.trace_backend`
+
+### Local Startup
+
+Start the demo stack as usual:
+
+```bash
+docker compose up -d --build
+```
+
+Validation endpoints:
+
+- Jaeger UI: `http://localhost:16686`
+
+In Jaeger, select service `aa-demo-kong` and inspect traces after running a demo scenario through Kong.
+
+To find one end-to-end run, filter Jaeger by tag:
+
+```text
+demo.run_id=<run_id>
+```
+
+Then expand the returned trace. A normal run should include gateway spans for `/orchestrator`, `/support-agent`, `/success-agent`, `/mock-mcp`, `/ai/orchestrator/...`, and `/ai/subagent/...`.
+
+Important note on MCP trace shape:
+
+- A2A requests currently appear inside the main end-to-end trace tree.
+- `/mock-mcp` requests currently show up as separate Jaeger traces even though the MCP payload carries `_meta.traceparent`.
+- The custom `trace-enricher` plugin copies `demo.run_id`, `demo.context_id`, `a2a.task_id`, and `a2a.message_id` onto those separate `/mock-mcp` traces so they can still be found with the same Jaeger tag filters as the main run.
+
+Latest validation after the A2A SDK migration:
+
+- run id: `f34eb1d2-899f-4727-bb32-ae23a3788985`
+- context id: `ctx-7dfe3072-a372-4c6f-a2b4-d5a648bfeea8`
+- Jaeger trace id: `64f9561a571b467430bf2d0c6987354d`
+- observed trace size: `268` spans
+- observed Loki events for that run:
+  - `a2a`: `4`
+  - `mcp`: `20`
+  - `llm`: `11`
+
+Latest MCP trace-enricher validation:
+
+- run id: `324de727-d66a-44ac-8308-a598588cc9c0`
+- example MCP trace id: `f10a53d57b595a395985f3fc1c8a72f9`
+- example MCP request id: `44e9ce4615a7433e3b5fd92a6e8e897a`
+- confirmed Jaeger MCP span tags:
+  - `demo.run_id`
+  - `demo.context_id`
+  - `mcp.session_id`
+  - `mcp.request.id`
+  - `mcp.method=tools/call`
+  - `mcp.tool_name=get_customer_account`
+  - `mcp.latency_ms`
+  - `mcp.request.payload`
+  - `mcp.response.payload`
+
+If you need to bring the Opik experiment back for comparison:
+
+```bash
+docker compose --profile opik up -d
+```
 
 ## Routes
 
@@ -108,6 +654,21 @@ Diagram views:
 
 The UI is also intended to be hosted through Kong, so the full demo can be reached from the same gateway entrypoint instead of exposing the UI separately.
 
+Agent-to-agent traffic now uses A2A-native discovery and streaming execution:
+
+- discovery happens through Kong at `GET /.well-known/agent-card.json`
+- Kong rewrites the agent card `url` and `additionalInterfaces[].url` fields to the gateway address
+- the support and success sub-agents are served with `a2a-sdk==0.3.26`
+- SDK-generated agent cards report A2A protocol version `0.3.0`
+- the orchestrator sends SDK-compatible `message/stream` requests to the sub-agents through Kong
+- the sub-agents stream SDK SSE events back: `status-update` for state changes and `artifact-update` for output chunks
+- the orchestrator does not send a `taskId` on the first message; the SDK creates the task id and returns it in the stream
+- `tasks/get` is available through the SDK task store for inspection, but it is no longer the orchestrator's primary execution path
+- `context_id` is the primary conversation identifier
+- `run_id` remains the demo execution identifier
+- `task_id` is the A2A task identifier
+- `message_id` is the initiating A2A message identifier, and multiple messages can belong to the same task
+
 `/mock-mcp` is the important route for the demo. Kong fronts the REST API and exposes it as MCP tools using the `ai-mcp-proxy` plugin.
 The AI routes are split by caller type:
 
@@ -116,11 +677,23 @@ The AI routes are split by caller type:
   - primary target: `gpt-4o-mini`
   - secondary failover target: `gemini-2.5-flash`
 - `/ai/orchestrator-failover-demo/chat/completions`
-  - used only for the orchestrator failover scenario
-  - used for current failover experimentation with Kong `ai-proxy-advanced`
+  - used by the `Load Balancing -> LLM Failover` subscene
+  - configured for Kong `ai-proxy-advanced` priority failover
+- `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
+  - used by the `Load Balancing -> Semantic Load Balancing` subscene
+  - configured for Kong `ai-proxy-advanced` semantic routing with Redis-backed embeddings
+- `/ai/orchestrator-model-based-demo/chat/completions`
+  - used by the `Load Balancing -> Model-Based Routing` subscene
+  - configured for Kong `datakit` plus `ai-proxy-advanced` tier routing
+- `/ai/orchestrator-model-selector/chat/completions`
+  - internal selector route used by the model-based routing subscene
+  - configured for Kong `ai-prompt-decorator` plus `ai-proxy-advanced`
 - `/ai/orchestrator-token-demo/chat/completions`
   - used only for the AI token limit scenario
   - protected by Kong `ai-rate-limiting-advanced`
+- `/ai/orchestrator-prompt-enhance-plain-demo/chat/completions`
+  - used only for the plain side of the prompt decorator scenario
+  - applies no prompt-decoration policy so the baseline response can be compared directly
 - `/ai/orchestrator-prompt-enhance-demo/chat/completions`
   - used only for the prompt decorator scenario
   - applies a stronger prompt-decoration policy to shape a more structured executive output
@@ -136,6 +709,15 @@ The AI routes are split by caller type:
 - `/ai/orchestrator-pii-synthetic-demo/chat/completions`
   - used only for the PII Sanitization synthetic scenario
   - protected by Kong `ai-sanitizer` in `BOTH` mode with `redact_type: synthetic`
+- `/ai/orchestrator-pii-block-demo/chat/completions`
+  - used only for the PII Sanitization block scenario
+  - protected by Kong `ai-sanitizer` in `BOTH` mode with blocking behavior when protected content is detected
+- `/ai/orchestrator-lakera-demo/chat/completions`
+  - used only for the Lakera Policy Guard scenario
+  - protected by Kong `ai-lakera-guard`
+- `/ai/orchestrator-judge-demo/chat/completions`
+  - used only for the LLM as Judge scenario
+  - applies `ai-proxy-advanced` for the candidate response and `ai-llm-as-judge` for scoring
 - `/ai/subagent/chat/completions`
   - used by both sub-agents
   - target: `gemini-2.5-flash`
@@ -144,6 +726,178 @@ The services use OpenAI-compatible clients pointed at those Kong routes, and Kon
 
 Prompt decoration is not applied on the standard orchestrator AI routes. It is used only in the dedicated `Prompt Decorator` scenario so the difference is easy to demonstrate.
 
+## A2A Protocol Shape
+
+The current A2A flow is aligned around the Kong `ai-a2a-proxy` plugin and the A2A protocol primitives:
+
+- `context_id`
+  - top-level conversation thread across orchestrator, support-agent, success-agent, MCP, and LLM activity
+- `task_id`
+  - a unit of work owned by a sub-agent
+- `message_id`
+  - a single A2A message within a task
+- `task_state`
+  - tracked as A2A task state on the sub-agents
+
+Current sub-agent behavior:
+
+- `message/send`
+  - creates or resumes a task through the A2A SDK and returns the task result
+- `message/stream`
+  - creates or resumes a task through the A2A SDK and streams `status-update` / `artifact-update` events over SSE
+- `tasks/get`
+  - returns the SDK task snapshot for an existing task
+
+The orchestrator currently uses `message/stream` for sub-agent execution so task state changes are pushed rather than polled.
+
+## Trace And Observability
+
+There are now two main trace surfaces:
+
+- Grafana dashboards
+  - operational and aggregate views backed by Loki
+- in-product `Trace Explorer`
+  - a custom UI surfaced from the sidebar/recent-runs flow
+  - loads normalized event detail for a `context_id`
+  - request/response previews and full payload inspection
+
+The custom trace explorer is backed by:
+
+- `/orchestrator/trace/context/{context_id}/events`
+
+That endpoint queries Loki, normalizes A2A, MCP, and LLM events, and returns them in time order for the UI.
+
+## cURL Tests Through Kong
+
+These examples go through Kong on `localhost:8000`.
+
+### 1. Discover the Support Agent Card Through Kong
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  http://localhost:8000/support-agent/.well-known/agent-card.json | jq
+```
+
+Expected result:
+
+- the request succeeds through Kong
+- `url` points at the Kong route, not the upstream container
+- `additionalInterfaces[].url` also point at Kong
+
+### 2. Discover the Success Agent Card Through Kong
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  http://localhost:8000/success-agent/.well-known/agent-card.json | jq
+```
+
+### 3. Send a Non-Streaming A2A Message Through Kong
+
+This creates a new SDK task. Do not pass `taskId` on the first message; the SDK assigns it.
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  -H 'Content-Type: application/json' \
+  -H 'x-demo-run-id: curl-a2a-run-001' \
+  -H 'x-demo-context-id: ctx-curl-a2a-001' \
+  http://localhost:8000/support-agent/a2a \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": "curl-msg-001",
+    "method": "message/send",
+    "params": {
+      "contextId": "ctx-curl-a2a-001",
+      "message": {
+        "kind": "message",
+        "messageId": "msg-curl-a2a-001",
+        "role": "user",
+        "contextId": "ctx-curl-a2a-001",
+        "parts": [
+          {
+            "kind": "text",
+            "text": "{\"run_id\":\"curl-a2a-run-001\",\"context_id\":\"ctx-curl-a2a-001\",\"customer_id\":\"cust_acme\",\"account_name\":\"Acme Health\",\"product_issue\":\"workflow agent sync delays\",\"incident_id\":\"INC-1007\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+          }
+        ]
+      }
+    }
+  }' | jq
+```
+
+### 4. Stream A2A Task Updates Through Kong
+
+This returns SDK SSE events until the task finishes.
+
+```bash
+curl -N \
+  -H 'apikey: orchestrator-demo-key' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: text/event-stream' \
+  -H 'x-demo-run-id: curl-a2a-run-002' \
+  -H 'x-demo-context-id: ctx-curl-a2a-002' \
+  http://localhost:8000/support-agent/a2a \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": "curl-msg-002",
+    "method": "message/stream",
+    "params": {
+      "contextId": "ctx-curl-a2a-002",
+      "message": {
+        "kind": "message",
+        "messageId": "msg-curl-a2a-002",
+        "role": "user",
+        "contextId": "ctx-curl-a2a-002",
+        "parts": [
+          {
+            "kind": "text",
+            "text": "{\"run_id\":\"curl-a2a-run-002\",\"context_id\":\"ctx-curl-a2a-002\",\"customer_id\":\"cust_acme\",\"account_name\":\"Acme Health\",\"product_issue\":\"workflow agent sync delays\",\"incident_id\":\"INC-1007\",\"triage_brief\":\"Investigate the incident, verify impact, and provide next steps.\"}"
+          }
+        ]
+      }
+    }
+  }'
+```
+
+Expected stream shape:
+
+- `status-update` event with `status.state=submitted`
+- `status-update` event with `status.state=working`
+- `artifact-update` event containing the agent result artifact
+- final `status-update` event with `status.state=completed` or `failed`
+
+### 5. Inspect a Task Directly Through Kong
+
+Use the `taskId` returned by `message/send` or emitted by `message/stream`.
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  -H 'Content-Type: application/json' \
+  -H 'x-demo-run-id: curl-a2a-run-002' \
+  -H 'x-demo-context-id: ctx-curl-a2a-002' \
+  http://localhost:8000/support-agent/a2a \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": "curl-task-001",
+    "method": "tasks/get",
+    "params": {
+      "id": "<task-id-from-the-stream>"
+    }
+  }' | jq
+```
+
+### 6. Validate Discovery Rewriting
+
+This should return a Kong-routed URL such as `http://kong-dp:8000/support-agent` internally, or `http://localhost:8000/support-agent` if your forwarded host headers are set that way.
+
+```bash
+curl -sS \
+  -H 'apikey: orchestrator-demo-key' \
+  http://localhost:8000/support-agent/.well-known/agent-card.json | jq '.url, .additionalInterfaces'
+```
+
 ## Governance scenarios
 
 The UI includes a `Governance Scenario` selector. The customer escalation story stays the same, but the Kong-governed AI path changes depending on what is selected.
@@ -151,12 +905,16 @@ The UI includes a `Governance Scenario` selector. The customer escalation story 
 The route path is selected by the `governance_scenario` field sent in the `Play` request. In the orchestrator, `PlayRequest.governance_scenario` is mapped by `ai_route_for_scenario()` in [services/orchestrator/app.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py):
 
 - `normal` -> `/ai/orchestrator/chat/completions`
-- `llm_failover` -> `/ai/orchestrator-failover-demo/chat/completions`
+- `load_balancing` -> `/ai/orchestrator-failover-demo/chat/completions`, `/ai/orchestrator-semantic-load-balance-demo/chat/completions`, or `/ai/orchestrator-model-based-demo/chat/completions`
 - `token_limit` -> `/ai/orchestrator-token-demo/chat/completions`
 - `prompt_enhancement` -> `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+- `prompt_compression` -> `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions` or `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
 - `semantic_guard` -> `/ai/orchestrator-semantic-guard-demo/chat/completions`
 - `semantic_cache` -> `/ai/orchestrator-semantic-cache-demo/chat/completions`
-- `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions` or `/ai/orchestrator-pii-synthetic-demo/chat/completions`
+- `llm_as_judge` -> `/ai/orchestrator-judge-demo/chat/completions`
+- `lakera_guard` -> `/ai/orchestrator-lakera-demo/chat/completions`
+- `rag` -> `/ai/orchestrator-rag-before-demo/chat/completions` or `/ai/orchestrator-rag-after-demo/chat/completions`
+- `pii_sanitizer` -> `/ai/orchestrator-pii-placeholder-demo/chat/completions`, `/ai/orchestrator-pii-synthetic-demo/chat/completions`, or `/ai/orchestrator-pii-block-demo/chat/completions`
 
 So the basis for route selection is simple: whichever governance scenario the user selected in the UI is included in the request payload, and the orchestrator picks the matching Kong AI route before it starts its own LLM steps.
 
@@ -173,15 +931,22 @@ Behind the scenes:
 
 This mode is meant to show the standard happy-path behavior.
 
-### 2. LLM Failover
+### 2. Load Balancing
 
-This scenario demonstrates what happens when the orchestrator's primary model path fails.
+This parent scene has three focused subscenes:
+
+- `LLM Failover`
+- `Semantic Load Balancing`
+- `Model-Based Routing`
+
+#### LLM Failover
+
+This subscene demonstrates what happens when the orchestrator's primary model path fails.
 
 Behind the scenes:
 
 - the orchestrator switches to `/ai/orchestrator-failover-demo/chat/completions`
 - the route is configured to experiment with Kong-managed failover behavior in `ai-proxy-advanced`
-- the support and success sub-agents still use their normal Gemini sub-agent route
 
 Important note:
 
@@ -194,7 +959,52 @@ Important note:
 - in this repo/runtime, the strongest finding is that target-specific `upstream_url` handling appears to interfere with failover target isolation
 - specifically, when the primary target uses `upstream_url`, Kong may still log and fail the fallback target against that same effective upstream
 - one experimental configuration only started working when the OpenAI target's `upstream_url` was pointed at a Gemini endpoint, which strongly suggests unexpected `upstream_url` behavior rather than correct target failover semantics
-- current conclusion: this is likely an `ai-proxy-advanced` bug or limitation in per-target `upstream_url` handling during failover, and the failover scene should be treated as experimental unless verified again against a working Kong-supported provider-native failure
+- current conclusion: this is likely an `ai-proxy-advanced` bug or limitation in per-target `upstream_url` handling during failover, and the failover subscene should be treated as experimental unless verified again against a working Kong-supported provider-native failure
+
+#### Semantic Load Balancing
+
+This subscene demonstrates prompt-aware model routing rather than failure recovery.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-semantic-load-balance-demo/chat/completions`
+- Kong uses `ai-proxy-advanced` with `balancer.algorithm: semantic`
+- Kong embeds the request prompt with `text-embedding-3-small`
+- Kong compares the prompt meaning against target descriptions stored through the semantic balancer and Redis
+- the demo uses two editable prompt presets:
+  - `Support / Operational`
+  - `Creative / Marketing`
+- the route then selects the most relevant target:
+  - `OpenAI 4o mini` for support / operational prompts
+  - `Gemini 2.5 Flash` for creative / marketing prompts
+
+#### Model-Based Routing
+
+This subscene demonstrates selector-driven tier routing rather than prompt similarity matching.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-model-based-demo/chat/completions`
+- Kong `datakit` intercepts the request before the final provider route
+- Kong calls `/ai/orchestrator-model-selector/chat/completions` with the same prompt
+- that selector route uses:
+  - `ai-prompt-decorator`
+  - `ai-proxy-advanced`
+  - selector model: `o3-mini` by default through `DECK_OPENAI_SELECTOR_MODEL`
+- the selector route is instructed to return only:
+  - `simple`
+  - `complex`
+- `datakit` rewrites the original request body `model` field with that tier
+- the main model-based route then uses `ai-proxy-advanced` target aliases:
+  - `complex` -> `OpenAI 4o mini`
+  - `simple` -> `Gemini 2.5 Flash`
+- the demo uses two editable prompt presets:
+  - `Simple`
+  - `Complex`
+- current provider mapping is explicit:
+  - `Simple` prompts are intended to route to `Gemini 2.5 Flash`
+  - `Complex` prompts are intended to route to `OpenAI 4o mini`
+- the UI uses a visualization heuristic for the selector/provider split because Kong performs both phases inside one request and the orchestrator receives only one end-to-end duration
 
 ### 3. AI Token Limit
 
@@ -202,14 +1012,18 @@ This scenario demonstrates Kong blocking the orchestrator with AI token governan
 
 Behind the scenes:
 
+- the UI now exposes two sub-scenes:
+  - `Model Token Rate Limit`
+  - `Consumer Cost Rate Limit`
 - the orchestrator switches to `/ai/orchestrator-token-demo/chat/completions`
 - that route uses `ai-rate-limiting-advanced`
 - the current config in [kong/deck/kong.yaml](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/deck/kong.yaml) is:
   - provider: `openai`
   - `limit: [1]`
   - `window_size: [300]`
-- in plain terms, the demo route allows one counted OpenAI budget event in a 300-second window, and later orchestrator AI calls are blocked with `429`
-- the orchestrator planner or later executive-summary calls hit Kong's AI policy and receive `429`
+- in plain terms, the demo route allows one counted OpenAI budget event in a 300-second window, and a later replay is blocked with `429`
+- each run sends one request on that governed route
+- replay the scene to consume the route budget and observe the next request get `429`
 - instead of crashing the whole demo, the orchestrator converts that into a structured blocked result
 - the trace shows that Kong policy blocked the orchestrator before the executive brief could be completed
 
@@ -223,21 +1037,49 @@ Important note:
 - for demo purposes, the effect is deterministic: the scenario shows a policy block after the first counted orchestrator AI usage on that route
 - the orchestrator now handles Kong `429` responses from the shared `httpx` LLM client correctly; earlier versions let those surface as `500`
 
-### 4. Prompt Decorator
+#### Consumer Cost Rate Limit
 
-This scenario demonstrates how Kong prompt decoration can materially improve and govern the orchestrator output.
+This sub-scene demonstrates cost-based consumer budgets on the same provider route.
 
 Behind the scenes:
 
-- the orchestrator switches to `/ai/orchestrator-prompt-enhance-demo/chat/completions`
-- the normal orchestrator route does not decorate prompts
-- this scenario route applies `ai-prompt-decorator`
+- the orchestrator switches to `/ai/orchestrator-consumer-cost-demo/chat/completions`
+- that route uses `ai-proxy-advanced` for `OpenAI 4o mini`
+- the route itself is key-auth protected
+- the rate limiting policy is applied at the consumer scope, not the route scope
+- two demo consumers are configured:
+  - `consumer1`
+    - key: `consumer1-demo-key`
+    - cost limit: `$5` per `300` seconds
+  - `consumer2`
+    - key: `consumer2-demo-key`
+    - cost limit: `$10` per `300` seconds
+- both consumers are members of the consumer group `team-a`
+- each consumer has its own `ai-rate-limiting-advanced` plugin with:
+  - `tokens_count_strategy: cost`
+  - `llm_providers: [{ name: openai, limit: [...], window_size: [300] }]`
+- each run sends one request for the selected consumer
+- replay the scene manually to consume more budget until Kong returns `429`
+- the topology is intentionally simplified to the effective governed path:
+  - `user -> kong -> llm`
+
+The point of this mode is to show that Kong can enforce separate budgets for different consumers even when they call the same model route, while also rolling usage up to the team level through the consumer group.
+
+### 4. Prompt Decorator
+
+This scenario demonstrates how Kong prompt decoration can materially improve and govern the output on a focused probe route.
+
+Behind the scenes:
+
+- the UI exposes one top-level `Prompt Decorator` scenario with two explicit sub-scenes:
+  - `Without Decorator`
+  - `With Decorator`
+- both sub-scenes use the same editable input prompt
+- the plain route uses `/ai/orchestrator-prompt-enhance-plain-demo/chat/completions`
+- the decorated route uses `/ai/orchestrator-prompt-enhance-demo/chat/completions`
+- only the decorated route applies `ai-prompt-decorator`
 - the application prompt stays the same, but Kong injects extra enterprise-governance instructions before the model sees it
-- the trace shows policy events for:
-  - the original prompt
-  - the Kong-decorated prompt
-  - the resulting LLM output
-- the sub-agents still run through their normal sub-agent Gemini route
+- the focused probe does not run the full MCP/sub-agent orchestration flow
 
 This mode is useful for showing that prompt shaping and output governance can happen in the gateway layer rather than inside application code.
 
@@ -250,20 +1092,72 @@ The current prompt decorator policy configured in [kong/deck/kong.yaml](/Users/s
 - `Mention regulatory or data residency considerations when they are relevant.`
 - `End with a confidence score and a named owner.`
 
-In the trace tree, this appears as a `Decorator policy applied` step nested under the relevant orchestrator LLM call. Clicking that row shows:
+In the trace tree, the decorated run appears with a `Decorator policy applied` step nested under the probe LLM call. Clicking that row shows:
 
 - the original prompt sent by the application
 - the policy text Kong injected
 - the decorated system and user prompts that Kong forwarded upstream
 
-The prompt decorator scenario route uses this enhancement policy:
+### 5. Prompt Compression
 
-- `Respond in an executive escalation format with sections for Situation, Risk, Actions, and Next Checkpoint.`
-- `State customer posture explicitly and keep the tone enterprise-safe.`
-- `Mention regulatory or data residency considerations when they are relevant.`
-- `End with a confidence score and a named owner.`
+This scenario demonstrates Kong shrinking a verbose orchestrator prompt before it reaches the upstream model.
 
-### 5. Semantic Guard
+Behind the scenes:
+
+- the UI exposes one top-level `Prompt Compression` scenario with two explicit sub-modes:
+  - `By Ratio (50%)`
+  - `By Token Count (100)`
+- the orchestrator switches to one of three dedicated routes:
+  - `/ai/orchestrator-prompt-compress-ratio-demo/chat/completions`
+  - `/ai/orchestrator-prompt-compress-token-demo/chat/completions`
+- each route applies `ai-prompt-compressor` before `ai-proxy-advanced`
+- both routes call the external Kong AI Prompt Compressor service at:
+  - `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
+- the ratio route uses:
+  - `compressor_type: rate`
+  - `compression_ranges: [{ min_tokens: 0, max_tokens: 1000000, value: 0.5 }]`
+- the token-count route uses:
+  - `compressor_type: target_token`
+  - `compression_ranges: [{ min_tokens: 0, max_tokens: 1000000, value: 100 }]`
+- the probe sends a deliberately verbose editable prompt so token savings are easy to see in both the UI and Grafana
+
+The demo intentionally uses the focused-probe pattern instead of the full MCP/sub-agent orchestration flow so the before-compression request shape and the logged token savings are easy to explain.
+
+When `Prompt Compression` is selected in `View Scene`, the scene popup changes from a single `Play` action to two explicit compression-mode controls:
+
+- `Send Prompt Compression Request` with `By Ratio (50%)`
+  - sends `governance_scenario: "prompt_compression"` with `prompt_compression_mode: "rate"`
+  - Kong compresses the verbose prompt to 50% of its original size before the model call
+
+- `Send Prompt Compression Request` with `By Token Count (100)`
+  - sends `governance_scenario: "prompt_compression"` with `prompt_compression_mode: "token_count"`
+  - Kong compresses the verbose prompt toward a 100-token target before the model call
+
+The final output shows:
+
+- the selected compression mode
+- the requested ratio or target token count
+- the original request prompt
+- original tokens
+- compressed tokens
+- saved tokens
+- compression type and compressor model when present in the Kong audit log
+
+Grafana now includes prompt-compression-specific panels in `Kong Governance Overview`, including:
+
+- total tokens saved
+- compression request count
+- average tokens saved per request
+- saved tokens by consumer
+- original vs compressed tokens
+- a prompt compression log stream
+
+Important setup note:
+
+- the AI Prompt Compressor service image is hosted in Kong's private Cloudsmith registry
+- you must authenticate with `docker login docker.cloudsmith.io`
+
+### 6. Semantic Guard
 
 This scenario demonstrates Kong rejecting semantically unsafe prompts using `ai-semantic-prompt-guard` backed by Redis.
 
@@ -298,7 +1192,7 @@ The `+` policy panel in the UI now shows the exact denied prompt families and ex
 - `vectordb.threshold`
   - final similarity cutoff used for the block decision
 
-### 6. Semantic Cache
+### 7. Semantic Cache
 
 This scenario demonstrates Kong serving a repeated orchestrator prompt from semantic cache backed by Redis.
 
@@ -361,13 +1255,59 @@ Important operational note:
 - because the cache is semantic, a later "first" request can still be a real cache hit if a sufficiently similar prompt already exists in Redis
 - if you want a deterministic miss-then-hit demo sequence, clear semantic cache first, then run the seed request, then run the reuse request
 
-### 7. PII Sanitization
+### 8. RAG
+
+This scenario demonstrates Kong improving a support answer by retrieving fictional AtlasFlow Cloud KB content through `ai-rag-injector`.
+
+Behind the scenes:
+
+- the UI exposes one top-level `RAG` scenario with two actions:
+  - `Run Baseline`
+  - `Run With RAG`
+- both actions send the same AtlasFlow support question through Kong
+- the baseline route is:
+  - `/ai/orchestrator-rag-before-demo/chat/completions`
+- the RAG route is:
+  - `/ai/orchestrator-rag-after-demo/chat/completions`
+- the RAG route applies:
+  - `ai-rag-injector`
+  - Redis as the vector store
+  - OpenAI `text-embedding-3-large` for embeddings
+- the answer model remains the same on both routes:
+  - OpenAI `gpt-4o-mini`
+
+The point of the scenario is controlled comparison:
+
+- `Before`
+  - same prompt
+  - same model
+  - no retrieval injection
+- `After`
+  - same prompt
+  - same model
+  - Kong injects retrieved KB context before the model call
+
+The fictional KB lives in:
+
+- [rag/atlasflow-support-kb/vector-sync-runbook.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/vector-sync-runbook.md)
+- [rag/atlasflow-support-kb/escalation-policy.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/escalation-policy.md)
+- [rag/atlasflow-support-kb/ownership-matrix.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/ownership-matrix.md)
+
+To ingest the KB for the local hybrid/Konnect demo stack, use:
+
+- [scripts/ingest_rag_kb.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.py)
+- [scripts/ingest_rag_kb.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.lua)
+
+The helper uses `kong runner` inside `kong-dp` because the standard `ingest_chunk` Admin API path is not the right operational path for this hybrid/Konnect-style setup.
+
+### 9. PII Sanitization
 
 This scenario demonstrates Kong anonymizing sensitive information in both the upstream request body and the downstream LLM response body.
 
 Behind the scenes:
 
 - the orchestrator switches to one of two dedicated routes:
+  - `/ai/orchestrator-pii-block-demo/chat/completions`
   - `/ai/orchestrator-pii-placeholder-demo/chat/completions`
   - `/ai/orchestrator-pii-synthetic-demo/chat/completions`
 - each route applies `ai-sanitizer` before `ai-proxy-advanced`
@@ -377,6 +1317,7 @@ Behind the scenes:
   - `recover_redacted: false`
 - the placeholder route uses `redact_type: placeholder`
 - the synthetic route uses `redact_type: synthetic`
+- the block route returns a policy block instead of forwarding the request when protected content is detected
 - both routes call the external Kong AI PII service at:
   - `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
 - the probe sends a prompt containing multiple categories of sensitive values and asks the model to restate them
@@ -384,7 +1325,7 @@ Behind the scenes:
 
 The demo intentionally uses the focused-probe pattern instead of the full MCP/sub-agent orchestration flow so the request/response anonymization is easy to see.
 
-When `PII Sanitization` is selected in `View Scene`, the scene popup changes from a single `Play` action to two explicit PII-mode controls:
+When `PII Sanitization` is selected in `View Scene`, the scene popup changes from a single `Play` action to three explicit PII-mode controls:
 
 - `Send Placeholder Request`
   - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "placeholder"`
@@ -393,6 +1334,10 @@ When `PII Sanitization` is selected in `View Scene`, the scene popup changes fro
 - `Send Synthetic Request`
   - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "synthetic"`
   - Kong replaces detected values with synthetic category-matched values in both request and response handling
+
+- `Send Block Request`
+  - sends `governance_scenario: "pii_sanitizer"` with `pii_sanitizer_mode: "block"`
+  - Kong blocks the request when the protected categories are detected instead of returning a sanitized model response
 
 The final output shows:
 
@@ -417,7 +1362,7 @@ Important setup note:
   - username: `kong/ai-pii`
   - password: your support-provided token
 
-### 8. LLM as Judge
+### 10. LLM as Judge
 
 This scenario demonstrates Kong generating a candidate response with one model and then scoring that response with a separate judge model.
 
@@ -475,6 +1420,25 @@ Current topology behavior:
 - the judge leg now uses a longer visible dwell in the UI so it better matches the multi-second judge latency seen in Grafana rather than flashing through on short synthetic timers
 - the orchestrator/UI return begins only after that longer judge-visible window, so the topology is easier to correlate with observed Kong latency
 
+### 11. Lakera Policy Guard
+
+This scenario demonstrates Kong sending prompts through Lakera before any model response is allowed back to the client.
+
+Behind the scenes:
+
+- the orchestrator switches to `/ai/orchestrator-lakera-demo/chat/completions`
+- that route applies `ai-lakera-guard` before the model call
+- the UI exposes four explicit Lakera prompt modes:
+  - `Safe Prompt`
+  - `Content Moderation`
+  - `Prompt Defense`
+  - `Data Leak Prevention`
+- the safe mode should be allowed through to the model
+- the other three modes are intended to trigger Lakera detection and return a blocked response with detector metadata
+- Kong writes the Lakera decision into the trace and audit logs so the UI and Grafana can show the policy outcome directly
+
+This mode is useful for showing third-party safety enforcement at the gateway layer without adding moderation code to the application.
+
 ## What happens when Play is pressed
 
 When the user presses `Play` in the UI, the following flow happens:
@@ -494,7 +1458,7 @@ When the user presses `Play` in the UI, the following flow happens:
    - open support tickets
 8. The orchestrator creates an executive triage brief using the scenario-specific orchestrator AI route in Kong.
 9. The orchestrator sends that triage brief to both sub-agents as shared escalation context.
-10. The orchestrator invokes the `support-agent` through Kong using explicit HTTP JSON-RPC.
+10. The orchestrator invokes the `support-agent` through Kong using A2A SDK `message/stream`.
 11. The support agent starts its own LangGraph workflow and calls only its allowed MCP tools through Kong:
    - `get_incident_status`
    - `search_runbook`
@@ -643,6 +1607,10 @@ These are the demo consumer keys currently configured in the repo:
 
 - `ui-demo-key`
   - used by the hosted UI when it calls the orchestrator and subscribes to `/orchestrator/trace`
+- `consumer1-demo-key`
+  - used by the consumer cost rate-limit probe for the `consumer1` budget in `team-a`
+- `consumer2-demo-key`
+  - used by the consumer cost rate-limit probe for the `consumer2` budget in `team-a`
 - `orchestrator-demo-key`
   - used by the orchestrator when it calls:
     - `/mock-mcp`
@@ -775,13 +1743,21 @@ If Grafana does not show those counts for a fresh normal run, the first thing to
 
 ## Implemented services
 
-- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay the last 20 stored traces
-- [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, serves `GET /trace/runs` and `GET /trace/runs/{run_id}` for recent trace replay, calls MCP through Kong, invokes the support-agent first, then invokes the success-agent with support context
+- [UI](/Users/surajpillai/Documents/work/demos/learn/aa-demo/ui/index.html): static single-screen demo UI with `Play`, `Reset`, `Reset Observability`, `View Run Output`, live flow states, selected-step detail, and a `Recent Runs` dropdown that can replay stored traces
+- [orchestrator](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/orchestrator/app.py): receives `POST /play`, exposes `WS /trace`, serves `GET /trace/runs`, `GET /trace/runs/{run_id}`, and `GET /trace/context/{context_id}/events`, calls MCP through Kong, discovers sub-agents through Kong, and invokes support/success through A2A `message/stream`
 - [orchestrator LLM helper](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/llm.py): shared OpenAI-compatible client used by the orchestrator and sub-agents, pointed at Kong's `/ai` route
 - [support-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/support_agent/app.py): LangGraph sub-agent for technical investigation using `get_incident_status` and `search_runbook`
 - [success-agent](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/success_agent/app.py): LangGraph sub-agent for customer-success actions using `draft_customer_reply` and `create_followup_task`
 - [mock-api](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/mock_api/app.py): backing REST API for the 7 tool endpoints plus OpenAPI schema
 - [shared MCP client](/Users/surajpillai/Documents/work/demos/learn/aa-demo/services/common/mcp_client.py): lightweight streamable HTTP MCP client for the agents
+
+## Implemented Kong Custom Plugins
+
+- [trace-enricher](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/trace-enricher): payload and LLM enrichment for Kong-side traces/logs
+- [workflow-graph](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/workflow-graph): synthetic workflow-tree export for Opik
+- [prompt-capture](/Users/surajpillai/Documents/work/demos/learn/aa-demo/kong/plugins/prompt-capture): captures the inbound chat prompt in `access` and stores it in `kong.ctx.shared` so blocked semantic-guard requests still log:
+  - `semantic_guard_input_prompt`
+  - `llm_input_prompt`
 
 ## Tool access model
 
@@ -880,6 +1856,19 @@ docker exec orchestrator curl -s http://mock-api:8000/customers/cust_acme
 - an OpenAI API key
 - a Gemini API key
 
+Cloudsmith-hosted supporting images required for focused governance scenarios:
+
+- `docker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en`
+- `docker.cloudsmith.io/kong/ai-compress/service:v0.0.2`
+
+If you do not already have those images locally:
+
+```bash
+docker login docker.cloudsmith.io
+docker pull --platform linux/amd64 ocker.cloudsmith.io/kong/ai-pii/service:v0.1.4-en
+docker pull docker.cloudsmith.io/kong/ai-compress/service:v0.0.2
+```
+
 ## Quick Start
 
 Run the following commands from the repo root.
@@ -906,7 +1895,7 @@ DECK_OPENAI_MODEL=gpt-4o-mini
 DECK_GEMINI_MODEL=gemini-2.5-flash
 DECK_REDIS_HOST=redis-stack
 KONNECT_TOKEN=YOUR_KONNECT_PAT
-KONNECT_CONTROL_PLANE_NAME=YOUR_KONNECT_CONTROL_PLANE_NAME
+KONNECT_CONTROL_PLANE_NAME=AA Demo
 ```
 
 ### 3. Place the hybrid certs
@@ -921,6 +1910,12 @@ Put your Konnect data plane cert and key here:
 kong/certs/tls.crt
 kong/certs/tls.key
 ```
+
+Important:
+
+- the startup script can create or reuse the Konnect control plane entity automatically
+- but your hybrid data plane still depends on the correct Konnect endpoint and certificates
+- `KONG_CLUSTER_CONTROL_PLANE`, `KONG_CLUSTER_SERVER_NAME`, `kong/certs/tls.crt`, and `kong/certs/tls.key` must match the control plane your data plane should join
 
 ### 4. Export the env vars for decK
 
@@ -942,6 +1937,8 @@ deck file validate kong/deck/kong.yaml
 ```
 
 ### 6. Sync the Kong config to Konnect
+
+Before running `deck gateway sync`, make sure the custom plugin schemas have been created in the target Konnect control plane. `./scripts/start_rag_demo.sh` does this automatically for every plugin under `kong/plugins/*/schema.lua` and waits until Konnect can read the schema back. If you skip that step, decK can fail with errors such as `no plugin-schema for 'trace-enricher'`.
 
 ```bash
 deck gateway sync \
@@ -1240,8 +2237,24 @@ The dashboard `Kong Governance Overview` includes:
 - semantic guard blocked requests
 - semantic cache hits
 - semantic cache misses
+- RAG injection rate
+- RAG fetch latency p95
 - LLM as Judge evaluations
 - a raw log stream panel for inspection
+
+Grafana now also provisions a dedicated dashboard called `Kong Consumer Cost Overview` for the consumer cost rate-limit scenario. It focuses on:
+
+- model calls by consumer
+- input tokens by consumer
+- output tokens by consumer
+- total tokens by consumer
+- total token cost by consumer
+- total token cost by team
+- a filtered LLM log stream for `consumer1` and `consumer2`
+
+Dashboard asset:
+
+- [observability/grafana/dashboards/kong-consumer-cost-overview.json](/Users/surajpillai/Documents/work/demos/learn/aa-demo/observability/grafana/dashboards/kong-consumer-cost-overview.json)
 
 The dashboard also includes a `Run ID` selector:
 
@@ -1250,6 +2263,12 @@ The dashboard also includes a `Run ID` selector:
   - excludes traffic where `run_id` is blank
 - a specific run id
   - scopes the dashboard to one run
+
+Current dashboard behavior:
+
+- the `Consumer` filter drives the consumer-level panels
+- `Total Token Cost By Team` ignores the consumer filter and always shows the total across all consumers in the selected run/time range
+- the team label is populated from Kong consumer-group metadata and currently resolves to `team-a`
 
 The LLM cost panels and LLM call-count panels are intended to follow the active Grafana time range rather than a hardcoded lookback window.
 
@@ -1278,6 +2297,15 @@ The judge table is backed by Kong judge-route logs and expects the flattened fie
 - `judge_model`
 - `judge_latency_ms`
 - `judge_accuracy`
+
+The RAG tiles are backed by Kong AI RAG Injector audit log fields that are flattened into the Loki payload:
+
+- `ai_rag_injected`
+- `ai_rag_fetch_latency`
+- `ai_rag_vector_db`
+- `ai_rag_chunk_ids`
+- `ai_rag_embeddings_provider`
+- `ai_rag_embeddings_model`
 
 Important judge-panel note:
 

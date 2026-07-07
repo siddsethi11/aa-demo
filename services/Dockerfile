@@ -12,5 +12,6 @@ RUN apt-get update \
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY services /app/services
+COPY kong/deck /app/kong/deck
 
 ENV PYTHONPATH=/app

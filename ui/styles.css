@@ -29,6 +29,10 @@ body {
   min-height: 100%;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
   color: var(--text);
@@ -112,6 +116,24 @@ button:hover {
   min-width: 0;
 }
 
+.brand-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
+  object-fit: contain;
+  margin-top: 0;
+}
+
 .eyebrow,
 .panel-kicker,
 .node-label,
@@ -128,10 +150,16 @@ button:hover {
 }
 
 .topbar h1 {
-  margin: 8px 0 10px;
-  font-size: clamp(2rem, 3.3vw, 3.35rem);
-  line-height: 0.96;
+  margin: 6px 0 10px;
+  font-size: clamp(1.7rem, 2.5vw, 2.65rem);
+  line-height: 1;
   max-width: 11ch;
+}
+
+/* CJK brand wordmarks are wider per glyph; give them room to avoid an awkward wrap. */
+html[lang="ja"] .topbar h1,
+html[lang="ko"] .topbar h1 {
+  max-width: 22ch;
 }
 
 .hero-copy {
@@ -803,6 +831,8 @@ button:hover {
 
 .redis-node,
 .judge-node,
+.lakera-node,
+.compress-node,
 .pii-node,
 .observability-node {
   top: 468px;
@@ -811,8 +841,9 @@ button:hover {
 }
 
 .judge-node {
-  top: 468px;
-  right: 88px;
+  top: 520px;
+  left: calc(50% + 126px);
+  right: auto;
   border-color: rgba(243, 179, 84, 0.56);
   background:
     linear-gradient(180deg, rgba(243, 179, 84, 0.14), rgba(243, 179, 84, 0.04)),
@@ -823,6 +854,21 @@ button:hover {
   border-color: rgba(131, 255, 94, 0.5);
   background:
     linear-gradient(180deg, rgba(131, 255, 94, 0.12), rgba(131, 255, 94, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.lakera-node {
+  border-color: rgba(255, 120, 120, 0.56);
+  background:
+    linear-gradient(180deg, rgba(255, 120, 120, 0.14), rgba(255, 120, 120, 0.04)),
+    rgba(11, 13, 18, 0.94);
+}
+
+.compress-node {
+  top: 528px;
+  border-color: rgba(150, 214, 255, 0.56);
+  background:
+    linear-gradient(180deg, rgba(150, 214, 255, 0.14), rgba(150, 214, 255, 0.04)),
     rgba(11, 13, 18, 0.94);
 }
 
@@ -971,6 +1017,172 @@ button:hover {
   width: min(1320px, calc(100vw - 32px));
 }
 
+#trace-explorer-modal {
+  width: min(1540px, calc(100vw - 32px));
+}
+
+.modal-trace-explorer {
+  width: min(1540px, calc(100vw - 32px));
+  gap: 18px;
+}
+
+.trace-explorer-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.trace-explorer-field {
+  display: grid;
+  gap: 8px;
+}
+
+.trace-explorer-field input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+.trace-explorer-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trace-explorer-stat {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.trace-explorer-stat strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1rem;
+}
+
+.trace-explorer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(420px, 0.95fr);
+  gap: 16px;
+  min-height: 620px;
+}
+
+.trace-explorer-list,
+.trace-explorer-detail {
+  padding: 18px;
+  border-radius: 22px;
+}
+
+.trace-explorer-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.trace-explorer-events {
+  display: grid;
+  gap: 8px;
+  max-height: 700px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.trace-event-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.trace-event-card:hover {
+  border-color: rgba(124, 192, 255, 0.26);
+  background: rgba(124, 192, 255, 0.05);
+}
+
+.trace-event-card.active {
+  border-color: rgba(131, 255, 94, 0.28);
+  background: rgba(131, 255, 94, 0.08);
+}
+
+.trace-event-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.trace-event-title {
+  font-size: 0.96rem;
+  color: var(--text);
+}
+
+.trace-event-subtitle {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.trace-event-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.trace-event-chip.event-a2a {
+  border-color: rgba(131, 255, 94, 0.24);
+  color: var(--green);
+  background: rgba(131, 255, 94, 0.08);
+}
+
+.trace-event-chip.event-mcp {
+  border-color: rgba(124, 192, 255, 0.24);
+  color: var(--blue);
+  background: rgba(124, 192, 255, 0.08);
+}
+
+.trace-event-chip.event-llm {
+  border-color: rgba(243, 179, 84, 0.22);
+  color: var(--amber);
+  background: rgba(243, 179, 84, 0.1);
+}
+
+.trace-event-chip.stage-completed {
+  color: var(--green);
+}
+
+.trace-event-chip.stage-working,
+.trace-event-chip.stage-planning,
+.trace-event-chip.stage-submitted,
+.trace-event-chip.stage-discovered {
+  color: var(--blue);
+}
+
+.trace-event-chip.stage-failed {
+  color: var(--red);
+}
+
 .modal-head {
   display: flex;
   align-items: flex-start;
@@ -1081,6 +1293,33 @@ button:hover {
   line-height: 1.5;
 }
 
+.policy-config-section {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.policy-config-section-title {
+  color: #d6ffbe;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.policy-kv-item-wide {
+  grid-column: 1 / -1;
+}
+
+.policy-multiline {
+  white-space: pre-wrap;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.88rem;
+}
+
 .scene-presets {
   display: grid;
   gap: 10px;
@@ -1132,6 +1371,28 @@ button:hover {
   border-color: rgba(131, 255, 94, 0.34);
   background: rgba(131, 255, 94, 0.09);
   color: #f6ffeb;
+}
+
+.challenge-option {
+  border-width: 1.5px;
+  font-weight: 600;
+  border-color: rgba(131, 255, 94, 0.12);
+  background: rgba(131, 255, 94, 0.025);
+  color: #d5e2cb;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.012);
+}
+
+.challenge-option span {
+  letter-spacing: 0.01em;
+}
+
+.challenge-option:has(input:checked) {
+  color: #f6ffeb;
+  border-color: rgba(131, 255, 94, 0.28);
+  background: rgba(131, 255, 94, 0.045);
+  box-shadow:
+    0 0 0 1px rgba(131, 255, 94, 0.035) inset,
+    0 3px 8px rgba(0, 0, 0, 0.12);
 }
 
 .form-grid {
@@ -2080,6 +2341,12 @@ button:hover {
     right: 32px;
   }
 
+  .judge-node {
+    top: 600px;
+    left: calc(50% + 78px);
+    right: auto;
+  }
+
   .mcp-node {
     top: 700px;
     right: 270px;
@@ -2148,6 +2415,17 @@ button:hover {
     flex: 1 1 auto;
   }
 
+  .brand-hero {
+    align-items: center;
+  }
+
+  .brand-mark {
+    width: 64px;
+    height: 64px;
+    flex-basis: 64px;
+    margin-top: 0;
+  }
+
   .topbar-actions {
     width: 100%;
     position: static;
@@ -2201,6 +2479,10 @@ button:hover {
     top: 580px;
   }
 
+  .judge-node {
+    top: 760px;
+  }
+
   .support-node {
     top: 760px;
   }
@@ -2210,11 +2492,11 @@ button:hover {
   }
 
   .openai-node {
-    top: 1120px;
+    top: 940px;
   }
 
   .gemini-node {
-    top: 1300px;
+    top: 1120px;
   }
 
   .mcp-node,
