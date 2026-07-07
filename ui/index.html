@@ -1181,12 +1181,20 @@
     </div>
 
     <script>
-      const protocol = window.location.protocol === "https:" ? "https:" : "http:";
-      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const host = window.location.host || "localhost:8000";
+      const params = new URLSearchParams(window.location.search);
+      const overrideProxy = params.get("kong_proxy");
+
+      // If UI is opened directly (e.g. localhost:3000 or orb.local), send API/WebSocket to Kong proxy.
+      const runningDirectUi = window.location.port === "3000" || window.location.hostname.endsWith(".orb.local");
+      const fallbackProxy = "http://localhost:8000";
+      const kongBase = (overrideProxy || (runningDirectUi ? fallbackProxy : `${window.location.protocol}//${window.location.host}`)).replace(/\/$/, "");
+
+      const kongUrl = new URL(kongBase);
+      const wsProtocol = kongUrl.protocol === "https:" ? "wss:" : "ws:";
+
       window.APP_CONFIG = {
-        apiBaseUrl: `${protocol}//${host}/orchestrator`,
-        traceWsUrl: `${wsProtocol}//${host}/orchestrator/trace?apikey=ui-demo-key`,
+        apiBaseUrl: `${kongUrl.protocol}//${kongUrl.host}/orchestrator`,
+        traceWsUrl: `${wsProtocol}//${kongUrl.host}/orchestrator/trace?apikey=ui-demo-key`,
         apiKey: "ui-demo-key"
       };
     </script>

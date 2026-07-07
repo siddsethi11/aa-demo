@@ -1,0 +1,104 @@
+_format_version: "3.0"
+
+# ---------------------------------------------------------------------------
+# Kong Audio Routing Demo
+#
+# Two services using ai-proxy-advanced to route OpenAI audio models:
+#   POST /audio/speech        → OpenAI TTS-1    (text  → Hindi MP3)
+#   POST /audio/translations  → OpenAI Whisper-1 (audio → English text)
+#
+# Kong injects the OpenAI Authorization header via ai-proxy-advanced.
+# Clients only need the Kong apikey (audio-demo-key).
+#
+# Apply with:
+#   deck gateway apply audio/kong_audio.yaml \
+#     --konnect-token "$KONNECT_TOKEN" \
+#     --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME"
+# ---------------------------------------------------------------------------
+
+services:
+  # -------------------------------------------------------------------------
+  # Service 1: Text → Speech (OpenAI TTS-1)
+  #   Client  : POST http://localhost:8000/audio/speech
+  #   Upstream: POST https://api.openai.com/v1/audio/speech
+  # -------------------------------------------------------------------------
+  - name: openai-audio-tts-service
+    url: https://api.openai.com
+    connect_timeout: 30000
+    read_timeout: 120000
+    write_timeout: 30000
+    routes:
+      - name: audio-speech-route
+        paths:
+          - /audio/speech
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          max_request_body_size: 10485760
+          genai_category: audio/speech
+          targets:
+            - route_type: audio/v1/audio/speech
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false   # audio binary — keep false
+                log_statistics: false
+              model:
+                provider: openai
+                name: tts-1
+              weight: 100
+
+  # -------------------------------------------------------------------------
+  # Service 2: Audio → English translation (OpenAI Whisper-1)
+  #   Client  : POST http://localhost:8000/audio/translations
+  #   Upstream: POST https://api.openai.com/v1/audio/translations
+  # -------------------------------------------------------------------------
+  - name: openai-audio-whisper-service
+    url: https://api.openai.com
+    connect_timeout: 30000
+    read_timeout: 120000
+    write_timeout: 30000
+    routes:
+      - name: audio-translations-route
+        paths:
+          - /audio/translations
+        strip_path: false
+        methods:
+          - POST
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+      - name: ai-proxy-advanced
+        config:
+          max_request_body_size: 10485760
+          genai_category: audio/transcription
+          targets:
+            - route_type: audio/v1/audio/translations
+              auth:
+                header_name: Authorization
+                header_value: Bearer ${{ env "DECK_OPENAI_API_KEY" }}
+              logging:
+                log_payloads: false   # multipart audio — keep false
+                log_statistics: false
+              model:
+                provider: openai
+                name: whisper-1
+              weight: 100
+
+# ---------------------------------------------------------------------------
+# Consumer for the audio demo client
+# ---------------------------------------------------------------------------
+consumers:
+  - username: audio-demo-client
+    keyauth_credentials:
+      - key: audio-demo-key

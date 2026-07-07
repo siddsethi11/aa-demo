@@ -1,6 +1,6 @@
 # Kong Agent + MCP Demo
 
-This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
+This repo is a Kong Enterprise workspace demo for showing how Kong governs both agent-to-agent traffic and MCP tool traffic.
 
 ## Contents
 
@@ -14,7 +14,7 @@ This repo is a Konnect hybrid demo for showing how Kong governs both agent-to-ag
 - [What it will show](#what-it-will-show)
 - [Runtime shape](#runtime-shape)
 - [Observability](#observability)
-  - [Konnect observability](#konnect-observability)
+  - [Enterprise workspace observability](#enterprise-workspace-observability)
   - [Loki and Grafana](#loki-and-grafana)
   - [Jaeger](#jaeger)
   - [Opik](#opik)
@@ -28,15 +28,16 @@ Before running the demo, make sure you have:
 - `curl`
 - `jq`
 - `deck`
-- a valid Konnect personal access token with access to the target control plane
+- Kong Enterprise Admin API access (for example via local port-forward on `http://localhost:8001`)
+- Admin token for the `Kong-Admin-Token` header
+- an existing Kong workspace (`AIDemo` by default)
 - a populated `.env` file based on [.env.example](/Users/surajpillai/Documents/work/demos/learn/aa-demo/.env.example)
 
 Minimum environment values required for the main startup flow:
 
-- `KONNECT_TOKEN`
-- `KONNECT_CONTROL_PLANE_NAME`
-- `KONG_CLUSTER_CONTROL_PLANE`
-- `KONG_CLUSTER_SERVER_NAME`
+- `KONG_ADMIN_ADDR`
+- `KONG_ADMIN_TOKEN`
+- `KONG_WORKSPACE`
 - `OPENAI_API_KEY`
 - `DECK_OPENAI_API_KEY`
 - `DECK_GEMINI_API_KEY`
@@ -49,11 +50,10 @@ Additional environment values required for optional/full governance scenarios:
 
 What the startup flow expects:
 
-- the startup script can create or reuse a Konnect control plane
-  - default name: `AA Demo`
-  - override with `KONNECT_CONTROL_PLANE_NAME`
-- Konnect custom plugin schemas can be created or updated
-- `deck gateway sync` can write the current Kong config to the target control plane
+- the startup script can create or reuse a Kong Enterprise workspace
+  - default name: `AIDemo`
+  - override with `KONG_WORKSPACE`
+- `deck gateway apply` can write the current Kong config to the target workspace
 - the local stack can start ports for:
   - UI `8000`
   - Grafana `3001`
@@ -71,14 +71,11 @@ What the startup flow expects:
 
 The startup flow will:
 
-- create or reuse the Konnect control plane
-  - default name: `AA Demo`
-  - override with `KONNECT_CONTROL_PLANE_NAME`
-- sync custom plugin schemas
-- run `deck gateway sync`
-- upload Konnect dashboards
-- register the Konnect MCP registry entry
-- ingest the demo RAG knowledge base
+- create or reuse the Kong Enterprise workspace
+  - default name: `AIDemo`
+  - override with `KONG_WORKSPACE`
+- run `deck gateway apply` to that workspace
+- ingest the demo RAG knowledge base only when local `kong-dp` is running
 
 3. Open the main local surfaces:
 
@@ -101,7 +98,7 @@ Important links used in the demo:
 
 ## What the project does
 
-This project demonstrates a small, visually clear agent system running behind Kong in Konnect hybrid mode.
+This project demonstrates a small, visually clear agent system running behind Kong in Kong Enterprise workspace mode.
 
 Example screens:
 
@@ -257,7 +254,7 @@ The demo exposes three main observability surfaces:
 - Jaeger for raw OpenTelemetry trace trees
 - Opik for the synthetic workflow-oriented AI trace exported by Kong
 
-### Konnect observability
+### Enterprise workspace observability
 
 - Konnect is used for control-plane-managed observability dashboards
 - the repo startup flow uploads the demo dashboard definitions into Konnect
@@ -1104,14 +1101,14 @@ The point of the scenario is controlled comparison:
 
 The fictional KB lives in:
 
-- [rag/atlasflow-support-kb/vector-sync-runbook.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/vector-sync-runbook.md)
-- [rag/atlasflow-support-kb/escalation-policy.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/escalation-policy.md)
-- [rag/atlasflow-support-kb/ownership-matrix.md](/Users/surajpillai/Documents/work/demos/learn/aa-demo/rag/atlasflow-support-kb/ownership-matrix.md)
+- [rag/atlasflow-support-kb/vector-sync-runbook.md](rag/atlasflow-support-kb/vector-sync-runbook.md)
+- [rag/atlasflow-support-kb/escalation-policy.md](rag/atlasflow-support-kb/escalation-policy.md)
+- [rag/atlasflow-support-kb/ownership-matrix.md](rag/atlasflow-support-kb/ownership-matrix.md)
 
 To ingest the KB for the local hybrid/Konnect demo stack, use:
 
-- [scripts/ingest_rag_kb.py](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.py)
-- [scripts/ingest_rag_kb.lua](/Users/surajpillai/Documents/work/demos/learn/aa-demo/scripts/ingest_rag_kb.lua)
+- [scripts/ingest_rag_kb.py](scripts/ingest_rag_kb.py)
+- [scripts/ingest_rag_kb.lua](scripts/ingest_rag_kb.lua)
 
 The helper uses `kong runner` inside `kong-dp` because the standard `ingest_chunk` Admin API path is not the right operational path for this hybrid/Konnect-style setup.
 
@@ -1626,9 +1623,9 @@ docker exec orchestrator curl -s http://mock-api:8000/customers/cust_acme
 ## Files added in this scaffold
 
 - `docker-compose.yml`: local container topology
-- `.env.example`: hybrid mode environment placeholders
+- `.env.example`: Kong Enterprise workspace environment placeholders
 - `.env`: local placeholder values so the compose file resolves
-- `kong/deck/kong.yaml`: Konnect-managed services, routes, auth, Consumers, and MCP config skeleton
+- `kong/deck/kong.yaml`: Kong-managed services, routes, auth, Consumers, and MCP config skeleton
 - `services/`: working FastAPI services and shared helper code
 - `ui/`: static frontend assets and container
 
@@ -1636,9 +1633,9 @@ docker exec orchestrator curl -s http://mock-api:8000/customers/cust_acme
 
 - Docker and Docker Compose
 - `deck`
-- a Konnect personal access token
-- a Konnect control plane name
-- Konnect hybrid data plane certificates
+- Kong Enterprise Admin API access
+- Kong Admin token (`Kong-Admin-Token`)
+- target workspace (default `AIDemo`)
 - an OpenAI API key
 - a Gemini API key
 
@@ -1657,9 +1654,9 @@ cp .env.example .env
 Set all required values in `.env`:
 
 ```bash
-KONG_CLUSTER_CONTROL_PLANE=YOUR_KONNECT_CP_HOST:443
-KONG_CLUSTER_SERVER_NAME=YOUR_KONNECT_CP_HOST
-KONG_CLUSTER_TELEMETRY_ENDPOINT=YOUR_KONNECT_TELEMETRY_HOST:443
+KONG_ADMIN_ADDR=http://localhost:8001
+KONG_ADMIN_TOKEN=kong_admin_password
+KONG_WORKSPACE=AIDemo
 OPENAI_API_KEY=YOUR_OPENAI_API_KEY
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 DECK_OPENAI_API_KEY=YOUR_OPENAI_API_KEY
@@ -1667,28 +1664,26 @@ DECK_GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 DECK_OPENAI_MODEL=gpt-4o-mini
 DECK_GEMINI_MODEL=gemini-2.5-flash
 DECK_REDIS_HOST=redis-stack
-KONNECT_TOKEN=YOUR_KONNECT_PAT
-KONNECT_CONTROL_PLANE_NAME=AA Demo
 ```
 
-### 3. Place the hybrid certs
+### 3. Ensure Kong EE port-forward is running
 
 ```bash
-mkdir -p kong/certs
+../setup-kong-ee-helm/port-forward.sh
 ```
 
-Put your Konnect data plane cert and key here:
+Expected local endpoints:
 
 ```text
-kong/certs/tls.crt
-kong/certs/tls.key
+http://localhost:8001  (Admin API)
+http://localhost:8000  (Proxy)
 ```
 
 Important:
 
-- the startup script can create or reuse the Konnect control plane entity automatically
-- but your hybrid data plane still depends on the correct Konnect endpoint and certificates
-- `KONG_CLUSTER_CONTROL_PLANE`, `KONG_CLUSTER_SERVER_NAME`, `kong/certs/tls.crt`, and `kong/certs/tls.key` must match the control plane your data plane should join
+- the startup script can create or reuse the target workspace automatically
+- default workspace is `AIDemo`
+- override with `KONG_WORKSPACE`
 
 ### 4. Export the env vars for decK
 
@@ -1709,12 +1704,13 @@ set +a
 deck file validate kong/deck/kong.yaml
 ```
 
-### 6. Sync the Kong config to Konnect
+### 6. Apply the Kong config to the workspace
 
 ```bash
-deck gateway sync \
-  --konnect-token "$KONNECT_TOKEN" \
-  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+deck gateway apply \
+  -w "$KONG_WORKSPACE" \
+  --headers "Kong-Admin-Token:$KONG_ADMIN_TOKEN" \
+  --kong-addr "$KONG_ADMIN_ADDR" \
   kong/deck/kong.yaml
 ```
 
@@ -1732,7 +1728,7 @@ docker compose ps
 
 ### 9. Open the hosted UI
 
-After the hybrid data plane connects and the Kong config is synced, open:
+After the Kong workspace config is applied, open:
 
 ```text
 http://localhost:8000/
@@ -1807,9 +1803,10 @@ deck file validate kong/deck/kong.yaml
 Sync Kong config again:
 
 ```bash
-deck gateway sync \
-  --konnect-token "$KONNECT_TOKEN" \
-  --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+deck gateway apply \
+  -w "$KONG_WORKSPACE" \
+  --headers "Kong-Admin-Token:$KONG_ADMIN_TOKEN" \
+  --kong-addr "$KONG_ADMIN_ADDR" \
   kong/deck/kong.yaml
 ```
 
@@ -2176,4 +2173,4 @@ This is intentionally demo-oriented and should not be treated as a production pa
 - `docker compose config` now resolves locally with placeholder `.env` values.
 - `deck file validate kong/deck/kong.yaml` passes offline validation.
 - service dependencies now include `langgraph` and `openai`, but I did not run a live service boot locally because the workspace Python environment does not have the app dependencies installed outside Docker.
-- live Konnect validation and sync still require your real Konnect control plane name, token, and hybrid certificates.
+- live validation and apply require your real Kong Enterprise Admin API endpoint, admin token, and workspace access.

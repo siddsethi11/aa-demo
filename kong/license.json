@@ -1,0 +1,16 @@
+{
+  "license": {
+    "version": 1,
+    "signature": "090bd2a8e357dffffa51795224f96cbf511c4b2821d54a3fbb53cdef7e26c2dd0b0472f486ebc57c84ce007745cf25cabb3a4954b10595153c6da030e8fdfd5c",
+    "payload": {
+      "customer": "sid-se-demo",
+      "license_creation_date": "2026-06-28",
+      "product_subscription": "Kong Enterprise Subscription",
+      "support_plan": "Platinum",
+      "admin_seats": "Unlimited",
+      "dataplanes": "",
+      "license_expiration_date": "2027-07-31",
+      "license_key": "0011K000022IA3HQAW_a1V1K0000086Z2IUAU"
+    }
+  }
+}

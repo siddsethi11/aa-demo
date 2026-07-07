@@ -3,6 +3,8 @@ services:
     image: redis/redis-stack-server:7.4.0-v6
     container_name: redis-stack
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     expose:
       - "6379"
 
@@ -11,6 +13,8 @@ services:
     platform: linux/amd64
     container_name: ai-pii-service
     restart: unless-stopped
+    ports:
+      - "18084:8080"
     expose:
       - "8080"
 
@@ -48,6 +52,8 @@ services:
       OPIK_API_KEY: ${OPIK_API_KEY:-}
       OPIK_WORKSPACE: ${OPIK_WORKSPACE:-default}
       OPIK_PROJECT_NAME: ${OPIK_PROJECT_NAME:-aa-demo-kong}
+    ports:
+      - "4318:4318"
     expose:
       - "4318"
       - "9464"
@@ -332,40 +338,167 @@ services:
       loki:
         condition: service_started
 
-  kong-dp:
-    image: kong/kong-gateway:3.14.0.1
-    container_name: kong-dp
-    restart: unless-stopped
+  konnect-dp-bootstrap:
+    profiles: ["konnect"]
+    image: alpine:3.20
+    container_name: konnect-dp-bootstrap
+    restart: "no"
     env_file:
       - .env
+    environment:
+      KONNECT_API_URL: ${KONNECT_API_URL:-https://us.api.konghq.com}
+      KONNECT_TOKEN: ${KONNECT_TOKEN}
+      KONNECT_CP_ID: ${KONNECT_CP_ID:-}
+      KONNECT_CONTROL_PLANE_NAME: ${KONNECT_CONTROL_PLANE_NAME}
+    volumes:
+      - ./kong/certs:/certs:ro
+      - ./scripts/sync_konnect_dp_cert.sh:/opt/sync_konnect_dp_cert.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        apk add --no-cache curl jq >/dev/null
+        /bin/sh /opt/sync_konnect_dp_cert.sh
+
+  kong-cp-db:
+    image: postgres:15
+    container_name: kong-cp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kong
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kong-cp-migrations:
+    image: kong/kong-gateway:3.14.0.7 
+    container_name: kong-cp-migrations
+    restart: "no"
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-cp-db
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+      KONG_PASSWORD: kong_admin_password
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        kong migrations bootstrap || (kong migrations up && kong migrations finish)
+    depends_on:
+      kong-cp-db:
+        condition: service_healthy
+
+  kong-cp:
+    image: kong/kong-gateway:3.14.0.7 
+    container_name: kong-cp
+    restart: unless-stopped
+    environment:
+      KONG_ROLE: control_plane
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-cp-db
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+      KONG_ENFORCE_RBAC: "on"
+      KONG_ADMIN_GUI_AUTH: basic-auth
+      KONG_ADMIN_GUI_URL: http://localhost:8002
+      KONG_ADMIN_GUI_SESSION_CONF: '{"secret":"secret","storage":"kong","cookie_secure":false}'
+      KONG_PASSWORD: kong_admin_password
+      KONG_CLUSTER_MTLS: pki
+      KONG_CLUSTER_LISTEN: 0.0.0.0:8005 ssl
+      KONG_CLUSTER_TELEMETRY_LISTEN: 0.0.0.0:8006 ssl
+      KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
+      KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
+      KONG_CLUSTER_CA_CERT: /etc/kong/certs/tls.crt
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+      KONG_PROXY_LISTEN: "off"
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_NGINX_DAEMON: "off"
+      KONG_ROUTER_FLAVOR: expressions
+      KONG_PLUGINS: bundled,trace-enricher,workflow-graph,prompt-capture
+      KONG_NGINX_HTTP_LUA_SHARED_DICT: workflow_graph 10m
+      KONG_UNTRUSTED_LUA: "on"
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: resty.http,cjson
+      KONG_TRACING_INSTRUMENTATIONS: all
+      KONG_TRACING_SAMPLING_RATE: "1.0"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        export KONG_LICENSE_DATA="$(cat /etc/kong/license/license.json)"
+        exec /entrypoint.sh kong start
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+      - "8005:8005"
+      - "8006:8006"
+      - "8101:8100"
+    volumes:
+      - ./kong/certs:/etc/kong/certs:ro
+      - ./kong/license.json:/etc/kong/license/license.json:ro
+      - ./kong/plugins/prompt-capture:/usr/local/share/lua/5.1/kong/plugins/prompt-capture:ro
+      - ./kong/plugins/trace-enricher:/usr/local/share/lua/5.1/kong/plugins/trace-enricher:ro
+      - ./kong/plugins/workflow-graph:/usr/local/share/lua/5.1/kong/plugins/workflow-graph:ro
+    depends_on:
+      kong-cp-db:
+        condition: service_healthy
+      kong-cp-migrations:
+        condition: service_completed_successfully
+
+  kong-dp:
+    image: kong/kong-gateway:3.14.0.7
+    container_name: kong-dp
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       KONG_ROLE: data_plane
       KONG_DATABASE: "off"
       KONG_TRACING_INSTRUMENTATIONS: all
       KONG_TRACING_SAMPLING_RATE: "1.0"
       KONG_CLUSTER_MTLS: pki
-      KONG_CLUSTER_CONTROL_PLANE: ${KONG_CLUSTER_CONTROL_PLANE}
-      KONG_CLUSTER_SERVER_NAME: ${KONG_CLUSTER_SERVER_NAME}
-      KONG_CLUSTER_TELEMETRY_ENDPOINT: ${KONG_CLUSTER_TELEMETRY_ENDPOINT}
-      KONG_CLUSTER_TELEMETRY_SERVER_NAME: ${KONG_CLUSTER_TELEMETRY_SERVER_NAME}
+      KONG_CLUSTER_CONTROL_PLANE: kong-cp:8005
+      KONG_CLUSTER_TELEMETRY_ENDPOINT: kong-cp:8006
+      KONG_CLUSTER_SERVER_NAME: kong_clustering
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: kong_clustering_telemetry
       KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
       KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
+      KONG_CLUSTER_CA_CERT: /etc/kong/certs/tls.crt
       KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
-      KONG_KONNECT_MODE: "on"
-      KONG_VITALS: "off"
+      KONG_KONNECT_MODE: "off"
+      KONG_ROUTER_FLAVOR: expressions
+      KONG_VITALS: "on"
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
       KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_NGINX_DAEMON: "off"
       KONG_LOG_LEVEL: notice
       KONG_PLUGINS: bundled,trace-enricher,workflow-graph,prompt-capture
       KONG_NGINX_HTTP_LUA_SHARED_DICT: workflow_graph 10m
       KONG_UNTRUSTED_LUA: "on"
       KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: resty.http,cjson
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        export KONG_LICENSE_DATA="$(cat /etc/kong/license/license.json)"
+        exec /entrypoint.sh kong start
     ports:
       - "8000:8000"
       - "8443:8443"
       - "8100:8100"
     volumes:
       - ./kong/certs:/etc/kong/certs:ro
+      - ./kong/license.json:/etc/kong/license/license.json:ro
       - ./kong/plugins/prompt-capture:/usr/local/share/lua/5.1/kong/plugins/prompt-capture:ro
       - ./kong/plugins/trace-enricher:/usr/local/share/lua/5.1/kong/plugins/trace-enricher:ro
       - ./kong/plugins/workflow-graph:/usr/local/share/lua/5.1/kong/plugins/workflow-graph:ro
@@ -386,6 +519,8 @@ services:
         condition: service_started
       mock-api:
         condition: service_started
+      kong-cp:
+        condition: service_started
 
   orchestrator:
     build:
@@ -395,8 +530,8 @@ services:
     command: ["uvicorn", "services.orchestrator.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
-      KONG_PROXY_URL: http://kong-dp:8000
-      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/orchestrator
+      KONG_PROXY_URL: ${KONG_PROXY_INTERNAL_URL:-http://kong-dp:8000}
+      KONG_AI_PROXY_URL: ${KONG_AI_PROXY_INTERNAL_URL:-http://kong-dp:8000/ai/orchestrator}
       AGENT_API_KEY: orchestrator-demo-key
       TRACE_WS_PATH: /trace
       OPENAI_MODEL: gpt-4o-mini
@@ -406,6 +541,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PWD}:${PWD}:ro
+    ports:
+      - "18080:8000"
 
   support-agent:
     build:
@@ -415,10 +552,12 @@ services:
     command: ["uvicorn", "services.support_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
-      KONG_MCP_URL: http://kong-dp:8000/mock-mcp
-      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/subagent
+      KONG_MCP_URL: ${KONG_MCP_INTERNAL_URL:-http://kong-dp:8000/mock-mcp}
+      KONG_AI_PROXY_URL: ${KONG_AI_PROXY_INTERNAL_URL:-http://kong-dp:8000/ai/subagent}
       AGENT_API_KEY: support-demo-key
       OPENAI_MODEL: gemini-2.5-flash
+    ports:
+      - "18081:8000"
 
   success-agent:
     build:
@@ -428,10 +567,12 @@ services:
     command: ["uvicorn", "services.success_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
-      KONG_MCP_URL: http://kong-dp:8000/mock-mcp
-      KONG_AI_PROXY_URL: http://kong-dp:8000/ai/subagent
+      KONG_MCP_URL: ${KONG_MCP_INTERNAL_URL:-http://kong-dp:8000/mock-mcp}
+      KONG_AI_PROXY_URL: ${KONG_AI_PROXY_INTERNAL_URL:-http://kong-dp:8000/ai/subagent}
       AGENT_API_KEY: success-demo-key
       OPENAI_MODEL: gemini-2.5-flash
+    ports:
+      - "18082:8000"
 
   mock-api:
     build:
@@ -441,6 +582,8 @@ services:
     command: ["uvicorn", "services.mock_api.app:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       PORT: "8000"
+    ports:
+      - "18083:8000"
 
   ui:
     build:

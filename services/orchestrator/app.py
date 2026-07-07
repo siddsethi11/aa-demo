@@ -46,6 +46,7 @@ app.add_middleware(
 
 KONG_PROXY_URL = os.getenv("KONG_PROXY_URL", "http://kong-dp:8000").rstrip("/")
 AGENT_API_KEY = os.getenv("AGENT_API_KEY", "orchestrator-demo-key")
+AUDIO_DEMO_API_KEY = os.getenv("AUDIO_DEMO_API_KEY", "audio-demo-key")
 os.environ.setdefault("KONG_AI_PROXY_URL", f"{KONG_PROXY_URL}/ai/orchestrator")
 llm = OrchestratorLLM()
 GEMINI_FALLBACK_URL = f"{KONG_PROXY_URL}/ai/subagent"
@@ -148,6 +149,7 @@ def ai_route_for_scenario(
         "prompt_enhancement": f"{KONG_PROXY_URL}/ai/orchestrator-prompt-enhance-demo",
         "semantic_guard": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-guard-demo",
         "semantic_cache": f"{KONG_PROXY_URL}/ai/orchestrator-semantic-cache-demo",
+        "audio_translation": f"{KONG_PROXY_URL}/audio/translations",
         "llm_as_judge": f"{KONG_PROXY_URL}/ai/orchestrator-judge-demo",
         "lakera_guard": f"{KONG_PROXY_URL}/ai/orchestrator-lakera-demo",
         "rag": (
@@ -176,6 +178,7 @@ def scenario_summary(scenario: str) -> str:
         "prompt_enhancement": "Kong prompt decoration applies stronger executive-governance instructions so the orchestrator output becomes more structured and enterprise-safe.",
         "semantic_guard": "Kong semantic guard is expected to block prompts that request sensitive personal or internal system information.",
         "semantic_cache": "Kong semantic cache is expected to serve a repeated orchestrator prompt from Redis after the first miss populates the cache.",
+        "audio_translation": "Kong AI Proxy Advanced routes Hindi text-to-speech and then routes the generated audio for English translation.",
         "llm_as_judge": "Kong AI LLM as Judge is expected to score the candidate model response for accuracy using a separate judge model.",
         "lakera_guard": "Kong AI Lakera Guard is expected to block unsafe prompts and return detector categories when Lakera finds a policy violation.",
         "rag": "Kong AI RAG Injector is expected to ground the answer using retrieved fictional support KB content when the after route is selected.",
@@ -339,6 +342,139 @@ def without_cache_headers(result: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(result)
     cleaned.pop("cache_headers", None)
     return cleaned
+
+
+async def run_audio_translation_probe(
+    *,
+    request: PlayRequest,
+    run_id: str,
+    context_id: str,
+    started: float,
+) -> dict[str, Any]:
+    hindi_text = (request.user_prompt or "").strip() or "नमस्ते, मैं आपकी कैसे मदद कर सकता हूँ?"
+    speech_url = f"{KONG_PROXY_URL}/audio/speech"
+    translation_url = f"{KONG_PROXY_URL}/audio/translations"
+    headers = {
+        "apikey": AUDIO_DEMO_API_KEY,
+        "x-demo-run-id": run_id,
+        "x-demo-context-id": context_id,
+        **current_trace_headers(),
+    }
+
+    await emit(
+        run_id,
+        "planning",
+        message="Kong will generate Hindi speech first, then route that audio for English translation.",
+    )
+    await emit(
+        run_id,
+        "policy_event",
+        actor="orchestrator",
+        stage="audio_translation",
+        summary="Kong AI Proxy Advanced is routing both audio/speech and audio/translations endpoints through governed routes.",
+        output={
+            "speech_route": speech_url,
+            "translation_route": translation_url,
+            "speech_model": "tts-1",
+            "translation_model": "whisper-1",
+        },
+    )
+
+    await emit_component(run_id, "openai", "active", actor="orchestrator", stage="audio_speech")
+    await emit(
+        run_id,
+        "llm_started",
+        actor="orchestrator",
+        stage="audio_speech",
+        component="openai",
+        input={"model": "tts-1", "input": hindi_text, "voice": "alloy", "response_format": "mp3"},
+    )
+    speech_started = time.perf_counter()
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        speech_response = await client.post(
+            speech_url,
+            headers={**headers, "Content-Type": "application/json"},
+            json={"model": "tts-1", "input": hindi_text, "voice": "alloy", "response_format": "mp3"},
+        )
+        speech_response.raise_for_status()
+        speech_audio = speech_response.content
+    await emit(
+        run_id,
+        "llm_completed",
+        actor="orchestrator",
+        stage="audio_speech",
+        component="openai",
+        llm_used=True,
+        model="tts-1",
+        output={"audio_bytes": len(speech_audio), "content_type": speech_response.headers.get("content-type")},
+        duration_ms=timed_ms(speech_started),
+    )
+
+    await emit_component(run_id, "openai", "active", actor="orchestrator", stage="audio_translation")
+    await emit(
+        run_id,
+        "llm_started",
+        actor="orchestrator",
+        stage="audio_translation",
+        component="openai",
+        input={"model": "whisper-1", "source": "generated_hindi_mp3"},
+    )
+    translation_started = time.perf_counter()
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        translation_response = await client.post(
+            translation_url,
+            headers=headers,
+            data={"model": "whisper-1"},
+            files={"file": ("sample_hindi.mp3", speech_audio, "audio/mpeg")},
+        )
+        translation_response.raise_for_status()
+        translated = translation_response.json()
+    translated_text = str(translated.get("text") or "").strip()
+    await emit(
+        run_id,
+        "llm_completed",
+        actor="orchestrator",
+        stage="audio_translation",
+        component="openai",
+        llm_used=True,
+        model="whisper-1",
+        output={"translated_text": translated_text},
+        duration_ms=timed_ms(translation_started),
+    )
+
+    final_response = {
+        "headline": "Audio translation probe completed",
+        "governance_scenario": "audio_translation",
+        "audio_probe": {
+            "hindi_input": hindi_text,
+            "translation_output": translated_text,
+            "speech_model": "tts-1",
+            "translation_model": "whisper-1",
+            "speech_route": speech_url,
+            "translation_route": translation_url,
+        },
+        "executive_brief": {
+            "llm_used": True,
+            "model": "whisper-1",
+            "summary": translated_text,
+        },
+        "recommended_summary": translated_text,
+        "available_tools": [],
+        "called_mcp_tools": [],
+        "tool_plan_steps": [],
+        "mcp_tools_by_agent": {
+            "orchestrator": [],
+            "support-agent": [],
+            "success-agent": [],
+        },
+    }
+    await emit(run_id, "final_response", headline=final_response["headline"], output=final_response)
+    await emit_component(run_id, "dashboard", "complete")
+    await emit_component(run_id, "kong", "complete")
+    await emit_component(run_id, "orchestrator", "complete")
+    await emit_component(run_id, "observability", "complete")
+    await emit(run_id, "run_completed", duration_ms=timed_ms(started), output=final_response)
+    return {"run_id": run_id, "context_id": context_id, "result": final_response}
 
 
 def build_pii_probe_prompts(request: PlayRequest, mode: str) -> dict[str, str]:
@@ -1212,6 +1348,13 @@ async def run_playbook(request: PlayRequest) -> dict[str, Any]:
         output={"ai_route_base_url": ai_route_base_url},
         context_id=context_id,
     )
+    if scenario == "audio_translation":
+        return await run_audio_translation_probe(
+            request=request,
+            run_id=run_id,
+            context_id=context_id,
+            started=started,
+        )
     if scenario == "pii_sanitizer":
         prompts = build_pii_probe_prompts(request, pii_sanitizer_mode)
         stage = f"pii_{pii_sanitizer_mode}_probe"
